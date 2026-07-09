@@ -1,0 +1,35 @@
+{
+  "name": "wsrt-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "WSRT is a runtime-first workspace orchestration monorepo.",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm run build && node --test tests/*.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "esbuild": "^0.28.1",
+    "vite": "^8.0.8",
+    "yaml": "^2.9.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@wsrt/core": "workspace:*",
+    "@types/node": "^24.12.2",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "keywords": [],
+  "license": "ISC",
+  "packageManager": "pnpm@10.12.4"
+}
