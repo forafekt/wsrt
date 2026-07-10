@@ -4,13 +4,11 @@ import http, { type IncomingMessage, type Server, type ServerResponse } from 'no
 import { dirname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
-  DashboardPluginPage,
-  DashboardRoute,
   ServerConfig,
-  WsrtConfig,
   WsrtPlugin,
   WorkspaceRuntime,
   WorkspaceRuntimeState,
+  WsrtConfig,
 } from '@wsrt/types'
 import {
   dashboardExports,
@@ -21,6 +19,7 @@ import {
   dashboardServerStatus,
 } from './api.js'
 import { dashboardHtml } from './app/dashboard-html.js'
+import type { DashboardPluginPage, DashboardRoute } from './types/index.js'
 
 export type DashboardHandle = {
   url: string
@@ -38,6 +37,8 @@ const dashboardClientDir = join(__dirname, 'app/client')
 export type DashboardPluginOptions = ServerConfig & {
   enabled?: boolean
   path?: string
+  pages?: DashboardPluginPage[]
+  routes?: DashboardRoute[]
 }
 
 export type DashboardPluginApi = {
@@ -47,31 +48,30 @@ export type DashboardPluginApi = {
   pages: DashboardPluginPage[]
 }
 
-export function dashboardPlugin(options: DashboardPluginOptions = {}): WsrtPlugin {
+export default function dashboardPlugin(options: DashboardPluginOptions = {}): WsrtPlugin {
   const enabled = options.enabled ?? true
+  const pages = options.pages ?? []
+  const routes = options.routes ?? []
   return {
     name: 'dashboard',
     config(config) {
       if (!enabled) return config
-      const legacy = dashboardConfig(config.dashboard)
+      // const legacy = dashboardConfig(config)
       return {
         ...config,
-        dashboard: {
-          ...legacy,
-          ...options,
-        },
       }
     },
     async runtimeCreated({ runtime }) {
       if (!enabled) return
-      const config = dashboardConfig(runtime.config.get('dashboard'))
-      const basePath = options.path ?? config.path ?? '/__wsrt'
+      // const config = dashboardConfig(runtime.config.get('dashboard'))
+      const basePath = options.path ?? '/__wsrt'
       runtime.state.dashboard = {
-        routes: baseDashboardRoutes(runtime.state),
-        pages: [],
+        routes: baseDashboardRoutes(runtime.state, routes),
+        pages: pages,
       }
-      await runDashboardRoutePlugins(runtime, runtime.config.raw, runtime.state.dashboard.routes)
-      await runDashboardPagePlugins(runtime, runtime.config.raw, runtime.state.dashboard.pages)
+
+      await runDashboardRoutePlugins(runtime, runtime.config.raw)
+      await runDashboardPagePlugins(runtime, runtime.config.raw)
       runtime.setPluginData('dashboard', 'api', {
         createRequestHandler: createDashboardRequestHandler,
         start: startDashboard,
@@ -81,16 +81,16 @@ export function dashboardPlugin(options: DashboardPluginOptions = {}): WsrtPlugi
       runtime.services.register({
         id: 'dashboard',
         name: 'Dashboard',
-        kind: 'dashboard',
+        kind: 'custom',
         url: dashboardUrl({
-          host: options.host ?? config.host,
-          port: options.port ?? config.port,
+          host: options.host,
+          port: options.port,
           basePath,
         }),
         start: async () => {
           const dashboard = await startDashboard(runtime, {
-            host: options.host ?? config.host,
-            port: options.port ?? config.port,
+            host: options.host,
+            port: options.port ,
             basePath,
           })
           return {
@@ -112,6 +112,8 @@ export function dashboardPlugin(options: DashboardPluginOptions = {}): WsrtPlugi
     },
   }
 }
+
+export { dashboardPlugin }
 
 function dashboardClientAsset(response: ServerResponse, pathname: string, basePath: string): void {
   const relativePath = pathname.slice(`${basePath}/client/`.length).replace(/^\/+/, '')
@@ -143,7 +145,7 @@ function dashboardAssetContentType(filePath: string): string {
   return 'application/octet-stream'
 }
 
-function baseDashboardRoutes(state: WorkspaceRuntimeState): DashboardRoute[] {
+function baseDashboardRoutes(state: WorkspaceRuntimeState, additionalRoutes: DashboardRoute[]): DashboardRoute[] {
   const routes: DashboardRoute[] = [
     { id: 'overview', label: 'Overview', path: '#overview' },
     { id: 'projects', label: 'Projects', path: '#projects' },
@@ -155,6 +157,7 @@ function baseDashboardRoutes(state: WorkspaceRuntimeState): DashboardRoute[] {
     { id: 'plugins', label: 'Plugins', path: '#plugins' },
     { id: 'artifacts', label: 'Artifacts', path: '#artifacts' },
     { id: 'mcp', label: 'MCP', path: '#mcp' },
+    ...additionalRoutes,
   ]
   return state.projects.some((project) => project.adapter === 'vite')
     ? [
@@ -172,25 +175,23 @@ function dashboardUrl(options: { host?: string; port?: number; basePath?: string
   return `http://${host}:${port}${basePath}`
 }
 
-function dashboardConfig(config: unknown): DashboardPluginOptions {
-  return isRecord(config) ? config as DashboardPluginOptions : {}
-}
+// function dashboardConfig(config: unknown): DashboardPluginOptions {
+//   return isRecord(config) ? config as DashboardPluginOptions : {}
+// }
 
 async function runDashboardRoutePlugins(
   runtime: WorkspaceRuntime,
   config: WsrtConfig,
-  routes: DashboardRoute[],
 ): Promise<void> {
-  for (const plugin of resolvedPlugins(config)) await plugin.dashboardRoutes?.(routes, { runtime })
+  for (const plugin of resolvedPlugins(config)) await plugin.custom?.({ runtime })
 }
 
 async function runDashboardPagePlugins(
   runtime: WorkspaceRuntime,
   config: WsrtConfig,
-  pages: DashboardPluginPage[],
 ): Promise<void> {
-  pages.splice(0, pages.length)
-  for (const plugin of resolvedPlugins(config)) await plugin.dashboardPages?.(pages, { runtime })
+  runtime.state.dashboard.pages.splice(0, runtime.state.dashboard.pages.length)
+  for (const plugin of resolvedPlugins(config)) await plugin.custom?.({ runtime })
 }
 
 function resolvedPlugins(config: WsrtConfig): WsrtPlugin[] {
@@ -211,7 +212,7 @@ export async function startDashboard(
 ): Promise<DashboardHandle> {
   const host = options.host ?? '127.0.0.1'
   const port = options.port ?? 5177
-  const basePath = normalizeBasePath(options.basePath ?? dashboardConfig(runtime.config.get('dashboard')).path ?? '/__wsrt')
+  const basePath = normalizeBasePath(options.basePath ?? '/__wsrt')
   const dashboard = createDashboardRequestHandler(runtime, { basePath })
   const server = http.createServer((request, response) => {
     if (dashboard.handle(request, response)) return
@@ -233,7 +234,7 @@ export function createDashboardRequestHandler(
   runtime: WorkspaceRuntime,
   options: { basePath?: string } = {},
 ): DashboardRequestHandler {
-  const basePath = normalizeBasePath(options.basePath ?? dashboardConfig(runtime.config.get('dashboard')).path ?? '/__wsrt')
+  const basePath = normalizeBasePath(options.basePath ?? '/__wsrt')
   const clients = new Set<ServerResponse>()
   const interval = setInterval(() => {
     const payload = `event: state\ndata: ${JSON.stringify({ signature: dashboardSignature(runtime) })}\n\n`
@@ -341,7 +342,7 @@ async function api(
   }
   if (route === '/plugin-data') return json(response, runtime.state.pluginData)
   if (route === '/plugin-pages') {
-    await runDashboardPagePlugins(runtime, runtime.config.raw, runtime.state.dashboard.pages)
+    await runDashboardPagePlugins(runtime, runtime.config.raw)
     return json(response, runtime.state.dashboard.pages)
   }
   if (route.startsWith('/plugin-data/'))
@@ -512,7 +513,7 @@ function dashboardSignature(runtime: WorkspaceRuntime): string {
     state.timeline.length,
     runtime.tasks.list().length,
     Object.keys(state.pluginData).length,
-    state.dashboard.pages.length,
+    // state.dashboard.pages.length,
     state.services
       .map((service) => `${service.id}:${service.state}:${service.health.status}`)
       .join(','),

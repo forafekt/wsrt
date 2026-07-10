@@ -117,7 +117,6 @@ export function createRuntimeFromLoaded(
     timeline: [],
     plugins: createPluginRuntimeState(loaded.config),
     pluginData: {},
-    dashboard: { routes: [], pages: [] },
     mcp: createMcpState(loaded.config),
   }
   const timeline = createRuntimeTimeline()

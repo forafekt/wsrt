@@ -6,10 +6,10 @@ import type {
   WsrtPluginMetadata,
   WorkspaceRuntime,
 } from '@wsrt/types'
-import { dashboardPlugin, type DashboardPluginOptions } from '@wsrt/plugin-dashboard'
-import { gitPlugin } from '@wsrt/plugin-git'
-import { typeScriptPlugin } from '@wsrt/plugin-typescript'
-import { workspacePlugin } from '@wsrt/plugin-workspace'
+// import { dashboardPlugin, type DashboardPluginOptions } from '@wsrt/plugin-dashboard'
+// import { gitPlugin } from '@wsrt/plugin-git'
+// import { typeScriptPlugin } from '@wsrt/plugin-typescript'
+// import { workspacePlugin } from '@wsrt/plugin-workspace'
 
 export function pluginNames(config: WsrtConfig): string[] {
   return resolvedPlugins(config).map((plugin) => plugin.name)
@@ -127,22 +127,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object'
 }
 
-function firstPartyPlugins(config: WsrtConfig): WsrtPlugin[] {
-  const plugins = resolvedPlugins(config)
+function firstPartyPlugins(_config: WsrtConfig): WsrtPlugin[] {
+  // const plugins = resolvedPlugins(config)
   return [
-    workspacePlugin(),
-    gitPlugin(),
-    typeScriptPlugin(),
-    ...(dashboardEnabledByConfig(config) && !plugins.some((plugin) => plugin.name === 'dashboard')
-      ? [dashboardPlugin(dashboardOptions(config.dashboard))]
-      : []),
+    // workspacePlugin(),
+    // gitPlugin(),
+    // typeScriptPlugin(),
+    // ...(dashboardEnabledByConfig(config) && !plugins.some((plugin) => plugin.name === 'dashboard')
+    //   ? [dashboardPlugin(dashboardOptions(config.dashboard))]
+    //   : []),
   ]
 }
 
-function dashboardEnabledByConfig(config: WsrtConfig): boolean {
-  return config.dashboard === true || (isRecord(config.dashboard) && config.dashboard.enabled !== false)
-}
+// function dashboardEnabledByConfig(config: WsrtConfig): boolean {
+//   return config.dashboard === true || (isRecord(config.dashboard) && config.dashboard.enabled !== false)
+// }
 
-function dashboardOptions(config: WsrtConfig['dashboard']): DashboardPluginOptions {
-  return isRecord(config) ? config as DashboardPluginOptions : {}
-}
+// function dashboardOptions(config: WsrtConfig['dashboard']): DashboardPluginOptions {
+//   return isRecord(config) ? config as DashboardPluginOptions : {}
+// }

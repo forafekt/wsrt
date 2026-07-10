@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { DashboardPluginPage, WsrtDiagnostic, WsrtPlugin, WorkspaceRuntime } from '@wsrt/types'
+import type { WsrtDiagnostic, WsrtPlugin, WorkspaceRuntime } from '@wsrt/types'
 import { packageManagerCommand, readJson, relative, runProcess, walkFiles } from '@wsrt/plugin-utils'
 
 type TsconfigInfo = {
@@ -18,7 +18,7 @@ type TypeScriptState = {
   lastTypecheck?: { exitCode: number | null; command: string; stdout: string; stderr: string }
 }
 
-export function typeScriptPlugin(): WsrtPlugin {
+export default function typeScriptPlugin(): WsrtPlugin {
   return {
     name: 'typescript',
     runtimeCreated({ runtime }) {
@@ -36,13 +36,22 @@ export function typeScriptPlugin(): WsrtPlugin {
         run: ({ runtime: currentRuntime }) => runTypecheck(currentRuntime),
       })
     },
-    dashboardRoutes(routes) {
-      routes.push({ id: 'typescript', label: 'TypeScript', path: '#typescript' })
-    },
-    dashboardPages(pages, { runtime }) {
+
+    // TODO
+    // dashboardRoutes(routes) {
+    //   routes.push({ id: 'typescript', label: 'TypeScript', path: '#typescript' })
+    // },
+    // dashboardPages(pages, { runtime }) {
+    //   const state = runtime.query.plugin('typescript') as TypeScriptState | undefined
+    //   if (!state?.detected) return
+    //   pages.push(typeScriptDashboardPage(state))
+    // },
+    custom({ runtime }) {
+      if (!runtime.state?.dashboard) return
+      runtime.state.dashboard.routes.push({ id: 'typescript', label: 'TypeScript', path: '#typescript' })
       const state = runtime.query.plugin('typescript') as TypeScriptState | undefined
       if (!state?.detected) return
-      pages.push(typeScriptDashboardPage(state))
+      runtime.state.dashboard.pages.push(typeScriptDashboardPage(state))
     },
     mcpTools(entries) {
       entries.push({
@@ -54,6 +63,8 @@ export function typeScriptPlugin(): WsrtPlugin {
     },
   }
 }
+
+export { typeScriptPlugin }
 
 function refreshTypeScript(runtime: WorkspaceRuntime): TypeScriptState {
   const tsconfigs = walkFiles(runtime.root, (file) => /^tsconfig(\..+)?\.json$/.test(path.basename(file)))
@@ -160,6 +171,9 @@ function upsertGraph(runtime: WorkspaceRuntime, tsconfigs: TsconfigInfo[]): void
     }
   }
 }
+
+// TODO
+type DashboardPluginPage = Record<string, unknown>
 
 function typeScriptDashboardPage(state: TypeScriptState): DashboardPluginPage {
   return {

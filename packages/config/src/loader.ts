@@ -156,7 +156,7 @@ async function loadConfigRecursive(
 
   stack.pop()
 
-  return mergeWsrtConfig(merged, loaded)
+  return mergeWsrtConfig(merged, await normalizePluginsConfig(loaded))
 }
 
 async function loadSingleConfig(
@@ -306,4 +306,48 @@ function stripJsonComments(source: string): string {
   }
 
   return output
+}
+async function normalizePluginsConfig(config: WsrtConfig): Promise<WsrtConfig> {
+  for (let index = 0; index < config.plugins.length; index += 1) {
+    const plugin = config.plugins[index]
+    const isRemoteHttp = typeof plugin === 'string' && (plugin.startsWith('http://') || plugin.startsWith('https://'))
+    const isWsrt = typeof plugin === 'string' && plugin.startsWith('wsrt:') && !isRemoteHttp 
+    const isModule = typeof plugin === 'string' && !isRemoteHttp && !isWsrt
+
+    if (isWsrt) {
+      const pluginNameQuery = plugin.slice('wsrt:'.length)
+      const pluginName = plugin.split('?')[0].slice('wsrt:'.length).trim();
+      config.plugins[index] = await import(`@wsrt/${pluginName}`).catch(() => {
+        throw new Error(`Plugin not found: ${pluginName}. Please try installing '${pluginName}'`)
+      }).then((plugin) => {
+        if (typeof plugin?.default !== 'function') {
+          throw new Error('Plugin must export default a function')
+        }
+        return plugin.default(parseOptionsFromQueryString(pluginNameQuery))
+      })
+    }
+
+    if (isModule) {
+      const pluginNameQuery = plugin
+       const pluginName = plugin.split('?')[0].trim();
+      config.plugins[index] = await import(pluginName).catch(() => {
+        throw new Error(`Plugin not found: ${pluginName}. Please try installing '${pluginName}'`)
+      }).then((plugin) => {
+        if (typeof plugin?.default !== 'function') {
+          throw new Error('Plugin must export default a function')
+        }
+        return plugin.default(parseOptionsFromQueryString(pluginNameQuery))
+      })
+    }
+  }
+  return config
+}
+
+function parseOptionsFromQueryString(search: string) {
+  const options: Record<string, any> = {}
+  const url = new URL(search, 'http://localhost')
+  for (const [key, value] of url.searchParams) {
+    options[key] = value
+  }
+  return options
 }

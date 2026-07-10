@@ -25,7 +25,6 @@ export {
   createRuntimeTaskRegistry,
 } from '@wsrt/runtime/registries'
 export { createServiceRegistry } from '@wsrt/services'
-export { dashboardPlugin, startDashboard } from '@wsrt/plugin-dashboard'
 export { createWsrtReport } from '@wsrt/reports'
 export { generateArtifacts } from '@wsrt/artifacts'
 export { buildWorkspaceGraph } from '@wsrt/graph'
@@ -36,16 +35,9 @@ export { syncTsconfigs } from '@wsrt/sync/tsconfig'
 export { createVirtualImportState, virtualModuleContents } from '@wsrt/virtual'
 export { commandAdapter, compositeAdapter, nodeAdapter, viteAdapter } from '@wsrt/adapter-core'
 export { createOrchestratedViteConfig } from '@wsrt/adapter-vite'
-export { hasWsrtVitePlugin, wsrt } from '@wsrt/plugin-vite'
-export { gitPlugin } from '@wsrt/plugin-git'
-export { typeScriptPlugin } from '@wsrt/plugin-typescript'
-export { workspacePlugin } from '@wsrt/plugin-workspace'
 export type {
   AdapterName,
   ConfigSource,
-  DashboardRoute,
-  DashboardPluginPage,
-  DashboardPluginPageWidget,
   DiagnosticLevel,
   LoadedWsrtConfig,
   ManifestSyncConfig,

@@ -59,42 +59,46 @@ export type RuntimeArtifact = {
   bytes?: number
   message?: string
 }
+type EventMapEntry<T = any> = T | {[key: string]: any}
 
 export type RuntimeEventMap = {
-  'runtime:created': { runtime: WorkspaceRuntime }
-  'runtime:started': { runtime: WorkspaceRuntime }
-  'runtime:stopped': { runtime: WorkspaceRuntime }
-  'config:loaded': { root: string; configFile?: string }
-  'project:discovered': { project: RuntimeProject }
-  'package:discovered': { package: WorkspacePackage }
-  'graph:updated': { graph: WorkspaceGraph }
-  'service:registered': { service: RuntimeService }
-  'service:starting': { service: RuntimeService }
-  'service:started': { service: RuntimeService; handle?: ProjectHandle }
-  'service:failed': { service: RuntimeService; error: string }
-  'service:stopping': { service: RuntimeService }
-  'service:stopped': { service: RuntimeService }
-  'service:health': { service: RuntimeService; health: ServiceHealth }
-  'diagnostic:added': { diagnostic: WsrtDiagnostic }
-  'artifacts:generated': { artifacts: RuntimeArtifact[] }
-  'task:started': { task: RuntimeTaskDefinition }
-  'task:completed': { task: RuntimeTaskDefinition; result: unknown }
-  'task:failed': { task: RuntimeTaskDefinition; error: string }
-  'command:started': { command: RuntimeCommandDefinition; args: string[] }
-  'command:completed': { command: RuntimeCommandDefinition; result: unknown }
-  'command:failed': { command: RuntimeCommandDefinition; error: string }
-  'dashboard:action': { action: string; id?: string; status?: 'ok' | 'unsupported' | 'failed' }
-  'plugin:data-updated': { plugin: string; key: string; data: unknown }
-  'git:repository-detected': { root: string; branch?: string }
-  'git:status-refreshed': { root: string; changed: number; staged: number; untracked: number }
-  'typescript:tsconfig-discovered': { file: string }
-  'typescript:state-refreshed': { root: string; tsconfigs: number; diagnostics: number }
-  'typescript:typecheck-started': { root: string }
-  'typescript:typecheck-completed': { root: string; exitCode: number | null }
-  'typescript:typecheck-failed': { root: string; error: string }
-  'workspace:package-manager-detected': { root: string; packageManager?: string }
-  'workspace:package-discovered': { name: string; root: string }
-  'workspace:graph-updated': { packages: number; edges: number }
+  [key: string]: EventMapEntry
+  'runtime:created': EventMapEntry<{ runtime: WorkspaceRuntime }>
+  'runtime:started': EventMapEntry<{ runtime: WorkspaceRuntime }>
+  'runtime:stopped': EventMapEntry<{ runtime: WorkspaceRuntime }>
+  'config:loaded': EventMapEntry<{ config: WsrtConfig; runtime: WorkspaceRuntime }>
+  'config:updated': EventMapEntry<{ config: WsrtConfig; runtime: WorkspaceRuntime }>
+  'project:discovered': EventMapEntry<{ project: RuntimeProject }>
+  'package:discovered': EventMapEntry<{ package: WorkspacePackage }>
+  'graph:updated': EventMapEntry<{ graph: WorkspaceGraph }>
+  'service:registered': EventMapEntry<{ service: RuntimeService }>
+  'service:starting': EventMapEntry<{ service: RuntimeService }>
+  'service:started': EventMapEntry<{ service: RuntimeService; handle?: ProjectHandle }>
+  'service:failed': EventMapEntry<{ service: RuntimeService; error: string }>
+  'service:stopping': EventMapEntry<{ service: RuntimeService }>
+  'service:stopped': EventMapEntry<{ service: RuntimeService }>
+  'service:health': EventMapEntry<{ service: RuntimeService; health: ServiceHealth }>
+  'diagnostic:added': EventMapEntry<{ diagnostic: WsrtDiagnostic }>
+  'artifacts:generated': EventMapEntry<{ artifacts: RuntimeArtifact[] }>
+  'task:started': EventMapEntry<{ task: RuntimeTaskDefinition }>
+  'task:completed': EventMapEntry<{ task: RuntimeTaskDefinition; result: unknown }>
+  'task:failed': EventMapEntry<{ task: RuntimeTaskDefinition; error: string }>
+  'command:started': EventMapEntry<{ command: RuntimeCommandDefinition; args: string[] }>
+  'command:completed': EventMapEntry<{ command: RuntimeCommandDefinition; result: unknown }>
+  'command:failed': EventMapEntry<{ command: RuntimeCommandDefinition; error: string }>
+  // TODO: this should not be here as part of the core. They are plugins
+  // 'dashboard:action': { action: string; id?: string; status?: 'ok' | 'unsupported' | 'failed' }
+  // 'plugin:data-updated': { plugin: string; key: string; data: unknown }
+  // 'git:repository-detected': { root: string; branch?: string }
+  // 'git:status-refreshed': { root: string; changed: number; staged: number; untracked: number }
+  // 'typescript:tsconfig-discovered': { file: string }
+  // 'typescript:state-refreshed': { root: string; tsconfigs: number; diagnostics: number }
+  // 'typescript:typecheck-started': { root: string }
+  // 'typescript:typecheck-completed': { root: string; exitCode: number | null }
+  // 'typescript:typecheck-failed': { root: string; error: string }
+  // 'workspace:package-manager-detected': { root: string; packageManager?: string }
+  // 'workspace:package-discovered': { name: string; root: string }
+  // 'workspace:graph-updated': { packages: number; edges: number }
 }
 
 export type RuntimeEventName = keyof RuntimeEventMap
@@ -133,11 +137,9 @@ export type ServiceKind =
   | 'dev-server'
   | 'api'
   | 'worker'
-  | 'electron'
   | 'job'
   | 'registry'
   | 'mcp'
-  | 'dashboard'
   | 'custom'
 
 export type ServiceLifecycleState =
@@ -242,12 +244,6 @@ export type McpRuntimeState = {
   maxResults: number
   tools: McpEntry[]
   resources: McpEntry[]
-}
-
-export type DashboardRoute = {
-  id: string
-  label: string
-  path: string
 }
 
 export type RuntimeOverview = {
@@ -388,9 +384,8 @@ export type WsrtPlugin = {
     artifacts: RuntimeArtifact[],
     context: WsrtPluginContext,
   ) => void | Promise<void>
-  dashboardRoutes?: (routes: DashboardRoute[], context: WsrtPluginContext) => void | Promise<void>
-  dashboardPages?: (pages: DashboardPluginPage[], context: WsrtPluginContext) => void | Promise<void>
   mcpTools?: (entries: McpEntry[], context: WsrtPluginContext) => void | Promise<void>
+  custom?: (context: WsrtPluginContext) => void | Promise<void>
 }
 
 export type WsrtPluginMetadata = {
@@ -421,21 +416,7 @@ export type WsrtModuleReferenceContext = {
 
 export type WsrtModuleResolvable<T> = T | WsrtModuleReference
 
-export type DashboardPluginPageWidget =
-  | { kind: 'metric'; label: string; value: unknown; tone?: 'neutral' | 'ok' | 'warning' | 'error' }
-  | { kind: 'key-values'; title: string; values: Record<string, unknown> }
-  | { kind: 'table'; title: string; headers: string[]; rows: unknown[][] }
-  | { kind: 'badges'; title: string; values: unknown[] }
-  | { kind: 'actions'; title: string; actions: Array<{ label: string; action: string; id?: string; value?: string; disabled?: boolean }> }
-  | { kind: 'json'; title: string; data: unknown }
 
-export type DashboardPluginPage = {
-  id: string
-  title: string
-  subtitle?: string
-  plugin: string
-  widgets: DashboardPluginPageWidget[]
-}
 
 export type ConfigSource = {
   file: string
@@ -499,7 +480,6 @@ export type WsrtConfig = {
   analyze?: Record<string, unknown>
   diagnostics?: { path?: string }
   server?: ServerConfig
-  dashboard?: boolean | (ServerConfig & { enabled?: boolean; path?: string })
   artifacts?: {
     dir?: string
     report?: boolean
@@ -650,8 +630,9 @@ export type WorkspaceRuntimeState = {
     list: () => WsrtPluginMetadata[]
   }
   pluginData: Record<string, unknown>
-  dashboard: { routes: DashboardRoute[]; pages: DashboardPluginPage[] }
   mcp: McpRuntimeState
+} & {
+    [key: string]: any
 }
 
 export type RuntimeDiagnostics = {

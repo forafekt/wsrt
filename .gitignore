@@ -172,11 +172,5 @@ apps/browser-extension/src/components.d.ts
 
 # End of https://www.toptal.com/developers/gitignore/api/node,vue,vuejs
 
-
-# ActiveLane
-.activelane
-auto-imports.d.ts
-components.d.ts
-.vite
-.vitem
-.monorepo
+# wsrt
+.wsrt

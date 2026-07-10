@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { DashboardPluginPage, WsrtDiagnostic, WsrtPlugin, WorkspacePackage, WorkspaceRuntime } from '@wsrt/types'
+import type { WsrtDiagnostic, WsrtPlugin, WorkspacePackage, WorkspaceRuntime } from '@wsrt/types'
 import { packageManagerCommand, readJson, relative, runProcess, walkFiles } from '@wsrt/plugin-utils'
 
 type PackageSummary = {
@@ -24,7 +24,7 @@ type WorkspaceState = {
   diagnostics: WsrtDiagnostic[]
 }
 
-export function workspacePlugin(): WsrtPlugin {
+export default function workspacePlugin(): WsrtPlugin {
   return {
     name: 'workspace',
     runtimeCreated({ runtime }) {
@@ -40,12 +40,19 @@ export function workspacePlugin(): WsrtPlugin {
     packagesDiscovered(packages, { runtime }) {
       for (const pkg of packages) runtime.events.emit('workspace:package-discovered', { name: pkg.name, root: pkg.root })
     },
-    dashboardRoutes(routes) {
-      routes.push({ id: 'workspace', label: 'Workspace', path: '#workspace' })
-    },
-    dashboardPages(pages, { runtime }) {
+  // TODO
+    // dashboardRoutes(routes) {
+    //   routes.push({ id: 'workspace', label: 'Workspace', path: '#workspace' })
+    // },
+    // dashboardPages(pages, { runtime }) {
+    //   const state = runtime.query.plugin('workspace') as WorkspaceState | undefined
+    //   if (state) pages.push(workspaceDashboardPage(state))
+    // },
+    custom({ runtime }) {
+      if (!runtime.state?.dashboard) return
+      runtime.state.dashboard.routes.push({ id: 'workspace', label: 'Workspace', path: '#workspace' })
       const state = runtime.query.plugin('workspace') as WorkspaceState | undefined
-      if (state) pages.push(workspaceDashboardPage(state))
+      if (state) runtime.state.dashboard.pages.push(workspaceDashboardPage(state))
     },
     mcpTools(entries) {
       entries.push({
@@ -57,6 +64,8 @@ export function workspacePlugin(): WsrtPlugin {
     },
   }
 }
+
+export { workspacePlugin }
 
 function refreshWorkspace(runtime: WorkspaceRuntime): WorkspaceState {
   const rootPackage = packageSummary(runtime.root, runtime.root, runtime.state.packages)
@@ -205,7 +214,8 @@ function upsertGraph(runtime: WorkspaceRuntime, packages: PackageSummary[]): voi
     }
   }
 }
-
+// TODO
+type DashboardPluginPage = Record<string, unknown>
 function workspaceDashboardPage(state: WorkspaceState): DashboardPluginPage {
   return {
     id: 'workspace',

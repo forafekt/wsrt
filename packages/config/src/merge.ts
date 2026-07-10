@@ -12,7 +12,6 @@ const objectKeysToMerge = new Set([
   'analyze',
   'diagnostics',
   'server',
-  'dashboard',
   'artifacts',
   'mcp',
   'runtime',

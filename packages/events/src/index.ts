@@ -40,9 +40,9 @@ export function createRuntimeEventBus(timeline = createRuntimeTimeline()): Runti
   return {
     on(name, listener) {
       const bucket = listeners.get(name) ?? new Set()
-      bucket.add(listener as (event: RuntimeEventMap[RuntimeEventName]) => void)
+      bucket.add(listener)
       listeners.set(name, bucket)
-      return () => bucket.delete(listener as (event: RuntimeEventMap[RuntimeEventName]) => void)
+      return () => bucket.delete(listener)
     },
     once(name, listener) {
       const off = this.on(name, (event) => {
@@ -116,5 +116,5 @@ function summarizeEvent<Name extends RuntimeEventName>(
   if ('root' in event) {
     return { summary: `${name} ${event.root}`, detail: event }
   }
-  return { summary: name }
+  return { summary: name.toString() }
 }

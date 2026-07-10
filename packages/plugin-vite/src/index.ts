@@ -1,8 +1,8 @@
 import type { Alias, Plugin, ResolvedConfig } from 'vite'
-import type { DashboardRequestHandler } from '@wsrt/plugin-dashboard'
 import type { WsrtVitePluginOptions, WorkspaceRuntime } from '@wsrt/types'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 
-export function wsrt(options: WsrtVitePluginOptions = {}): Plugin {
+export default function wsrt(options: WsrtVitePluginOptions = {}): Plugin {
   let resolvedConfig: ResolvedConfig | undefined
   return {
     name: 'wsrt',
@@ -71,6 +71,13 @@ export function wsrt(options: WsrtVitePluginOptions = {}): Plugin {
       })
     },
   }
+}
+
+export { wsrt }
+
+ type DashboardRequestHandler = {
+    handle: (request: IncomingMessage, response: ServerResponse) => boolean;
+    close: () => void;
 }
 
 function dashboardRequestHandler(runtime: WorkspaceRuntime): DashboardRequestHandler | undefined {

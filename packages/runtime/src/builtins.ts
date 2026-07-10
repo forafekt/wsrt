@@ -90,21 +90,10 @@ function registerCoreCliGroups(runtime: WorkspaceRuntime): void {
   runtime.cli.registerGroup({
     id: 'run',
     title: 'Run lifecycle services',
-    aliases: ['dev', 'dashboard', 'mcp'],
+    aliases: ['dev', 'mcp'],
     async run({ runtime: currentRuntime, args, options }) {
       const alias = typeof options.alias === 'string' ? options.alias : undefined
       const [target = inferRunTarget(options), ...rest] = alias ? [alias, ...args] : args
-      if (target === 'dashboard') {
-        const service = await currentRuntime.services.start('dashboard')
-        return {
-          kind: 'lifecycle',
-          message: `Workspace runtime dashboard running${service.url ? ` at ${service.url}` : ''}`,
-          close: async () => {
-            await currentRuntime.services.stop('dashboard')
-          },
-          value: service,
-        } satisfies RuntimeCliLifecycleResult
-      }
       if (target === 'mcp') {
         return runMcpTool(currentRuntime, rest[0] ?? 'workspace.overview', parseKeyValues(rest.slice(1)))
       }
@@ -197,9 +186,9 @@ async function startProjects(runtime: WorkspaceRuntime, names: string[]): Promis
 function lifecycleMessage(handles: ProjectHandle[]): string {
   if (handles.length === 1) {
     const [handle] = handles
-    return `Workspace runtime ${handle.adapter} service "${handle.name}" running${handle.url ? ` at ${handle.url}` : ''}`
+    return `WSRT ${handle.adapter} service "${handle.name}" running${handle.url ? ` at ${handle.url}` : ''}`
   }
-  return `Workspace runtime running ${handles.length} service(s)`
+  return `WSRT running ${handles.length} service(s)`
 }
 
 function runExternalCommand(command: string, args: string[]): Promise<{ command: string; code: number | null }> {

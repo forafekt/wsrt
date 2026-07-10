@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
-import type { DashboardPluginPage, WsrtPlugin, WorkspaceRuntime } from '@wsrt/types'
+import type { WsrtPlugin, WorkspaceRuntime } from '@wsrt/types'
 
 type GitState = {
   detected: boolean
@@ -14,7 +14,7 @@ type GitState = {
   recentCommits: Array<{ hash: string; shortHash: string; subject: string; author?: string; date?: string }>
 }
 
-export function gitPlugin(): WsrtPlugin {
+export default function gitPlugin(): WsrtPlugin {
   return {
     name: 'git',
     runtimeCreated({ runtime }) {
@@ -32,13 +32,12 @@ export function gitPlugin(): WsrtPlugin {
         run: ({ runtime: currentRuntime }) => refreshGit(currentRuntime),
       })
     },
-    dashboardRoutes(routes) {
-      routes.push({ id: 'git', label: 'Git', path: '#git' })
-    },
-    dashboardPages(pages, { runtime }) {
-      const state = runtime.query.plugin('git') as GitState | undefined
+    custom({ runtime }) {
+      runtime.state.dashboard.routes.push({ id: 'git', label: 'Git', path: '#git' })
+
+    const state = runtime.query.plugin('git') as GitState | undefined
       if (!state?.detected) return
-      pages.push(gitDashboardPage(state))
+      runtime.state.dashboard.pages.push(gitDashboardPage(state))
     },
     mcpTools(entries) {
       entries.push({
@@ -50,6 +49,8 @@ export function gitPlugin(): WsrtPlugin {
     },
   }
 }
+
+export { gitPlugin }
 
 function refreshGit(runtime: WorkspaceRuntime): GitState {
   const root = git(['rev-parse', '--show-toplevel'], runtime.root)
@@ -130,6 +131,7 @@ function upsertGraph(runtime: WorkspaceRuntime, state: GitState): void {
   }
 }
 
+type DashboardPluginPage = Record<string, unknown>
 function gitDashboardPage(state: GitState): DashboardPluginPage {
   return {
     id: 'git',

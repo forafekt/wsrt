@@ -30,7 +30,6 @@
     "@wsrt/environment": "workspace:*",
     "@wsrt/events": "workspace:*",
     "@wsrt/services": "workspace:*",
-    "@wsrt/plugin-dashboard": "workspace:*",
     "@wsrt/reports": "workspace:*",
     "@wsrt/artifacts": "workspace:*",
     "@wsrt/graph": "workspace:*",
@@ -40,10 +39,6 @@
     "@wsrt/virtual": "workspace:*",
     "@wsrt/adapter-core": "workspace:*",
     "@wsrt/adapter-vite": "workspace:*",
-    "@wsrt/plugin-vite": "workspace:*",
-    "@wsrt/plugin-git": "workspace:*",
-    "@wsrt/plugin-typescript": "workspace:*",
-    "@wsrt/plugin-workspace": "workspace:*",
     "@wsrt/types": "workspace:*"
   }
 }
