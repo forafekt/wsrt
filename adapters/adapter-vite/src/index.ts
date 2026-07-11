@@ -4,7 +4,7 @@ import type { ProjectAdapter } from '@wsrt/types'
 
 export function viteAdapter(): ProjectAdapter {
   return {
-    name: 'vite',
+    name: 'wsrt-vite',
     async start({ runtime, project }) {
       const orchestrated = await createOrchestratedViteConfig({ runtime, project })
       const command = viteCommand({ runtime, project })

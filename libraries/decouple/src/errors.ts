@@ -1,0 +1,6 @@
+export class DecoupleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DecoupleError";
+  }
+}

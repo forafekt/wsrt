@@ -4,43 +4,8 @@ import gitPlugin from '@wsrt/plugin-git'
 import typeScriptPlugin from '@wsrt/plugin-typescript'
 import workspacePlugin from '@wsrt/plugin-workspace'
 
-
-
 export default defineWorkspace({
-  projects: {
-    build: {
-      root: '.',
-      adapter: 'node',
-      command: 'pnpm -r build',
-      environment: {
-        NODE_ENV: '${runtime.environment}',
-      },
-    },
-    release: {
-      root: '.',
-      adapter: 'node',
-      command: 'pnpm -r release',
-      environment: {
-        NODE_ENV: '${runtime.environment}',
-      },
-    },
-    pack: {
-      root: '.',
-      adapter: 'node',
-      command: 'pnpm -r pack',
-      environment: {
-        NODE_ENV: '${runtime.environment}',
-      },
-    },
-    publish: {
-      root: '.',
-      adapter: 'node',
-      command: 'pnpm -r publish',
-      environment: {
-        NODE_ENV: '${runtime.environment}',
-      },
-    },
-  },
+  projects: {},
   workspace: {
     packages: [
       './packages/*',
