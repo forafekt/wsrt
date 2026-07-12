@@ -32,22 +32,22 @@ importers:
         version: link:packages/core
       '@wsrt/plugin-dashboard':
         specifier: workspace:*
-        version: link:packages/plugin-dashboard
+        version: link:plugins/plugin-dashboard
       '@wsrt/plugin-git':
         specifier: workspace:*
-        version: link:packages/plugin-git
+        version: link:plugins/plugin-git
       '@wsrt/plugin-typescript':
         specifier: workspace:*
-        version: link:packages/plugin-typescript
+        version: link:plugins/plugin-typescript
       '@wsrt/plugin-utils':
         specifier: workspace:*
-        version: link:packages/plugin-utils
+        version: link:plugins/plugin-utils
       '@wsrt/plugin-vite':
         specifier: workspace:*
-        version: link:packages/plugin-vite
+        version: link:plugins/plugin-vite
       '@wsrt/plugin-workspace':
         specifier: workspace:*
-        version: link:packages/plugin-workspace
+        version: link:plugins/plugin-workspace
       rimraf:
         specifier: ^6.1.3
         version: 6.1.3
@@ -55,22 +55,22 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/adapter-command:
+  adapters/adapter-command:
     dependencies:
       '@wsrt/environment':
         specifier: workspace:*
-        version: link:../environment
+        version: link:../../packages/environment
       '@wsrt/types':
         specifier: workspace:*
-        version: link:../types
+        version: link:../../packages/types
 
-  packages/adapter-composite:
+  adapters/adapter-composite:
     dependencies:
       '@wsrt/types':
         specifier: workspace:*
-        version: link:../types
+        version: link:../../packages/types
 
-  packages/adapter-core:
+  adapters/adapter-core:
     dependencies:
       '@wsrt/adapter-command':
         specifier: workspace:*
@@ -86,31 +86,46 @@ importers:
         version: link:../adapter-vite
       '@wsrt/types':
         specifier: workspace:*
-        version: link:../types
+        version: link:../../packages/types
 
-  packages/adapter-node:
+  adapters/adapter-node:
     dependencies:
       '@wsrt/adapter-command':
         specifier: workspace:*
         version: link:../adapter-command
       '@wsrt/types':
         specifier: workspace:*
-        version: link:../types
+        version: link:../../packages/types
 
-  packages/adapter-vite:
+  adapters/adapter-vite:
     dependencies:
       '@wsrt/diagnostics':
         specifier: workspace:*
-        version: link:../diagnostics
+        version: link:../../packages/diagnostics
       '@wsrt/plugin-vite':
         specifier: workspace:*
-        version: link:../plugin-vite
+        version: link:../../plugins/plugin-vite
       '@wsrt/types':
         specifier: workspace:*
-        version: link:../types
+        version: link:../../packages/types
       vite:
         specifier: ^8.0.8
         version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
+
+  libraries/events:
+    dependencies:
+      '@wsrt/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+
+  libraries/worker-pool:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.12.0
+        version: 24.13.3
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   packages/artifacts:
     dependencies:
@@ -146,10 +161,10 @@ importers:
     dependencies:
       '@wsrt/adapter-core':
         specifier: workspace:*
-        version: link:../adapter-core
+        version: link:../../adapters/adapter-core
       '@wsrt/adapter-vite':
         specifier: workspace:*
-        version: link:../adapter-vite
+        version: link:../../adapters/adapter-vite
       '@wsrt/artifacts':
         specifier: workspace:*
         version: link:../artifacts
@@ -220,50 +235,6 @@ importers:
         specifier: workspace:*
         version: link:../types
 
-  packages/plugin-dashboard:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/plugin-git:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/plugin-typescript:
-    dependencies:
-      '@wsrt/plugin-utils':
-        specifier: workspace:*
-        version: link:../plugin-utils
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/plugin-utils: {}
-
-  packages/plugin-vite:
-    dependencies:
-      '@wsrt/plugin-dashboard':
-        specifier: workspace:*
-        version: link:../plugin-dashboard
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-      vite:
-        specifier: ^8.0.8
-        version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
-
-  packages/plugin-workspace:
-    dependencies:
-      '@wsrt/plugin-utils':
-        specifier: workspace:*
-        version: link:../plugin-utils
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
   packages/plugins:
     dependencies:
       '@wsrt/types':
@@ -286,7 +257,7 @@ importers:
     dependencies:
       '@wsrt/adapter-core':
         specifier: workspace:*
-        version: link:../adapter-core
+        version: link:../../adapters/adapter-core
       '@wsrt/artifacts':
         specifier: workspace:*
         version: link:../artifacts
@@ -356,6 +327,50 @@ importers:
       '@wsrt/types':
         specifier: workspace:*
         version: link:../types
+
+  plugins/plugin-dashboard:
+    dependencies:
+      '@wsrt/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+
+  plugins/plugin-git:
+    dependencies:
+      '@wsrt/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+
+  plugins/plugin-typescript:
+    dependencies:
+      '@wsrt/plugin-utils':
+        specifier: workspace:*
+        version: link:../plugin-utils
+      '@wsrt/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+
+  plugins/plugin-utils: {}
+
+  plugins/plugin-vite:
+    dependencies:
+      '@wsrt/plugin-dashboard':
+        specifier: workspace:*
+        version: link:../plugin-dashboard
+      '@wsrt/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      vite:
+        specifier: ^8.0.8
+        version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
+
+  plugins/plugin-workspace:
+    dependencies:
+      '@wsrt/plugin-utils':
+        specifier: workspace:*
+        version: link:../plugin-utils
+      '@wsrt/types':
+        specifier: workspace:*
+        version: link:../../packages/types
 
 packages:
 
@@ -849,8 +864,8 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.28:
-    resolution: {integrity: sha512-YwUvVpSF7m1yOblFPrU3Hbo8XhPheBoiyfGuII6z19LnOr6JpDnyyp7LFNrfV56wS8tpvtBFGRISHN02pDdLOA==}
+  hono@4.12.29:
+    resolution: {integrity: sha512-1hNiRjawYrLq/4m3DQQjPGFg0VZkk4RjQJDff/excI6Dm9BiL75qxGrd7/c6YOxPdq6AscP3LiXhQ6fKFC1Waw==}
     engines: {node: '>=16.9.0'}
 
   http-errors@2.0.1:
@@ -1324,13 +1339,13 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@hono/node-server@1.19.14(hono@4.12.28)':
+  '@hono/node-server@1.19.14(hono@4.12.29)':
     dependencies:
-      hono: 4.12.28
+      hono: 4.12.29
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.14(hono@4.12.28)
+      '@hono/node-server': 1.19.14(hono@4.12.29)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -1340,7 +1355,7 @@ snapshots:
       eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.5.2(express@5.2.1)
-      hono: 4.12.28
+      hono: 4.12.29
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -1651,7 +1666,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.28: {}
+  hono@4.12.29: {}
 
   http-errors@2.0.1:
     dependencies:
