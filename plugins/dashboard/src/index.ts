@@ -1,1 +1,1 @@
-export{dashboardOperation,dashboardSnapshot}from'./api.js'
+export { dashboardOperation, dashboardSnapshot } from "./api.js";

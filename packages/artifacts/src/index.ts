@@ -1,1 +1,37 @@
-export type ArtifactStatus='pending'|'generating'|'ready'|'failed';export type ArtifactRecord={id:string;type:string;producer?:string;consumers:readonly string[];location?:string;status:ArtifactStatus;hash?:string;metadata:Readonly<Record<string,unknown>>};export class ArtifactRegistry{readonly#records=new Map<string,ArtifactRecord>();register(record:ArtifactRecord):ArtifactRecord{if(this.#records.has(record.id))throw new Error(`Duplicate artifact: ${record.id}`);this.#records.set(record.id,Object.freeze({...record}));return record}update(id:string,update:Partial<Omit<ArtifactRecord,'id'>>):ArtifactRecord{const record=this.get(id);const next=Object.freeze({...record,...update,id});this.#records.set(id,next);return next}get(id:string):ArtifactRecord{const value=this.#records.get(id);if(!value)throw new Error(`Unknown artifact: ${id}`);return value}list():readonly ArtifactRecord[]{return[...this.#records.values()]}}
+export type ArtifactStatus = "pending" | "generating" | "ready" | "failed";
+export type ArtifactRecord = {
+	id: string;
+	type: string;
+	producer?: string;
+	consumers: readonly string[];
+	location?: string;
+	status: ArtifactStatus;
+	hash?: string;
+	metadata: Readonly<Record<string, unknown>>;
+};
+export class ArtifactRegistry {
+	readonly #records = new Map<string, ArtifactRecord>();
+	register(record: ArtifactRecord): ArtifactRecord {
+		if (this.#records.has(record.id))
+			throw new Error(`Duplicate artifact: ${record.id}`);
+		this.#records.set(record.id, Object.freeze({ ...record }));
+		return record;
+	}
+	update(
+		id: string,
+		update: Partial<Omit<ArtifactRecord, "id">>,
+	): ArtifactRecord {
+		const record = this.get(id);
+		const next = Object.freeze({ ...record, ...update, id });
+		this.#records.set(id, next);
+		return next;
+	}
+	get(id: string): ArtifactRecord {
+		const value = this.#records.get(id);
+		if (!value) throw new Error(`Unknown artifact: ${id}`);
+		return value;
+	}
+	list(): readonly ArtifactRecord[] {
+		return [...this.#records.values()];
+	}
+}

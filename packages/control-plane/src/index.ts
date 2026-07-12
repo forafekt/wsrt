@@ -1,14 +1,320 @@
-import type{ProcessHandle,RuntimeInstance,RuntimeProvider}from'@wsrt/capabilities';import{compileSystemGraph,loadSystemDefinition,type NormalizedExecutable,type NormalizedSystemDefinition,type SystemDiagnostic}from'@wsrt/config';import{type ExecutionPlan,SystemGraph,type SystemNode}from'@wsrt/graph';import{LifecycleEngine,type LifecycleEvent,type LifecycleState}from'@wsrt/lifecycle';import{NodeRuntimeProvider}from'@wsrt/runtime-node'
-export type WorkspaceEvent=LifecycleEvent|{id:string;type:string;timestamp:string;source:string;correlationId:string;payload:unknown}
-export type ArtifactRecord={id:string;type:string;producer?:string;consumers:readonly string[];location?:string;status:'pending'|'generating'|'ready'|'failed';hash?:string;metadata:Readonly<Record<string,unknown>>}
-export type OperationResult={nodes:readonly string[];states:Readonly<Record<string,LifecycleState>>}
-export type ControlPlaneOptions={root?:string;config?:string;providers?:RuntimeProvider[];allowMutations?:boolean}
-export class WsrtControlPlane{readonly #events:WorkspaceEvent[]=[];readonly #artifacts=new Map<string,ArtifactRecord>();readonly #handles=new Map<string,ProcessHandle>();readonly #runtimes=new Map<string,RuntimeInstance>();#definition?:NormalizedSystemDefinition;#graph?:SystemGraph;#engine?:LifecycleEngine;#diagnostics:SystemDiagnostic[]=[];constructor(readonly options:ControlPlaneOptions={}){}
- async load():Promise<NormalizedSystemDefinition>{const loaded=await loadSystemDefinition(this.options.root,this.options.config);this.#diagnostics=[...loaded.diagnostics];if(!loaded.definition)throw new Error(this.#diagnostics.map(d=>d.message).join('\n'));this.#definition=loaded.definition;this.#graph=compileSystemGraph(loaded.definition);for(const issue of this.#graph.validate())this.#diagnostics.push({code:`graph.${issue.code}`,severity:'error',message:issue.message,source:{file:loaded.definition.sourceFile,path:issue.path.join('.')}});const providers=this.options.providers??[new NodeRuntimeProvider()];for(const runtime of Object.values(loaded.definition.runtimes)){const provider=providers.find(item=>item.id===runtime.provider);if(!provider)throw new Error(`Runtime provider not registered: ${runtime.provider}`);this.#runtimes.set(runtime.provider,await provider.create())}this.#engine=new LifecycleEngine(this.#graph,{onEvent:event=>this.#events.push(event)});for(const executable of loaded.definition.executables)this.#engine.register(executable.id,this.#handler(executable));for(const artifact of loaded.definition.artifacts)this.#artifacts.set(artifact.id,{id:artifact.id,type:artifact.type,producer:artifact.producer,consumers:artifact.consumers,location:artifact.location,status:'pending',metadata:artifact.metadata});return loaded.definition}
- definition():NormalizedSystemDefinition{return required(this.#definition,'Control plane is not loaded')}graph():SystemGraph{return required(this.#graph,'Control plane is not loaded')}validate():readonly SystemDiagnostic[]{return this.#diagnostics}plan(ids?:readonly string[]):ExecutionPlan{return this.graph().plan(ids?this.#closure(ids):this.#executableIds())}getNode(id:string):SystemNode|undefined{return this.graph().node(id)}getNodeState(id:string):LifecycleState|undefined{try{return this.#engine?.state(id)}catch{return undefined}}getDependencies(id:string){return this.graph().dependencies(id)}getConsumers(id:string){return this.graph().consumers(id)}listEvents(){return[...this.#events]}listArtifacts(){return[...this.#artifacts.values()]}
- async start(ids?:readonly string[]):Promise<OperationResult>{this.#assertMutable();const targets=ids?.map(id=>this.#resolve(id))??this.#longRunningIds();const selected=this.#closure(targets);await required(this.#engine,'Control plane is not loaded').start(selected);return this.#result(selected)}async stop(ids?:readonly string[]):Promise<OperationResult>{this.#assertMutable();const targets=ids?.map(id=>this.#resolve(id))??this.#executableIds();const selected=this.#dependants(targets);await required(this.#engine,'Control plane is not loaded').stop(selected);return this.#result(selected)}async restart(ids:readonly string[]):Promise<OperationResult>{await this.stop(ids);return this.start(ids)}async runTask(id:string):Promise<OperationResult>{const resolved=this.#resolve(id,'task');return this.start([resolved])}
- async dispose():Promise<void>{if(this.#engine)await this.#engine.stop(this.#executableIds()).catch(()=>{});await Promise.all([...this.#runtimes.values()].map(runtime=>runtime.dispose()));this.#runtimes.clear()}
- #handler(item:NormalizedExecutable){const runtime=()=>required(this.#runtimes.get(this.definition().runtimes[item.runtime].provider),`Runtime unavailable: ${item.runtime}`);return{start:async({signal}:{signal:AbortSignal})=>{if(!item.command)return;const handle=runtime().capabilities.require('spawn').spawn({command:item.command.command,args:item.command.args,cwd:item.root,environment:item.environment,shell:item.command.shell,signal});this.#handles.set(item.id,handle);if(item.kind==='task'){const exit=await handle.exit;if(exit.code!==0)throw new Error(`Task ${item.name} exited with code ${exit.code}`);for(const artifact of this.#artifacts.values())if(artifact.producer===item.name)this.#artifacts.set(artifact.id,{...artifact,status:'ready'})}},stop:async()=>{const handle=this.#handles.get(item.id);if(!handle?.running)return;handle.terminate();await Promise.race([handle.exit,runtime().capabilities.require('timers').delay(3000)]);if(handle.running)handle.terminate('SIGKILL');await handle.exit;this.#handles.delete(item.id)},ready:async({signal}:{signal:AbortSignal})=>{if(item.kind==='task'||!item.healthcheck)return;const health=item.healthcheck;if(health.type==='process'){if(!this.#handles.get(item.id)?.running)throw new Error(`Process ${item.name} is not running`);return}if(health.type==='tcp')throw new Error('TCP readiness requires a networking capability');const timers=runtime().capabilities.require('timers'),http=runtime().capabilities.require('http');let last:unknown;for(let attempt=0;attempt<(health.retries??20);attempt++){try{const response=await http.fetch(health.url,{signal:AbortSignal.timeout(health.timeoutMs??2000)});if(response.ok)return;last=new Error(`HTTP ${response.status}`)}catch(cause){last=cause}await timers.delay(health.intervalMs??250,signal)}throw last??new Error(`HTTP readiness failed for ${health.url}`)}}}
- #resolve(value:string,kind?:NormalizedExecutable['kind']){const match=this.definition().executables.find(item=>item.id===value||item.name===value);if(!match||kind&&match.kind!==kind)throw new Error(`Unknown ${kind??'executable'}: ${value}`);return match.id}#executableIds(){return this.definition().executables.map(item=>item.id)}#longRunningIds(){return this.definition().executables.filter(item=>item.kind!=='task'&&!item.id.includes('/process:')).map(item=>item.id)}#closure(ids:readonly string[]){const result=new Set(ids),visit=(id:string)=>{const related=[...this.graph().dependencies(id),...this.graph().neighbors(id,'out','contains')];for(const node of related)if(node.kind!=='artifact'&&!result.has(node.id)){result.add(node.id);visit(node.id)}};for(const id of ids)visit(id);return[...result]}#dependants(ids:readonly string[]){const result=new Set(ids),visit=(id:string)=>{const related=[...this.graph().consumers(id),...this.graph().neighbors(id,'out','contains')];for(const node of related)if(!result.has(node.id)){result.add(node.id);visit(node.id)}};for(const id of ids)visit(id);return[...result]}#result(ids:readonly string[]):OperationResult{return{nodes:ids,states:Object.fromEntries(ids.map(id=>[id,this.getNodeState(id)!]))}}#assertMutable(){if(this.options.allowMutations===false)throw new Error('Mutating control-plane operations are disabled')}}
-function required<T>(value:T|undefined,message:string):T{if(value===undefined)throw new Error(message);return value}
-export async function createControlPlane(options:ControlPlaneOptions={}):Promise<WsrtControlPlane>{const plane=new WsrtControlPlane(options);await plane.load();return plane}
+import type {
+	ProcessHandle,
+	RuntimeInstance,
+	RuntimeProvider,
+} from "@wsrt/capabilities";
+import {
+	compileSystemGraph,
+	loadSystemDefinition,
+	type NormalizedExecutable,
+	type NormalizedSystemDefinition,
+	type SystemDiagnostic,
+} from "@wsrt/config";
+import type { ExecutionPlan, SystemGraph, SystemNode } from "@wsrt/graph";
+import {
+	LifecycleEngine,
+	type LifecycleEvent,
+	type LifecycleState,
+} from "@wsrt/lifecycle";
+import { NodeRuntimeProvider } from "@wsrt/runtime-node";
+export type WorkspaceEvent =
+	| LifecycleEvent
+	| {
+			id: string;
+			type: string;
+			timestamp: string;
+			source: string;
+			correlationId: string;
+			payload: unknown;
+	  };
+export type ArtifactRecord = {
+	id: string;
+	type: string;
+	producer?: string;
+	consumers: readonly string[];
+	location?: string;
+	status: "pending" | "generating" | "ready" | "failed";
+	hash?: string;
+	metadata: Readonly<Record<string, unknown>>;
+};
+export type OperationResult = {
+	nodes: readonly string[];
+	states: Readonly<Record<string, LifecycleState>>;
+};
+export type ControlPlaneOptions = {
+	root?: string;
+	config?: string;
+	providers?: RuntimeProvider[];
+	allowMutations?: boolean;
+};
+export class WsrtControlPlane {
+	readonly #events: WorkspaceEvent[] = [];
+	readonly #artifacts = new Map<string, ArtifactRecord>();
+	readonly #handles = new Map<string, ProcessHandle>();
+	readonly #runtimes = new Map<string, RuntimeInstance>();
+	#definition?: NormalizedSystemDefinition;
+	#graph?: SystemGraph;
+	#engine?: LifecycleEngine;
+	#diagnostics: SystemDiagnostic[] = [];
+	constructor(readonly options: ControlPlaneOptions = {}) {}
+	async load(): Promise<NormalizedSystemDefinition> {
+		const loaded = await loadSystemDefinition(
+			this.options.root,
+			this.options.config,
+		);
+		this.#diagnostics = [...loaded.diagnostics];
+		if (!loaded.definition)
+			throw new Error(this.#diagnostics.map((d) => d.message).join("\n"));
+		this.#definition = loaded.definition;
+		this.#graph = compileSystemGraph(loaded.definition);
+		for (const issue of this.#graph.validate())
+			this.#diagnostics.push({
+				code: `graph.${issue.code}`,
+				severity: "error",
+				message: issue.message,
+				source: {
+					file: loaded.definition.sourceFile,
+					path: issue.path.join("."),
+				},
+			});
+		const providers = this.options.providers ?? [new NodeRuntimeProvider()];
+		for (const runtime of Object.values(loaded.definition.runtimes)) {
+			const provider = providers.find((item) => item.id === runtime.provider);
+			if (!provider)
+				throw new Error(`Runtime provider not registered: ${runtime.provider}`);
+			this.#runtimes.set(runtime.provider, await provider.create());
+		}
+		this.#engine = new LifecycleEngine(this.#graph, {
+			onEvent: (event) => this.#events.push(event),
+		});
+		for (const executable of loaded.definition.executables)
+			this.#engine.register(executable.id, this.#handler(executable));
+		for (const artifact of loaded.definition.artifacts)
+			this.#artifacts.set(artifact.id, {
+				id: artifact.id,
+				type: artifact.type,
+				producer: artifact.producer,
+				consumers: artifact.consumers,
+				location: artifact.location,
+				status: "pending",
+				metadata: artifact.metadata,
+			});
+		return loaded.definition;
+	}
+	definition(): NormalizedSystemDefinition {
+		return required(this.#definition, "Control plane is not loaded");
+	}
+	graph(): SystemGraph {
+		return required(this.#graph, "Control plane is not loaded");
+	}
+	validate(): readonly SystemDiagnostic[] {
+		return this.#diagnostics;
+	}
+	plan(ids?: readonly string[]): ExecutionPlan {
+		return this.graph().plan(ids ? this.#closure(ids) : this.#executableIds());
+	}
+	getNode(id: string): SystemNode | undefined {
+		return this.graph().node(id);
+	}
+	getNodeState(id: string): LifecycleState | undefined {
+		try {
+			return this.#engine?.state(id);
+		} catch {
+			return undefined;
+		}
+	}
+	getDependencies(id: string) {
+		return this.graph().dependencies(id);
+	}
+	getConsumers(id: string) {
+		return this.graph().consumers(id);
+	}
+	listEvents() {
+		return [...this.#events];
+	}
+	listArtifacts() {
+		return [...this.#artifacts.values()];
+	}
+	async start(ids?: readonly string[]): Promise<OperationResult> {
+		this.#assertMutable();
+		const targets =
+			ids?.map((id) => this.#resolve(id)) ?? this.#longRunningIds();
+		const selected = this.#closure(targets);
+		await required(this.#engine, "Control plane is not loaded").start(selected);
+		return this.#result(selected);
+	}
+	async stop(ids?: readonly string[]): Promise<OperationResult> {
+		this.#assertMutable();
+		const targets =
+			ids?.map((id) => this.#resolve(id)) ?? this.#executableIds();
+		const selected = this.#dependants(targets);
+		await required(this.#engine, "Control plane is not loaded").stop(selected);
+		return this.#result(selected);
+	}
+	async restart(ids: readonly string[]): Promise<OperationResult> {
+		await this.stop(ids);
+		return this.start(ids);
+	}
+	async runTask(id: string): Promise<OperationResult> {
+		const resolved = this.#resolve(id, "task");
+		return this.start([resolved]);
+	}
+	async dispose(): Promise<void> {
+		if (this.#engine)
+			await this.#engine.stop(this.#executableIds()).catch(() => {});
+		await Promise.all(
+			[...this.#runtimes.values()].map((runtime) => runtime.dispose()),
+		);
+		this.#runtimes.clear();
+	}
+	#handler(item: NormalizedExecutable) {
+		const runtime = () =>
+			required(
+				this.#runtimes.get(this.definition().runtimes[item.runtime].provider),
+				`Runtime unavailable: ${item.runtime}`,
+			);
+		return {
+			start: async ({ signal }: { signal: AbortSignal }) => {
+				if (!item.command) return;
+				const handle = runtime().capabilities.require("spawn").spawn({
+					command: item.command.command,
+					args: item.command.args,
+					cwd: item.root,
+					environment: item.environment,
+					shell: item.command.shell,
+					signal,
+				});
+				this.#handles.set(item.id, handle);
+				if (item.kind === "task") {
+					const exit = await handle.exit;
+					if (exit.code !== 0)
+						throw new Error(`Task ${item.name} exited with code ${exit.code}`);
+					for (const artifact of this.#artifacts.values())
+						if (artifact.producer === item.name)
+							this.#artifacts.set(artifact.id, {
+								...artifact,
+								status: "ready",
+							});
+				}
+			},
+			stop: async () => {
+				const handle = this.#handles.get(item.id);
+				if (!handle?.running) return;
+				handle.terminate();
+				await Promise.race([
+					handle.exit,
+					runtime().capabilities.require("timers").delay(3000),
+				]);
+				if (handle.running) handle.terminate("SIGKILL");
+				await handle.exit;
+				this.#handles.delete(item.id);
+			},
+			ready: async ({ signal }: { signal: AbortSignal }) => {
+				if (item.kind === "task" || !item.healthcheck) return;
+				const health = item.healthcheck;
+				if (health.type === "process") {
+					if (!this.#handles.get(item.id)?.running)
+						throw new Error(`Process ${item.name} is not running`);
+					return;
+				}
+				const timers = runtime().capabilities.require("timers");
+				let last: unknown;
+				for (let attempt = 0; attempt < (health.retries ?? 20); attempt++) {
+					try {
+						if (health.type === "tcp")
+							await runtime()
+								.capabilities.require("network")
+								.connect(health.host ?? "127.0.0.1", health.port, {
+									timeoutMs: health.timeoutMs ?? 2000,
+									signal,
+								});
+						else {
+							const response = await runtime()
+								.capabilities.require("http")
+								.fetch(health.url, {
+									signal: AbortSignal.timeout(health.timeoutMs ?? 2000),
+								});
+							if (!response.ok) throw new Error(`HTTP ${response.status}`);
+						}
+						return;
+					} catch (cause) {
+						last = cause;
+					}
+					await timers.delay(health.intervalMs ?? 250, signal);
+				}
+				throw last ?? new Error(`Readiness failed for ${item.name}`);
+			},
+		};
+	}
+	#resolve(value: string, kind?: NormalizedExecutable["kind"]) {
+		const match = this.definition().executables.find(
+			(item) => item.id === value || item.name === value,
+		);
+		if (!match || (kind && match.kind !== kind))
+			throw new Error(`Unknown ${kind ?? "executable"}: ${value}`);
+		return match.id;
+	}
+	#executableIds() {
+		return this.definition().executables.map((item) => item.id);
+	}
+	#longRunningIds() {
+		return this.definition()
+			.executables.filter(
+				(item) => item.kind !== "task" && !item.id.includes("/process:"),
+			)
+			.map((item) => item.id);
+	}
+	#closure(ids: readonly string[]) {
+		const result = new Set(ids),
+			visit = (id: string) => {
+				const related = [
+					...this.graph().dependencies(id),
+					...this.graph().neighbors(id, "out", "contains"),
+				];
+				for (const node of related)
+					if (node.kind !== "artifact" && !result.has(node.id)) {
+						result.add(node.id);
+						visit(node.id);
+					}
+			};
+		for (const id of ids) visit(id);
+		return [...result];
+	}
+	#dependants(ids: readonly string[]) {
+		const result = new Set(ids),
+			visit = (id: string) => {
+				const related = [
+					...this.graph().consumers(id),
+					...this.graph().neighbors(id, "out", "contains"),
+				];
+				for (const node of related)
+					if (!result.has(node.id)) {
+						result.add(node.id);
+						visit(node.id);
+					}
+			};
+		for (const id of ids) visit(id);
+		return [...result];
+	}
+	#result(ids: readonly string[]): OperationResult {
+		return {
+			nodes: ids,
+			states: Object.fromEntries(ids.map((id) => [id, this.getNodeState(id)!])),
+		};
+	}
+	#assertMutable() {
+		if (this.options.allowMutations === false)
+			throw new Error("Mutating control-plane operations are disabled");
+	}
+}
+function required<T>(value: T | undefined, message: string): T {
+	if (value === undefined) throw new Error(message);
+	return value;
+}
+export async function createControlPlane(
+	options: ControlPlaneOptions = {},
+): Promise<WsrtControlPlane> {
+	const plane = new WsrtControlPlane(options);
+	await plane.load();
+	return plane;
+}
