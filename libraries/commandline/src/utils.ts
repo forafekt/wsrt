@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 // utils.ts
-import type Option from "./option.ts";
+import type Option from "./option.js";
 
 export const removeBrackets = (v: string) => v.replace(/[<[].+/, "").trim();
 

@@ -1,6 +1,6 @@
-import CommandLine from "./commandline.ts";
-import Command from "./command.ts";
-import { CommandLineError } from "./utils.ts";
+import CommandLine from "./commandline.js";
+import Command from "./command.js";
+import { CommandLineError } from "./utils.js";
 
 const cmd = (name: string = "") => new CommandLine(name);
 

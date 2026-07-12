@@ -95,6 +95,27 @@ export class LifecycleEngine {
 		if (!state) throw new Error(`Unknown lifecycle node: ${nodeId}`);
 		return state;
 	}
+	/** Records an externally observed process exit in the authoritative lifecycle. */
+	processExited(
+		nodeId: string,
+		expected: boolean,
+		correlationId: string,
+	): void {
+		const state = this.state(nodeId);
+		if (expected) {
+			if (["stopping", "stopped", "resolved"].includes(state)) return;
+			this.#transition(nodeId, "stopping", correlationId);
+			this.#transition(nodeId, "stopped", correlationId);
+			return;
+		}
+		if (state !== "failed")
+			this.#transition(
+				nodeId,
+				"failed",
+				correlationId,
+				new Error("Process exited unexpectedly"),
+			);
+	}
 	async start(
 		ids: Iterable<string> = this.#handlers.keys(),
 		signal = new AbortController().signal,
@@ -123,8 +144,9 @@ export class LifecycleEngine {
 			);
 			this.#transition(id, "running", correlationId);
 			if (handler.ready) {
+				const ready = handler.ready;
 				await this.#attempt(
-					() => handler.ready!({ signal, nodeId: id, correlationId }),
+					() => ready({ signal, nodeId: id, correlationId }),
 					signal,
 				);
 				this.#transition(id, "ready", correlationId);
@@ -222,7 +244,7 @@ async function withTimeout<T>(
 	try {
 		return await Promise.race([promise, timeout, cancelled]);
 	} finally {
-		clearTimeout(timer!);
+		if (timer !== undefined) clearTimeout(timer);
 	}
 }
 

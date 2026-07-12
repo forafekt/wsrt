@@ -70,3 +70,16 @@ pnpm typecheck
 pnpm build
 pnpm test
 ```
+## Operational workflow
+
+```sh
+pnpm install
+pnpm build
+node packages/cli/dist/index.js run validate
+```
+
+The root configuration dogfoods architecture checking, lint, type-checking, building and tests without recursively invoking WSRT. `wsrt status`, `health`, `operations`, `events` and `artifacts` read the authoritative snapshot; `start`, `stop`, `restart`, `run` and `cancel` create or control revisioned operations.
+
+Readiness and health are intentionally separate. Readiness admits dependants during startup. Health checks continue after startup and drive `checking`, `healthy`, `degraded` and `unhealthy` states, process-exit reporting, and configured restart policy. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the transition and backoff rules.
+
+Declared task outputs are invalidated before execution, verified inside the workspace, hashed with SHA-256 and recorded with size and timestamps. A failed or missing output remains invalid/failed even if an older file still exists.

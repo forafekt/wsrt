@@ -48,7 +48,12 @@ export type RestartPolicyInput =
 			maximumDelayMs?: number;
 			restartOnUnhealthy?: boolean;
 	  };
-export type TaskOutputInput = { artifact: string; path: string; type?: string; directory?: boolean };
+export type TaskOutputInput = {
+	artifact: string;
+	path: string;
+	type?: string;
+	directory?: boolean;
+};
 export type ExecutableInput = {
 	root?: string;
 	runtime?: string;
@@ -64,7 +69,10 @@ export type ApplicationInput = ExecutableInput & {
 	processes?: Record<string, ExecutableInput>;
 	consumes?: string[];
 };
-export type TaskInput = ExecutableInput & { produces?: string[]; outputs?: TaskOutputInput[] };
+export type TaskInput = ExecutableInput & {
+	produces?: string[];
+	outputs?: TaskOutputInput[];
+};
 export type ArtifactInput = {
 	type: string;
 	producer?: string;
@@ -194,7 +202,9 @@ export function normalizeSystemDefinition(
 			healthcheck: value.healthcheck,
 			restart: value.restart ?? { policy: "never" },
 			critical: value.critical ?? true,
-			outputs: Object.freeze([...(kind === "task" ? (value as TaskInput).outputs ?? [] : [])]),
+			outputs: Object.freeze([
+				...(kind === "task" ? ((value as TaskInput).outputs ?? []) : []),
+			]),
 			environment: Object.freeze({ ...value.environment }),
 			source: { file: options.file, path: `${kind}s.${name}` },
 		});
@@ -290,6 +300,47 @@ function references(
 					item.source,
 					`${item.source.path}.dependsOn.${dep.id}`,
 				);
+		if (item.kind === "task") {
+			const seen = new Set<string>();
+			for (const [index, output] of item.outputs.entries()) {
+				const artifact = definition.artifacts.find(
+					(candidate) => candidate.name === output.artifact,
+				);
+				if (!artifact)
+					push(
+						"WSRT_ARTIFACT_OUTPUT_MISSING",
+						`Unknown output artifact "${output.artifact}"`,
+						item.source,
+						`${item.source.path}.outputs.${index}.artifact`,
+					);
+				else if (artifact.producer !== item.name)
+					push(
+						"WSRT_ARTIFACT_PRODUCER_MISMATCH",
+						`Artifact "${output.artifact}" is produced by "${artifact.producer ?? "nobody"}", not "${item.name}"`,
+						item.source,
+						`${item.source.path}.outputs.${index}.artifact`,
+					);
+				if (seen.has(output.artifact))
+					push(
+						"config.artifact_output_duplicate",
+						`Duplicate output artifact "${output.artifact}"`,
+						item.source,
+						`${item.source.path}.outputs.${index}`,
+					);
+				seen.add(output.artifact);
+				const resolved = path.resolve(item.root, output.path);
+				if (
+					resolved !== definition.root &&
+					!resolved.startsWith(`${definition.root}${path.sep}`)
+				)
+					push(
+						"WSRT_ARTIFACT_PATH_INVALID",
+						`Output path escapes workspace: ${output.path}`,
+						item.source,
+						`${item.source.path}.outputs.${index}.path`,
+					);
+			}
+		}
 	}
 	for (const item of definition.artifacts) {
 		if (item.producer && !names.has(item.producer))

@@ -14,6 +14,7 @@ for (let i = 0; i < args.length; i++) {
 	else if (args[i] === "--json") json = true;
 	else values.push(args[i]);
 }
+if (json) process.env.WSRT_JSON_OUTPUT = "1";
 const plane = await createControlPlane({ root, config });
 try {
 	let result: unknown;
@@ -61,7 +62,10 @@ try {
 			break;
 		case "cancel":
 			if (!values[0]) throw new Error("Usage: wsrt cancel <operation-id>");
-			result = { operationId: values[0], cancelled: plane.cancelOperation(values[0]) };
+			result = {
+				operationId: values[0],
+				cancelled: plane.cancelOperation(values[0]),
+			};
 			break;
 		default:
 			throw new Error(`Unknown command: ${command}`);

@@ -1,9 +1,9 @@
 // deno-lint-ignore-file no-explicit-any
 // command.ts
-import type CommandLine from "./commandline.ts";
-import Option, { type OptionConfig } from "./option.ts";
-import { CommandLineError, findAllBrackets, findLongest, padRight, removeBrackets } from "./utils.ts";
-import { platformInfo } from "./deno.ts";
+import type CommandLine from "./commandline.js";
+import Option, { type OptionConfig } from "./option.js";
+import { CommandLineError, findAllBrackets, findLongest, padRight, removeBrackets } from "./utils.js";
+import { platformInfo } from "./deno.js";
 
 interface CommandArg {
   required: boolean;

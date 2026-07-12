@@ -7,16 +7,16 @@ import Command, {
   type CommandExample,
   GlobalCommand,
   type HelpCallback,
-} from './command.ts'
-import { processArgs } from './deno.ts'
-import type { OptionConfig } from './option.ts'
+} from './command.js'
+import { processArgs } from './deno.js'
+import type { OptionConfig } from './option.js'
 import {
   camelcaseOptionName,
   getArgParseOptions,
   getFileName,
   setByType,
   setDotProp,
-} from './utils.ts'
+} from './utils.js'
 
 interface ParsedArgv {
   args: ReadonlyArray<string>
@@ -231,7 +231,7 @@ class CommandLine extends EventEmitter {
     }
 
     if (!this.matchedCommand && this.args[0]) {
-      this.emit('command:*')
+      this.emit('command:*', undefined)
     }
 
     return parsedArgv

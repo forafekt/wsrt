@@ -40,10 +40,15 @@ export async function runMcpTool(
 		case "workspace.artifacts":
 			return controlPlane.listArtifacts();
 		case "workspace.artifact":
-			return controlPlane.listArtifacts().find((item) => item.id === String(input.id ?? ""));
+			return controlPlane
+				.listArtifacts()
+				.find((item) => item.id === String(input.id ?? ""));
 		case "workspace.cancel":
 			mutation(options);
-			return { operationId: String(input.id ?? ""), cancelled: controlPlane.cancelOperation(String(input.id ?? "")) };
+			return {
+				operationId: String(input.id ?? ""),
+				cancelled: controlPlane.cancelOperation(String(input.id ?? "")),
+			};
 		case "workspace.start":
 			mutation(options);
 			return controlPlane.start(ids(input));

@@ -26,6 +26,25 @@ export const plugin = {
 
 Runtime providers create capability registries and dispose every resource they own. Execution adapters validate provider-owned options and translate nodes into commands. Readiness providers wait until dependency admission is safe. Health providers perform one check; the control plane owns scheduling and state transitions. Artifact providers generate or inspect outputs and report location, hash, and whether content changed.
 
+```ts
+import type { HealthProvider } from "@wsrt/capabilities"
+
+const health: HealthProvider<{ url: string }> = {
+  id: "example-http",
+  validate(value) {
+    return typeof value === "object" && value !== null && "url" in value
+      ? { options: value as { url: string }, diagnostics: [] }
+      : { diagnostics: ["url is required"] }
+  },
+  async check(options, capabilities, signal) {
+    const response = await capabilities.require("http").fetch(options.url, { signal })
+    return response.ok ? { healthy: true } : { healthy: false, diagnostic: `HTTP ${response.status}` }
+  },
+}
+```
+
+Providers must implement one bounded action and honor the supplied abort signal. Scheduling, retries, thresholds, revisions and events remain control-plane responsibilities. Isolation tests should use separate `ProviderRegistry` instances; disposal tests should assert every child, timer and subscription is released.
+
 Plugins declare `requires` and `optional` dependencies. Ordering is deterministic. Contribution IDs must be unique within their role. Tests should create multiple registries or control planes to prove isolation and should verify reverse-order disposal.
 
 Extensions must not:

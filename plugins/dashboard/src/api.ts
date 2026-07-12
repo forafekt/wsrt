@@ -2,20 +2,11 @@ import type { WsrtControlPlane } from "@wsrt/control-plane";
 export function dashboardSnapshot(plane: WsrtControlPlane) {
 	const snapshot = plane.snapshot();
 	return {
-		overview: {
-			name: plane.definition().name,
-			root: plane.definition().root,
-			nodes: plane.graph().nodes().length,
-			events: plane.listEvents().length,
-			artifacts: plane.listArtifacts().length,
-		},
-		graph: plane.graph().toJSON(),
-		nodes: snapshot.nodes,
-		operations: snapshot.operations,
 		revision: snapshot.revision,
+		controlPlane: snapshot,
+		graph: plane.graph().toJSON(),
 		events: plane.listEvents(),
-		diagnostics: plane.validate(),
-		artifacts: plane.listArtifacts(),
+		configuration: plane.definition(),
 	};
 }
 export async function dashboardOperation(
@@ -30,6 +21,9 @@ export async function dashboardOperation(
 		throw new Error("Task operation requires exactly one task");
 	return plane.runTask(ids[0]);
 }
-export function dashboardCancelOperation(plane: WsrtControlPlane, operationId: string) {
+export function dashboardCancelOperation(
+	plane: WsrtControlPlane,
+	operationId: string,
+) {
 	return { operationId, cancelled: plane.cancelOperation(operationId) };
 }

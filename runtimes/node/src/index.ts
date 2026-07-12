@@ -66,7 +66,7 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 						cwd: request.cwd,
 						env: { ...process.env, ...request.environment },
 						shell: request.shell ?? false,
-						stdio: "inherit",
+						stdio: process.env.WSRT_JSON_OUTPUT === "1" ? "ignore" : "inherit",
 						signal: request.signal,
 					});
 					let running = true;

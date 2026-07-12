@@ -113,8 +113,19 @@ export interface ReadinessProvider<Options = unknown> {
 }
 export interface HealthProvider<Options = unknown> {
 	readonly id: string;
-	validate(options: unknown): { options?: Options; diagnostics: readonly string[] };
-	check(options: Options, capabilities: CapabilityRegistry, signal: AbortSignal): Promise<{ healthy: boolean; diagnostic?: string; metadata?: Readonly<Record<string, unknown>> }>;
+	validate(options: unknown): {
+		options?: Options;
+		diagnostics: readonly string[];
+	};
+	check(
+		options: Options,
+		capabilities: CapabilityRegistry,
+		signal: AbortSignal,
+	): Promise<{
+		healthy: boolean;
+		diagnostic?: string;
+		metadata?: Readonly<Record<string, unknown>>;
+	}>;
 }
 export interface ArtifactProvider<Input = unknown> {
 	readonly id: string;
@@ -124,7 +135,12 @@ export interface ArtifactProvider<Input = unknown> {
 		signal: AbortSignal,
 	): Promise<{ location?: string; hash?: string; changed: boolean }>;
 }
-export type ProviderKind = "runtime" | "execution" | "readiness" | "health" | "artifact";
+export type ProviderKind =
+	| "runtime"
+	| "execution"
+	| "readiness"
+	| "health"
+	| "artifact";
 export type ProviderRegistration = {
 	kind: ProviderKind;
 	id: string;

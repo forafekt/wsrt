@@ -17,6 +17,12 @@ WSRT describes a software system and executes its lifecycle. Configuration is no
 
 Package ownership is explicit: graph owns nodes and plans; config owns input, normalization, diagnostics, and graph compilation; capabilities owns portable runtime contracts; runtime-node implements them; lifecycle owns transitions and scheduling; control-plane coordinates processes, readiness, events, diagnostics, and artifacts. User interfaces only call the control plane.
 
-The local vertical slice implements process and HTTP readiness. TCP readiness is modeled but awaits a networking capability. Durable state, scheduled health monitoring, deployments, distributed operation, and non-Node runtimes remain intentionally unimplemented.
+Readiness gates dependant startup; health continuously observes a node only after readiness succeeds. The Node runtime supplies HTTP, TCP, process, timer, filesystem and spawn capabilities. The control plane owns monitoring, restart scheduling, cancellation, snapshots, operations and artifact provenance. Durable state, deployments, distributed operation, and non-Node runtimes remain intentionally out of scope.
+
+Health transitions are centralized: a new node is `unknown`, monitor startup makes it `checking`, the first failure makes it `degraded`, and the configured failure threshold makes it `unhealthy`. A success while unhealthy makes it `degraded`; the configured consecutive-success threshold makes it `healthy`. Expected stop returns health to `unknown`; unexpected exit makes it `unhealthy`. Pending restart remains unhealthy until the new instance passes checks. Generation guards discard stale check completions.
+
+`never` does not restart. `on-failure` restarts non-zero or signalled exits; `always` also restarts clean exits. `attempts` counts restarts after the initial start. Exponential delay is `min(base × 2^(attempt-1), maximum)`. Manual stop/restart and disposal cancel pending delays. Application state is derived in the control plane from explicit child criticality rather than by clients.
+
+Snapshots are immutable, revisioned JSON projections and are the only operational authority consumed by CLI, MCP and dashboard. Dashboard hydration uses a full snapshot and subsequent Server-Sent Events, suppressing duplicate revisions and refreshing after reconnect.
 
 There is no legacy runtime or centralized type package. New integrations must depend on their domain-owning packages and operate through the control plane.

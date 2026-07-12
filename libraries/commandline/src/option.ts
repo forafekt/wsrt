@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 // option.ts
-import { camelcaseOptionName, removeBrackets } from "./utils.ts";
+import { camelcaseOptionName, removeBrackets } from "./utils.js";
 
 interface OptionConfig {
   default?: any;
