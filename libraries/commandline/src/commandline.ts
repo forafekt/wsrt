@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 // commandline.ts
 import ap from '@wsrt/argparse'
-import { EventEmitter } from '@wsrt/events'
+import { EventEmitter } from '@wsrt/event-targets'
 import Command, {
   type CommandConfig,
   type CommandExample,
