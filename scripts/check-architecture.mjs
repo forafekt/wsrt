@@ -50,8 +50,30 @@ const violations = files.flatMap((file) =>
 		.filter((name) => fs.readFileSync(file, "utf8").includes(name))
 		.map((name) => `${file}: ${name}`),
 );
+for (const [name, { file, value }] of packages) {
+	if (!file.startsWith(`packages${path.sep}`)) continue;
+	for (const dependency of Object.keys({
+		...value.dependencies,
+		...value.optionalDependencies,
+		...value.peerDependencies,
+	}))
+		if (dependency.startsWith("@wsrt/plugin-"))
+			violations.push(
+				`${file}: core package ${name} depends on concrete plugin ${dependency}`,
+			);
+}
+for (const file of files.filter((item) =>
+	item.startsWith(`packages${path.sep}`),
+)) {
+	const source = fs.readFileSync(file, "utf8"),
+		matches = source.match(/@wsrt\/plugin-[a-z0-9-]+/g) ?? [];
+	for (const dependency of new Set(matches))
+		violations.push(
+			`${file}: core source references concrete plugin ${dependency}`,
+		);
+}
 if (violations.length)
-	throw new Error(`Obsolete imports:\n${violations.join("\n")}`);
+	throw new Error(`Architecture violations:\n${violations.join("\n")}`);
 console.log(
 	`Architecture valid: ${packages.size} packages, ${edges.length} workspace edges, no cycles or obsolete imports`,
 );

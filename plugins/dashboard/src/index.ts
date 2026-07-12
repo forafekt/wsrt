@@ -6,4 +6,14 @@ export {
 export { matchDashboardRoute } from "./client/router.js";
 export { DashboardStore, reduceDashboardState } from "./client/state/store.js";
 export { SnapshotTransport } from "./client/transport/sse.js";
-export { streamSnapshots } from "./server/index.js";
+export {
+	type DashboardOptions,
+	dashboardPlugin,
+	dashboardPlugin as default,
+	normalizeDashboardOptions,
+} from "./plugin/index.js";
+export {
+	type DashboardHandle,
+	startDashboard,
+	streamSnapshots,
+} from "./server/index.js";

@@ -32,7 +32,7 @@ Unknown core properties and missing runtime, dependency, producer, or consumer r
 
 `@wsrt/config` normalizes definitions and compiles `@wsrt/graph`. The graph owns stable nodes, containment, dependencies, traversal, cycle detection, and deterministic startup/shutdown plans. `@wsrt/lifecycle` executes those plans with explicit transitions, parallel safe stages, retries, cancellation, readiness, and structured events.
 
-Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` implements filesystem, environment, process, spawn, HTTP, timers, and logging. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI, MCP, and dashboard APIs depend only on the control plane.
+Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` implements filesystem, environment, process, spawn, HTTP, timers, and logging. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI and MCP depend only on core contracts. Optional plugins depend inward on those contracts; core packages never import concrete plugins.
 
 Vite is an explicit plugin contribution, not a runtime. It translates Vite options into command and readiness configuration. Composite applications expand into application and child process graph nodes; the control plane owns their execution.
 
@@ -40,7 +40,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for dependency rules and domain termino
 
 ## CLI
 
-Implemented commands are `validate`, `inspect`, `graph`, `up`, `down`, `start`, `stop`, `restart`, `run`, and `artifacts`.
+Implemented commands include `validate`, `inspect`, `graph`, `up`, `down`, `start`, `stop`, `restart`, `run`, `exec`, and `artifacts`.
 
 ```sh
 pnpm build
@@ -83,3 +83,32 @@ The root configuration dogfoods architecture checking, lint, type-checking, buil
 Readiness and health are intentionally separate. Readiness admits dependants during startup. Health checks continue after startup and drive `checking`, `healthy`, `degraded` and `unhealthy` states, process-exit reporting, and configured restart policy. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the transition and backoff rules.
 
 Declared task outputs are invalidated before execution, verified inside the workspace, hashed with SHA-256 and recorded with size and timestamps. A failed or missing output remains invalid/failed even if an older file still exists.
+# Dashboard
+
+`@wsrt/plugin-dashboard` is the local control-plane interface. The root configuration registers it explicitly with host `127.0.0.1`, port `5177`, base path `/__wsrt`, and browser opening disabled. Dashboard startup does not implicitly start system nodes.
+
+Prerequisites and root startup:
+
+```bash
+pnpm install
+pnpm build
+pnpm dashboard
+```
+
+The command prints `WSRT Dashboard: http://127.0.0.1:5177/__wsrt`. You can also run:
+
+```bash
+pnpm add -D @wsrt/plugin-dashboard
+pnpm run wsrt exec --list
+pnpm run wsrt exec dashboard --config ./examples/system-lifecycle/wsrt.config.ts
+pnpm run wsrt exec dashboard -- --host 127.0.0.1 --port 5177 --base-path /__wsrt
+pnpm run wsrt exec dashboard -- --read-only --no-open
+```
+
+Configure the package explicitly with `plugins: [{ provider: "@wsrt/plugin-dashboard", options: { host: "127.0.0.1", port: 5177, basePath: "/__wsrt" } }]`.
+
+`wsrt run <task>` runs a finite graph task. `wsrt exec <executable>` runs an executable contribution from the explicitly configured plugin set. Arguments after `--` are validated by that plugin. Press Ctrl+C for graceful disposal.
+
+Programmatic use is available through `startDashboard(plane, options)`; the returned `{ url, host, port, basePath, close }` handle owns only the dashboard server. See `plugins/dashboard/README.md`.
+
+Troubleshooting: a strict occupied port reports the bind failure; choose another port or use `--no-strict-port`. Custom base paths must begin with `/`. Failure to open a browser is only a warning—open the printed URL manually. A config-not-found error occurs before binding. Stopped nodes are expected until a dashboard action or `wsrt up` starts them. In restricted sandboxes, loopback listen may fail with `EPERM`; build and non-network tests remain usable.

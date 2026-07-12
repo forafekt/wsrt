@@ -45,6 +45,52 @@ test("plugins order deterministically and validate dependencies", async () => {
 	);
 });
 
+test("executable contributions are isolated, owned, and unique", () => {
+	const executable = {
+		id: "devtools",
+		owner: { id: "tools", version: "1" },
+		async execute() {
+			return "done";
+		},
+	};
+	const session = new PluginSession([
+		{ id: "tools", version: "1", contributions: { executables: [executable] } },
+	]);
+	assert.equal(session.executable("devtools"), executable);
+	assert.equal(session.executable("missing"), undefined);
+	assert.throws(
+		() =>
+			new PluginSession([
+				{
+					id: "a",
+					version: "1",
+					contributions: {
+						executables: [{ ...executable, owner: { id: "a", version: "1" } }],
+					},
+				},
+				{
+					id: "b",
+					version: "1",
+					contributions: {
+						executables: [{ ...executable, owner: { id: "b", version: "1" } }],
+					},
+				},
+			]),
+		/Duplicate executables contribution/,
+	);
+	assert.throws(
+		() =>
+			new PluginSession([
+				{
+					id: "tools",
+					version: "1",
+					contributions: { executables: [{ ...executable, owner: undefined }] },
+				},
+			]),
+		/missing or incorrect owner/,
+	);
+});
+
 test("provider registries are isolated and reject duplicate owned IDs", () => {
 	const provider = {
 		id: "command",

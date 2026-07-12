@@ -5,6 +5,7 @@ export function streamSnapshots(
 	plane: WsrtControlPlane,
 	writer: SseWriter,
 	lastEventId?: string,
+	onClose?: () => void,
 ) {
 	let revision = Number(lastEventId ?? -1);
 	const unsubscribe = plane.subscribeSnapshots((snapshot) => {
@@ -15,9 +16,13 @@ export function streamSnapshots(
 		);
 	});
 	const heartbeat = setInterval(() => writer.write(": heartbeat\n\n"), 15_000);
+	let closed = false;
 	return () => {
+		if (closed) return;
+		closed = true;
 		clearInterval(heartbeat);
 		unsubscribe();
+		onClose?.();
 		writer.end();
 	};
 }

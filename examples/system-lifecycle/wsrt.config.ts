@@ -2,6 +2,7 @@ import { defineSystem } from "@wsrt/config";
 export default defineSystem({
 	schemaVersion: "1",
 	name: "system-lifecycle",
+	plugins: [{ provider: "@wsrt/plugin-dashboard", options: { open: false } }],
 	applications: {
 		web: {
 			root: "apps/web",

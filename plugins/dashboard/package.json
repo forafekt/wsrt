@@ -25,6 +25,7 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@wsrt/control-plane": "workspace:*"
+		"@wsrt/control-plane": "workspace:*",
+		"@wsrt/plugins": "workspace:*"
 	}
 }

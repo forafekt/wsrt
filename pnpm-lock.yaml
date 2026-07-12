@@ -92,6 +92,9 @@ importers:
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@wsrt/plugins':
+        specifier: workspace:*
+        version: link:../plugins
 
   packages/config:
     dependencies:
@@ -154,6 +157,9 @@ importers:
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:../../packages/control-plane
+      '@wsrt/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
 
   plugins/vite:
     dependencies:

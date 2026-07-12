@@ -12,7 +12,14 @@ const routes = new Set<DashboardRoute>([
 	"configuration",
 ]);
 export function matchDashboardRoute(pathname: string): DashboardRoute {
-	const value = pathname.replace(/^\/+|\/+$/g, "") || "overview";
+	const base =
+		typeof document === "undefined"
+			? ""
+			: (document.querySelector<HTMLMetaElement>('meta[name="wsrt-base-path"]')
+					?.content ?? "");
+	const relative =
+		base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
+	const value = relative.replace(/^\/+|\/+$/g, "").split("/")[0] || "overview";
 	return routes.has(value as DashboardRoute)
 		? (value as DashboardRoute)
 		: "overview";
@@ -26,7 +33,10 @@ export class DashboardRouter {
 		return () => removeEventListener("popstate", update);
 	}
 	navigate(route: DashboardRoute) {
-		history.pushState({}, "", `/${route}`);
+		const base =
+			document.querySelector<HTMLMetaElement>('meta[name="wsrt-base-path"]')
+				?.content ?? "";
+		history.pushState({}, "", `${base}/${route === "overview" ? "" : route}`);
 		this.onRoute(route);
 	}
 }

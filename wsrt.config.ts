@@ -4,7 +4,15 @@ export default defineSystem({
 	name: "wsrt",
 	workspace: { packageManager: "pnpm" },
 	plugins: [
-		{ provider: "@wsrt/plugin-dashboard", options: {} },
+		{
+			provider: "@wsrt/plugin-dashboard",
+			options: {
+				host: "127.0.0.1",
+				port: 5177,
+				basePath: "/__wsrt",
+				open: false,
+			},
+		},
 		// { provider: "@wsrt/plugin-terraform", options: {} },
 	],
 	tasks: {

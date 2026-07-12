@@ -11,6 +11,7 @@
 		"lint": "biome check .",
 		"check:architecture": "node scripts/check-architecture.mjs",
 		"wsrt": "pnpm exec node ./packages/cli/dist/index.js",
+		"dashboard": "pnpm run wsrt exec dashboard",
 		"clean:prune": "rimraf --glob **/node_modules **/pnpm-lock.yaml **/dist",
 		"clean:install": "pnpm clean:prune && pnpm install",
 		"clean:vue-dts": "find packages -type f -path \"*/src/*.vue.d.ts\" -delete",
