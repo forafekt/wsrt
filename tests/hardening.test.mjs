@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ProviderRegistry } from "@wsrt/capabilities";
+import { createControlPlane } from "@wsrt/control-plane";
 import { EventJournal } from "@wsrt/events";
 import { orderPlugins, PluginSession } from "@wsrt/plugins";
 
@@ -99,4 +100,26 @@ test("event journal is bounded, sequenced, immutable and queryable", () => {
 		1,
 	);
 	assert.equal(Object.isFrozen(journal.list()[0]), true);
+});
+
+test("control-plane snapshots are immutable, revisioned and operation-backed", async () => {
+	const plane = await createControlPlane({ root: "examples/system-lifecycle" });
+	const revisions = [];
+	const unsubscribe = plane.subscribeSnapshots((snapshot) =>
+		revisions.push(snapshot.revision),
+	);
+	try {
+		const before = plane.snapshot();
+		const result = await plane.runTask("contracts");
+		const after = plane.snapshot();
+		assert.ok(result.operationId);
+		assert.ok(after.revision > before.revision);
+		assert.equal(after.operations.at(-1).status, "completed");
+		assert.equal(Object.isFrozen(after), true);
+		assert.equal(Object.isFrozen(after.nodes), true);
+		assert.ok(revisions.length >= 3);
+	} finally {
+		unsubscribe();
+		await plane.dispose();
+	}
 });

@@ -22,11 +22,17 @@ try {
 			result = plane.validate();
 			break;
 		case "inspect":
-			result = {
-				definition: plane.definition(),
-				nodes: plane.graph().nodes(),
-				diagnostics: plane.validate(),
-			};
+			result = plane.snapshot();
+			break;
+		case "status":
+		case "health":
+			result = plane.snapshot().nodes;
+			break;
+		case "events":
+			result = plane.listEvents();
+			break;
+		case "operations":
+			result = plane.listOperations();
 			break;
 		case "graph":
 			result = plane.graph().toJSON();

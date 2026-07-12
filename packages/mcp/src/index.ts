@@ -17,6 +17,10 @@ export async function runMcpTool(
 			};
 		case "workspace.graph":
 			return controlPlane.graph().toJSON();
+		case "workspace.snapshot":
+			return controlPlane.snapshot();
+		case "workspace.operations":
+			return controlPlane.listOperations();
 		case "workspace.node":
 			return controlPlane.getNode(String(input.id ?? ""));
 		case "workspace.dependencies":
@@ -26,7 +30,9 @@ export async function runMcpTool(
 		case "workspace.diagnostics":
 			return controlPlane.validate();
 		case "workspace.state":
-			return controlPlane.getNodeState(String(input.id ?? ""));
+			return controlPlane
+				.snapshot()
+				.nodes.find((node) => node.id === String(input.id ?? ""));
 		case "workspace.events":
 			return controlPlane.listEvents();
 		case "workspace.artifacts":

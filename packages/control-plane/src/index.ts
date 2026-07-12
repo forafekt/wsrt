@@ -38,8 +38,45 @@ export type ArtifactRecord = {
 	metadata: Readonly<Record<string, unknown>>;
 };
 export type OperationResult = {
+	operationId: string;
 	nodes: readonly string[];
 	states: Readonly<Record<string, LifecycleState>>;
+};
+export type HealthState =
+	| "unknown"
+	| "checking"
+	| "healthy"
+	| "degraded"
+	| "unhealthy";
+export type OperationSnapshot = {
+	id: string;
+	type: "start" | "stop" | "restart" | "task" | "dispose";
+	status: "pending" | "running" | "completed" | "failed" | "cancelled";
+	requestedNodes: readonly string[];
+	affectedNodes: readonly string[];
+	startedAt?: string;
+	completedAt?: string;
+	correlationId: string;
+	diagnostics: readonly SystemDiagnostic[];
+};
+export type NodeSnapshot = {
+	id: string;
+	kind: SystemNode["kind"];
+	state: LifecycleState;
+	health: HealthState;
+	runtime?: string;
+	pid?: number;
+	restartCount: number;
+};
+export type ControlPlaneSnapshot = {
+	revision: number;
+	generatedAt: string;
+	workspace: { name: string; root: string };
+	nodes: readonly NodeSnapshot[];
+	operations: readonly OperationSnapshot[];
+	artifacts: readonly ArtifactRecord[];
+	diagnostics: readonly SystemDiagnostic[];
+	events: { size: number };
 };
 export type ControlPlaneOptions = {
 	root?: string;
@@ -52,6 +89,11 @@ export class WsrtControlPlane {
 	readonly #artifacts = new Map<string, ArtifactRecord>();
 	readonly #handles = new Map<string, ProcessHandle>();
 	readonly #runtimes = new Map<string, RuntimeInstance>();
+	readonly #operations: OperationSnapshot[] = [];
+	readonly #subscribers = new Set<(snapshot: ControlPlaneSnapshot) => void>();
+	readonly #health = new Map<string, HealthState>();
+	#revision = 0;
+	#activeOperation?: string;
 	#definition?: NormalizedSystemDefinition;
 	#graph?: SystemGraph;
 	#engine?: LifecycleEngine;
@@ -135,21 +177,66 @@ export class WsrtControlPlane {
 	listArtifacts() {
 		return [...this.#artifacts.values()];
 	}
+	snapshot(): ControlPlaneSnapshot {
+		const definition = this.definition();
+		const nodes = definition.executables
+			.map((item) =>
+				Object.freeze({
+					id: item.id,
+					kind: item.kind,
+					state: this.getNodeState(item.id) ?? "resolved",
+					health: this.#health.get(item.id) ?? "unknown",
+					runtime: item.runtime,
+					pid: this.#handles.get(item.id)?.pid,
+					restartCount: 0,
+				}),
+			)
+			.sort((a, b) => a.id.localeCompare(b.id));
+		return Object.freeze({
+			revision: this.#revision,
+			generatedAt: new Date().toISOString(),
+			workspace: Object.freeze({
+				name: definition.name,
+				root: definition.root,
+			}),
+			nodes: Object.freeze(nodes),
+			operations: Object.freeze(
+				this.#operations.map((item) => Object.freeze({ ...item })),
+			),
+			artifacts: Object.freeze(
+				this.listArtifacts().map((item) => Object.freeze({ ...item })),
+			),
+			diagnostics: Object.freeze([...this.#diagnostics]),
+			events: Object.freeze({ size: this.#events.length }),
+		});
+	}
+	subscribeSnapshots(
+		listener: (snapshot: ControlPlaneSnapshot) => void,
+	): () => void {
+		this.#subscribers.add(listener);
+		listener(this.snapshot());
+		return () => this.#subscribers.delete(listener);
+	}
+	listOperations(): readonly OperationSnapshot[] {
+		return Object.freeze([...this.#operations]);
+	}
 	async start(ids?: readonly string[]): Promise<OperationResult> {
 		this.#assertMutable();
 		const targets =
 			ids?.map((id) => this.#resolve(id)) ?? this.#longRunningIds();
 		const selected = this.#closure(targets);
-		await required(this.#engine, "Control plane is not loaded").start(selected);
-		return this.#result(selected);
+		return this.#operate("start", targets, selected, async () =>
+			required(this.#engine, "Control plane is not loaded").start(selected),
+		);
 	}
 	async stop(ids?: readonly string[]): Promise<OperationResult> {
 		this.#assertMutable();
 		const targets =
 			ids?.map((id) => this.#resolve(id)) ?? this.#executableIds();
 		const selected = this.#dependants(targets);
-		await required(this.#engine, "Control plane is not loaded").stop(selected);
-		return this.#result(selected);
+		return this.#operate("stop", targets, selected, async () =>
+			required(this.#engine, "Control plane is not loaded").stop(selected),
+		);
 	}
 	async restart(ids: readonly string[]): Promise<OperationResult> {
 		await this.stop(ids);
@@ -157,7 +244,15 @@ export class WsrtControlPlane {
 	}
 	async runTask(id: string): Promise<OperationResult> {
 		const resolved = this.#resolve(id, "task");
-		return this.start([resolved]);
+		return this.#operate(
+			"task",
+			[resolved],
+			this.#closure([resolved]),
+			async () =>
+				required(this.#engine, "Control plane is not loaded").start(
+					this.#closure([resolved]),
+				),
+		);
 	}
 	async dispose(): Promise<void> {
 		if (this.#engine)
@@ -296,11 +391,75 @@ export class WsrtControlPlane {
 		for (const id of ids) visit(id);
 		return [...result];
 	}
-	#result(ids: readonly string[]): OperationResult {
+	#result(operationId: string, ids: readonly string[]): OperationResult {
 		return {
+			operationId,
 			nodes: ids,
-			states: Object.fromEntries(ids.map((id) => [id, this.getNodeState(id)!])),
+			states: Object.fromEntries(
+				ids.map((id) => [id, this.getNodeState(id) ?? "resolved"]),
+			),
 		};
+	}
+	async #operate(
+		type: OperationSnapshot["type"],
+		requested: readonly string[],
+		affected: readonly string[],
+		run: () => Promise<void>,
+	): Promise<OperationResult> {
+		if (this.#activeOperation)
+			throw new Error(
+				`WSRT_OPERATION_CONFLICT: operation ${this.#activeOperation} is running`,
+			);
+		const id = crypto.randomUUID(),
+			correlationId = crypto.randomUUID(),
+			startedAt = new Date().toISOString();
+		let operation: OperationSnapshot = Object.freeze({
+			id,
+			type,
+			status: "running",
+			requestedNodes: Object.freeze([...requested]),
+			affectedNodes: Object.freeze([...affected]),
+			startedAt,
+			correlationId,
+			diagnostics: Object.freeze([]),
+		});
+		this.#operations.push(operation);
+		if (this.#operations.length > 100) this.#operations.shift();
+		this.#activeOperation = id;
+		this.#changed();
+		try {
+			await run();
+			operation = Object.freeze({
+				...operation,
+				status: "completed",
+				completedAt: new Date().toISOString(),
+			});
+			return this.#result(id, affected);
+		} catch (cause) {
+			const diagnostic: SystemDiagnostic = {
+				code: "WSRT_OPERATION_PARTIAL_FAILURE",
+				severity: "error",
+				message: cause instanceof Error ? cause.message : String(cause),
+				source: { file: this.definition().sourceFile, path: "" },
+			};
+			operation = Object.freeze({
+				...operation,
+				status: "failed",
+				completedAt: new Date().toISOString(),
+				diagnostics: Object.freeze([diagnostic]),
+			});
+			throw cause;
+		} finally {
+			const index = this.#operations.findIndex((item) => item.id === id);
+			if (index >= 0) this.#operations[index] = operation;
+			this.#activeOperation = undefined;
+			this.#changed();
+		}
+	}
+	#changed(): void {
+		this.#revision += 1;
+		const snapshot = this.snapshot();
+		for (const subscriber of this.#subscribers) subscriber(snapshot);
 	}
 	#assertMutable() {
 		if (this.options.allowMutations === false)

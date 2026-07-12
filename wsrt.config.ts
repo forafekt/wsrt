@@ -13,9 +13,9 @@ export default defineSystem({
 			command: { command: "pnpm", args: ["test"] },
 			dependsOn: { build: { condition: "successful" } },
 		},
-    demo: {
-      command: { command: "echo", args: ["Hello World"] },
-    }
+		demo: {
+			command: { command: "echo", args: ["Hello World"] },
+		},
 	},
 	artifacts: {
 		build: {

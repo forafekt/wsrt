@@ -1,5 +1,6 @@
 import type { WsrtControlPlane } from "@wsrt/control-plane";
 export function dashboardSnapshot(plane: WsrtControlPlane) {
+	const snapshot = plane.snapshot();
 	return {
 		overview: {
 			name: plane.definition().name,
@@ -9,10 +10,9 @@ export function dashboardSnapshot(plane: WsrtControlPlane) {
 			artifacts: plane.listArtifacts().length,
 		},
 		graph: plane.graph().toJSON(),
-		nodes: plane
-			.graph()
-			.nodes()
-			.map((node) => ({ ...node, state: plane.getNodeState(node.id) })),
+		nodes: snapshot.nodes,
+		operations: snapshot.operations,
+		revision: snapshot.revision,
 		events: plane.listEvents(),
 		diagnostics: plane.validate(),
 		artifacts: plane.listArtifacts(),
