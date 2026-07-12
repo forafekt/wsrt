@@ -6,7 +6,7 @@ Effortlessly build beautiful command-line apps 🪄 [Try the demo](https://stack
 
 ---
 
-`@wsrt/prompts` is an opinionated, pre-styled wrapper around [`@wsrt/core`](https://www.npmjs.com/package/@wsrt/core).
+`@wsrt/prompts` is an independent collection of terminal prompt components.
 
 - 🤏 80% smaller than other options
 - 💎 Beautiful, minimal UI

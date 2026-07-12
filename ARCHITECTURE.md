@@ -19,4 +19,4 @@ Package ownership is explicit: graph owns nodes and plans; config owns input, no
 
 The local vertical slice implements process and HTTP readiness. TCP readiness is modeled but awaits a networking capability. Durable state, scheduled health monitoring, deployments, distributed operation, and non-Node runtimes remain intentionally unimplemented.
 
-The older workspace-inspection runtime remains while unrelated package-analysis, synchronization, and Vite features are migrated. New lifecycle code must not depend on it or on `@wsrt/types`.
+There is no legacy runtime or centralized type package. New integrations must depend on their domain-owning packages and operate through the control plane.

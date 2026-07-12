@@ -27,111 +27,27 @@ importers:
       '@types/node':
         specifier: ^24.12.2
         version: 24.13.3
-      '@wsrt/adapter-vite':
-        specifier: workspace:*
-        version: link:adapters/adapter-vite
       '@wsrt/config':
         specifier: workspace:*
         version: link:packages/config
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:packages/control-plane
-      '@wsrt/environment':
-        specifier: workspace:*
-        version: link:packages/environment
       '@wsrt/mcp':
         specifier: workspace:*
         version: link:packages/mcp
       '@wsrt/plugin-dashboard':
         specifier: workspace:*
-        version: link:plugins/plugin-dashboard
-      '@wsrt/plugin-git':
-        specifier: workspace:*
-        version: link:plugins/plugin-git
-      '@wsrt/plugin-typescript':
-        specifier: workspace:*
-        version: link:plugins/plugin-typescript
-      '@wsrt/plugin-utils':
-        specifier: workspace:*
-        version: link:plugins/plugin-utils
+        version: link:plugins/dashboard
       '@wsrt/plugin-vite':
         specifier: workspace:*
-        version: link:plugins/plugin-vite
-      '@wsrt/plugin-workspace':
-        specifier: workspace:*
-        version: link:plugins/plugin-workspace
-      '@wsrt/runtime':
-        specifier: workspace:*
-        version: link:packages/runtime
+        version: link:plugins/vite
       rimraf:
         specifier: ^6.1.3
         version: 6.1.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-
-  adapters/adapter-command:
-    dependencies:
-      '@wsrt/environment':
-        specifier: workspace:*
-        version: link:../../packages/environment
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-
-  adapters/adapter-composite:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-
-  adapters/adapter-core:
-    dependencies:
-      '@wsrt/adapter-command':
-        specifier: workspace:*
-        version: link:../adapter-command
-      '@wsrt/adapter-composite':
-        specifier: workspace:*
-        version: link:../adapter-composite
-      '@wsrt/adapter-node':
-        specifier: workspace:*
-        version: link:../adapter-node
-      '@wsrt/adapter-vite':
-        specifier: workspace:*
-        version: link:../adapter-vite
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-
-  adapters/adapter-node:
-    dependencies:
-      '@wsrt/adapter-command':
-        specifier: workspace:*
-        version: link:../adapter-command
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-
-  adapters/adapter-vite:
-    dependencies:
-      '@wsrt/diagnostics':
-        specifier: workspace:*
-        version: link:../../packages/diagnostics
-      '@wsrt/plugin-vite':
-        specifier: workspace:*
-        version: link:../../plugins/plugin-vite
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-      vite:
-        specifier: ^8.0.8
-        version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
-
-  libraries/events:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
 
   libraries/worker-pool:
     devDependencies:
@@ -142,14 +58,7 @@ importers:
         specifier: ~5.9.3
         version: 5.9.3
 
-  packages/artifacts:
-    dependencies:
-      '@wsrt/reports':
-        specifier: workspace:*
-        version: link:../reports
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
+  packages/artifacts: {}
 
   packages/capabilities: {}
 
@@ -161,15 +70,9 @@ importers:
 
   packages/config:
     dependencies:
-      '@wsrt/diagnostics':
-        specifier: workspace:*
-        version: link:../diagnostics
       '@wsrt/graph':
         specifier: workspace:*
         version: link:../graph
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
@@ -195,77 +98,13 @@ importers:
         specifier: workspace:*
         version: link:../../runtimes/node
 
-  packages/core:
-    dependencies:
-      '@wsrt/adapter-core':
-        specifier: workspace:*
-        version: link:../../adapters/adapter-core
-      '@wsrt/adapter-vite':
-        specifier: workspace:*
-        version: link:../../adapters/adapter-vite
-      '@wsrt/artifacts':
-        specifier: workspace:*
-        version: link:../artifacts
-      '@wsrt/config':
-        specifier: workspace:*
-        version: link:../config
-      '@wsrt/environment':
-        specifier: workspace:*
-        version: link:../environment
-      '@wsrt/events':
-        specifier: workspace:*
-        version: link:../events
-      '@wsrt/graph':
-        specifier: workspace:*
-        version: link:../graph
-      '@wsrt/mcp':
-        specifier: workspace:*
-        version: link:../mcp
-      '@wsrt/reports':
-        specifier: workspace:*
-        version: link:../reports
-      '@wsrt/resolve':
-        specifier: workspace:*
-        version: link:../resolve
-      '@wsrt/runtime':
-        specifier: workspace:*
-        version: link:../runtime
-      '@wsrt/services':
-        specifier: workspace:*
-        version: link:../services
-      '@wsrt/sync':
-        specifier: workspace:*
-        version: link:../sync
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-      '@wsrt/virtual':
-        specifier: workspace:*
-        version: link:../virtual
+  packages/diagnostics: {}
 
-  packages/diagnostics:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
+  packages/environment: {}
 
-  packages/environment:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
+  packages/events: {}
 
-  packages/events:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/graph:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
+  packages/graph: {}
 
   packages/lifecycle:
     dependencies:
@@ -278,149 +117,20 @@ importers:
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:../control-plane
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
 
-  packages/plugins:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
+  packages/plugins: {}
 
-  packages/reports:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/resolve:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/runtime:
-    dependencies:
-      '@wsrt/adapter-core':
-        specifier: workspace:*
-        version: link:../../adapters/adapter-core
-      '@wsrt/artifacts':
-        specifier: workspace:*
-        version: link:../artifacts
-      '@wsrt/config':
-        specifier: workspace:*
-        version: link:../config
-      '@wsrt/diagnostics':
-        specifier: workspace:*
-        version: link:../diagnostics
-      '@wsrt/environment':
-        specifier: workspace:*
-        version: link:../environment
-      '@wsrt/events':
-        specifier: workspace:*
-        version: link:../events
-      '@wsrt/graph':
-        specifier: workspace:*
-        version: link:../graph
-      '@wsrt/mcp':
-        specifier: workspace:*
-        version: link:../mcp
-      '@wsrt/plugins':
-        specifier: workspace:*
-        version: link:../plugins
-      '@wsrt/resolve':
-        specifier: workspace:*
-        version: link:../resolve
-      '@wsrt/services':
-        specifier: workspace:*
-        version: link:../services
-      '@wsrt/sync':
-        specifier: workspace:*
-        version: link:../sync
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-      '@wsrt/virtual':
-        specifier: workspace:*
-        version: link:../virtual
-
-  packages/services:
-    dependencies:
-      '@wsrt/environment':
-        specifier: workspace:*
-        version: link:../environment
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/sync:
-    dependencies:
-      '@wsrt/diagnostics':
-        specifier: workspace:*
-        version: link:../diagnostics
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  packages/types:
-    dependencies:
-      vite:
-        specifier: ^8.0.8
-        version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
-
-  packages/virtual:
-    dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../types
-
-  plugins/plugin-dashboard:
+  plugins/dashboard:
     dependencies:
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:../../packages/control-plane
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
 
-  plugins/plugin-git:
+  plugins/vite:
     dependencies:
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-
-  plugins/plugin-typescript:
-    dependencies:
-      '@wsrt/plugin-utils':
-        specifier: workspace:*
-        version: link:../plugin-utils
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-
-  plugins/plugin-utils: {}
-
-  plugins/plugin-vite:
-    dependencies:
-      '@wsrt/plugin-dashboard':
-        specifier: workspace:*
-        version: link:../plugin-dashboard
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       vite:
         specifier: ^8.0.8
         version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
-
-  plugins/plugin-workspace:
-    dependencies:
-      '@wsrt/plugin-utils':
-        specifier: workspace:*
-        version: link:../plugin-utils
-      '@wsrt/types':
-        specifier: workspace:*
-        version: link:../../packages/types
 
   runtimes/node:
     dependencies:

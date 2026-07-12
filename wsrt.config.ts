@@ -1,81 +1,25 @@
-import { defineWorkspace } from '@wsrt/core'
-import dashboardPlugin from '@wsrt/plugin-dashboard'
-import gitPlugin from '@wsrt/plugin-git'
-import typeScriptPlugin from '@wsrt/plugin-typescript'
-import workspacePlugin from '@wsrt/plugin-workspace'
-
-export default defineWorkspace({
-  projects: {},
-  workspace: {
-    packages: [
-      './packages/*',
-    ],
-  },
-  graph: {
-    includeExternal: false,
-  },
-  analyze: {
-    circularDependencies: true,
-    deadPackages: true,
-    deadExports: true,
-    missingDependencies: true,
-    duplicateDependencies: true,
-    versionDrift: true,
-    importStyle: true,
-    health: true,
-    impact: true,
-  },
-  imports: {
-    validateRelativeWorkspaceImports: true,
-    fixRelativeWorkspaceImports: false,
+import { defineSystem } from "@wsrt/config";
+export default defineSystem({
+  schemaVersion: "1",
+  name: "wsrt",
+  workspace: { packageManager: "pnpm" },
+  tasks: {
+    typecheck: { command: { command: "pnpm", args: ["typecheck"] } },
+    build: {
+      command: { command: "pnpm", args: ["build"] },
+      dependsOn: { typecheck: { condition: "successful" } },
+    },
+    test: {
+      command: { command: "pnpm", args: ["test"] },
+      dependsOn: { build: { condition: "successful" } },
+    },
   },
   artifacts: {
-    dir: './.wsrt',
-    report: true,
-    graph: true,
-    packages: true,
-    aliases: true,
-    diagnostics: true,
+    build: {
+      type: "workspace-build",
+      producer: "build",
+      location: "packages/*/dist",
+    },
   },
-  mcp: {
-    enabled: true,
-    name: 'wsrt',
-    exposeSourcePaths: true,
-    exposeReports: true,
-    exposeDiagnostics: true,
-    maxResults: 100,
-  },
-  tsconfig: {
-    enabled: true,
-    mode: 'check',
-    paths: true,
-    root: false,
-    projects: true,
-  },
-  manifests: {
-    enabled: true,
-    mode: 'check',
-    targets: ['package-json'],
-  },
-  report: {
-    file: './.vitem/report.json',
-    pretty: true,
-  },
-  plugins: [
-    dashboardPlugin({
-      enabled: true,
-      host: '0.0.0.0',
-      port: 5177,
-      path: '/wsrt',
-    }),
-    gitPlugin(),
-    typeScriptPlugin(),
-    workspacePlugin(),
-  ],
-})
-
-
-    // "@wsrt/plugin-dashboard?enabled=true&host=0.0.0.0&port=5177&path=/wsrt",
-    // "@wsrt/plugin-git",
-    // "@wsrt/plugin-typescript",
-    // "@wsrt/plugin-workspace",
+  environments: { development: { activate: { tasks: ["typecheck"] } } },
+});
