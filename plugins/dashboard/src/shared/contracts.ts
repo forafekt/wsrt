@@ -12,10 +12,13 @@ export type DashboardRoute =
 	| "graph"
 	| "nodes"
 	| "operations"
+	| "tasks"
 	| "artifacts"
 	| "events"
 	| "diagnostics"
+	| "health"
 	| "plugins"
+	| "providers"
 	| "configuration";
 export type DashboardOperationRequest = {
 	operation: "start" | "stop" | "restart" | "run";

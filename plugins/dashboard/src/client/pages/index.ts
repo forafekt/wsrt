@@ -1,7 +1,7 @@
 import type { DashboardRoute } from "../../shared/contracts.js";
 import type { DashboardState } from "../state/store.js";
 
-const escapeHtml = (value: unknown) =>
+export const escapeHtml = (value: unknown) =>
 	String(value ?? "").replace(
 		/[&<>"']/g,
 		(character) =>
@@ -9,90 +9,302 @@ const escapeHtml = (value: unknown) =>
 				character
 			] ?? character,
 	);
+const tone = (value: unknown) => {
+	const text = String(value ?? "unknown").toLowerCase();
+	if (/healthy|running|completed|ready|unchanged|success/.test(text))
+		return "success";
+	if (/failed|unhealthy|invalid|error|cancelled/.test(text)) return "danger";
+	if (/degraded|warning|partial|stopping|pending|generating/.test(text))
+		return "warning";
+	return "neutral";
+};
+const badge = (value: unknown) =>
+	`<span class="badge ${tone(value)}">${escapeHtml(value ?? "unknown")}</span>`;
+const empty = (title: string, detail: string) =>
+	`<div class="empty"><span class="empty-icon">◇</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p></div>`;
+const duration = (start?: string, end?: string) => {
+	if (!start) return "—";
+	const ms = new Date(end ?? Date.now()).getTime() - new Date(start).getTime();
+	return ms < 1000
+		? `${ms} ms`
+		: ms < 60000
+			? `${Math.round(ms / 100) / 10} s`
+			: `${Math.round(ms / 60000)} min`;
+};
+const time = (value?: string) =>
+	value
+		? `<time datetime="${escapeHtml(value)}" title="${escapeHtml(value)}">${escapeHtml(new Date(value).toLocaleString())}</time>`
+		: "—";
+const table = (
+	title: string,
+	headers: string[],
+	rows: string[][],
+	emptyText = "No data is available yet.",
+) =>
+	`<section class="section"><div class="section-heading"><h2>${escapeHtml(title)}</h2><span class="count">${rows.length}</span></div>${rows.length ? `<div class="table-wrap"><table><thead><tr>${headers.map((item) => `<th scope="col">${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((item) => `<td>${item}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : empty(title, emptyText)}</section>`;
+const heading = (title: string, description: string, actions = "") =>
+	`<div class="page-heading"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div>${actions}</div>`;
+
 export function renderPage(
 	route: DashboardRoute,
 	state: DashboardState,
 ): string {
-	const data = state.snapshot,
-		snapshot = data?.controlPlane;
-	if (!snapshot) return "<p>Loading workspace…</p>";
-	if (route === "overview")
-		return `<h1>${escapeHtml(snapshot.workspace.name)}</h1><div class="cards"><article><b>${snapshot.nodes.length}</b><span>Nodes</span></article><article><b>${snapshot.operations.length}</b><span>Operations</span></article><article><b>${snapshot.artifacts.length}</b><span>Artifacts</span></article></div>`;
-	if (route === "graph") {
-		const graph = data.graph as {
-				nodes?: { id: string; kind: string }[];
-				edges?: { from: string; to: string; kind: string }[];
-			},
-			nodes = graph.nodes ?? [],
-			width = 900,
-			height = Math.max(420, Math.ceil(nodes.length / 4) * 150);
-		const positions = new Map(
-			nodes.map((node, index) => [
-				node.id,
-				{ x: 130 + (index % 4) * 210, y: 80 + Math.floor(index / 4) * 150 },
-			]),
+	const data = state.snapshot;
+	const snapshot = data?.controlPlane;
+	if (state.error)
+		return `<div class="alert danger" role="alert"><b>Dashboard unavailable</b><span>${escapeHtml(state.error)}</span><button data-action="refresh">Try again</button></div>`;
+	if (!snapshot)
+		return `<div class="skeleton-page" aria-label="Loading"><div></div><div></div><div></div></div>`;
+	if (route === "overview") {
+		const health = ["healthy", "degraded", "unhealthy", "unknown"].map(
+			(value) => [
+				value,
+				snapshot.nodes.filter((n) => n.health === value).length,
+			],
 		);
-		return `<h1>System graph</h1><div class="graph-tools"><button data-graph="out">−</button><button data-graph="fit">Fit</button><button data-graph="in">+</button></div><div class="graph" tabindex="0" aria-label="Interactive system graph"><svg viewBox="0 0 ${width} ${height}" role="img"><g id="graph-viewport">${(
-			graph.edges ?? []
-		)
-			.map((edge) => {
-				const from = positions.get(edge.from),
-					to = positions.get(edge.to);
-				return from && to
-					? `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" class="edge ${escapeHtml(edge.kind)}"><title>${escapeHtml(edge.kind)}</title></line>`
-					: "";
-			})
-			.join("")}${nodes
-			.map((node) => {
-				const point = positions.get(node.id) ?? { x: 0, y: 0 };
-				const state = snapshot.nodes.find((item) => item.id === node.id);
-				return `<g class="graph-node" data-node="${escapeHtml(node.id)}" tabindex="0" transform="translate(${point.x - 75} ${point.y - 28})"><rect width="150" height="56" rx="9"></rect><text x="10" y="22">${escapeHtml(node.id)}</text><text x="10" y="42" class="sub">${escapeHtml(state?.health ?? node.kind)}</text></g>`;
-			})
-			.join("")}</g></svg></div>`;
+		const active = snapshot.operations.filter(
+			(o) => o.status === "running" || o.status === "pending",
+		);
+		return `${heading("Overview", "Live workspace health and recent control-plane activity.")}<div class="summary-grid"><article class="metric"><span>Nodes</span><strong>${snapshot.nodes.length}</strong><small>${health.map(([k, v]) => `${v} ${k}`).join(" · ")}</small></article><article class="metric"><span>Overall health</span><strong class="${tone(health.find(([k]) => k === "unhealthy")?.[1] ? "unhealthy" : "healthy")}">${health.find(([k]) => k === "unhealthy")?.[1] ? "Attention" : "Operational"}</strong><small>Generated ${time(snapshot.generatedAt)}</small></article><article class="metric"><span>Active operations</span><strong>${active.length}</strong><small>${snapshot.operations.length} total operations</small></article><article class="metric"><span>Artifacts</span><strong>${snapshot.artifacts.length}</strong><small>${snapshot.artifacts.filter((a) => a.status === "failed" || a.status === "invalid").length} need attention</small></article></div><div class="two-column">${table(
+			"Lifecycle",
+			["State", "Nodes"],
+			["running", "starting", "stopping", "stopped", "failed"].map((value) => [
+				badge(value),
+				String(snapshot.nodes.filter((n) => n.state === value).length),
+			]),
+		)}${table(
+			"Recent activity",
+			["Time", "Event", "Source"],
+			data.events
+				.slice(-8)
+				.reverse()
+				.map((e) => [
+					time(e.timestamp),
+					`<code>${escapeHtml(e.type)}</code>`,
+					escapeHtml(e.source),
+				]),
+			"Activity appears here as the system changes.",
+		)}</div>`;
 	}
+	if (route === "graph")
+		return renderGraph(data.graph as Graph, snapshot.nodes, state.selectedNode);
 	if (route === "nodes")
-		return `<h1>Nodes</h1><div class="grid">${snapshot.nodes.map((node) => `<button class="node" data-node="${escapeHtml(node.id)}"><b>${escapeHtml(node.id)}</b><span>${escapeHtml(node.state)} · ${escapeHtml(node.health)}</span><small>checks ${node.consecutiveSuccesses}/${node.consecutiveFailures} · restarts ${node.restartCount}</small></button>`).join("")}</div>`;
+		return `${heading("Nodes", "Processes, services, and tasks in the active system.", `<label class="search"><span class="sr-only">Search nodes</span><input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Search nodes…"></label>`)}${table(
+			"All nodes",
+			[
+				"Node",
+				"Kind",
+				"Lifecycle",
+				"Health",
+				"Runtime",
+				"PID",
+				"Restarts",
+				"Actions",
+			],
+			snapshot.nodes
+				.filter(
+					(n) =>
+						!state.search ||
+						`${n.id} ${n.kind} ${n.runtime}`
+							.toLowerCase()
+							.includes(state.search.toLowerCase()),
+				)
+				.map((n) => [
+					`<button class="link" data-node="${escapeHtml(n.id)}">${escapeHtml(n.id)}</button>`,
+					escapeHtml(n.kind),
+					badge(n.state),
+					badge(n.health),
+					escapeHtml(n.runtime ?? "—"),
+					escapeHtml(n.pid ?? "—"),
+					String(n.restartCount),
+					`<span class="row-actions"><button data-mutate="start" data-id="${escapeHtml(n.id)}">Start</button><button data-mutate="restart" data-id="${escapeHtml(n.id)}">Restart</button><button class="danger-button" data-mutate="stop" data-id="${escapeHtml(n.id)}">Stop</button></span>`,
+				]),
+		)}`;
 	if (route === "operations")
-		return table(
-			["Operation", "Type", "Status"],
-			snapshot.operations.map((item) => [item.id, item.type, item.status]),
-		);
+		return `${heading("Operations", "Track lifecycle work and per-node outcomes.")}${table(
+			"Operation history",
+			["ID", "Type", "Status", "Targets", "Duration", "Correlation"],
+			snapshot.operations
+				.slice()
+				.reverse()
+				.map((o) => [
+					`<code>${escapeHtml(o.id)}</code>`,
+					escapeHtml(o.type),
+					badge(o.status),
+					escapeHtml(o.requestedNodes.join(", ") || "—"),
+					duration(o.startedAt, o.completedAt),
+					`<code>${escapeHtml(o.correlationId)}</code>`,
+				]),
+			"Operations will appear after a lifecycle action or task run.",
+		)}`;
+	if (route === "tasks") {
+		const tasks = snapshot.nodes.filter((n) => n.kind === "task");
+		return `${heading("Tasks", "Runnable work exposed by the authoritative system graph.")}${table(
+			"Available tasks",
+			["Task", "State", "Health", "Last operation", "Action"],
+			tasks.map((n) => {
+				const op = snapshot.operations.find(
+					(o) => o.type === "task" && o.requestedNodes.includes(n.id),
+				);
+				return [
+					`<b>${escapeHtml(n.id)}</b>`,
+					badge(n.state),
+					badge(n.health),
+					op ? badge(op.status) : "Never run",
+					`<button class="primary" data-mutate="run" data-id="${escapeHtml(n.id)}">Run task</button>`,
+				];
+			}),
+			"No task nodes are configured for this workspace.",
+		)}`;
+	}
 	if (route === "artifacts")
-		return table(
-			["Artifact", "Status", "SHA-256", "Producer"],
-			snapshot.artifacts.map((item) => [
-				item.id,
-				item.status,
-				item.hash ?? "—",
-				item.producer ?? "—",
+		return `${heading("Artifacts", "Produced outputs and their provenance.")}${table(
+			"Artifact browser",
+			[
+				"Artifact",
+				"Type",
+				"Status",
+				"Producer",
+				"Consumers",
+				"Location",
+				"Size",
+			],
+			snapshot.artifacts.map((a) => [
+				`<b>${escapeHtml(a.id)}</b>`,
+				escapeHtml(a.type),
+				badge(a.status),
+				escapeHtml(a.producer ?? "—"),
+				escapeHtml(a.consumers.join(", ") || "—"),
+				a.location
+					? `<span class="copyable">${escapeHtml(a.location)}<button data-copy="${escapeHtml(a.location)}" aria-label="Copy artifact location">Copy</button></span>`
+					: "—",
+				a.size == null ? "—" : `${Math.round(a.size / 1024)} KB`,
 			]),
-		);
+			"Artifacts appear when configured producers expose outputs.",
+		)}`;
 	if (route === "events") {
 		const filter = state.eventFilter.toLowerCase();
-		return `<h1>Events</h1><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Filter events">${table(
-			["Time", "Type", "Source"],
-			data.events
-				.filter(
-					(item) =>
-						!filter ||
-						`${item.type} ${item.source}`.toLowerCase().includes(filter),
-				)
-				.map((item) => [item.timestamp, item.type, item.source]),
+		const events = data.events
+			.filter(
+				(e) =>
+					!filter ||
+					`${e.type} ${e.source} ${e.correlationId}`
+						.toLowerCase()
+						.includes(filter),
+			)
+			.slice(-300)
+			.reverse();
+		return `${heading("Events", "A stable, inspectable timeline of control-plane activity.", `<button data-action="toggle-events">${state.eventsPaused ? "Resume live" : "Pause live"}</button>`)}<div class="toolbar"><label class="search"><span class="sr-only">Filter events</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Filter type, source, correlation…"></label>${state.eventsPaused ? badge("Live updates paused") : badge("Live")}</div>${table(
+			"Timeline",
+			["Time", "Type", "Source", "Correlation"],
+			events.map((e) => [
+				time(e.timestamp),
+				`<code>${escapeHtml(e.type)}</code>`,
+				escapeHtml(e.source),
+				`<code>${escapeHtml(e.correlationId)}</code>`,
+			]),
+			filter
+				? "No events match the active filter."
+				: "Events appear as the workspace changes.",
 		)}`;
 	}
 	if (route === "diagnostics")
-		return table(
-			["Severity", "Code", "Message"],
-			snapshot.diagnostics.map((item) => [
-				item.severity,
-				item.code,
-				item.message,
+		return `${heading("Diagnostics", "Actionable configuration and runtime findings.")}${table(
+			"Findings",
+			["Severity", "Code", "Message", "Source"],
+			snapshot.diagnostics.map((d) => [
+				badge(d.severity),
+				`<code>${escapeHtml(d.code)}</code>`,
+				escapeHtml(d.message),
+				escapeHtml(
+					d.source
+						? `${d.source.file ?? ""}${d.source.path ? ` · ${d.source.path}` : ""}`
+						: "—",
+				),
 			]),
-		);
-	if (route === "configuration")
-		return `<h1>Configuration</h1><pre>${escapeHtml(JSON.stringify(data.configuration, null, 2))}</pre>`;
-	return `<h1>Plugins</h1><p>Plugin and provider ownership is exposed by the control-plane snapshot when registrations are present.</p>`;
+			"No diagnostics. The workspace has no reported findings.",
+		)}`;
+	if (route === "health")
+		return `${heading("Health", "Authoritative node checks and restart signals.")}${table(
+			"Node health",
+			[
+				"Node",
+				"Health",
+				"Provider",
+				"Last check",
+				"Successes",
+				"Failures",
+				"Restart",
+			],
+			snapshot.nodes.map((n) => [
+				`<button class="link" data-node="${escapeHtml(n.id)}">${escapeHtml(n.id)}</button>`,
+				badge(n.health),
+				escapeHtml(n.healthProviderId ?? "—"),
+				time(n.lastCheckAt),
+				String(n.consecutiveSuccesses),
+				String(n.consecutiveFailures),
+				n.restartPending ? badge("pending") : "—",
+			]),
+		)}`;
+	if (route === "plugins")
+		return `${heading("Plugins", "Explicitly configured extensions visible in the public snapshot.")}${table(
+			"Installed plugins",
+			["Plugin ID", "Status"],
+			snapshot.plugins.map((p) => [
+				`<code>${escapeHtml(p)}</code>`,
+				badge("registered"),
+			]),
+			"No plugins are reported by this workspace.",
+		)}`;
+	if (route === "providers")
+		return `${heading("Providers", "Runtime capabilities registered with the control plane.")}${table(
+			"Runtime providers",
+			["Provider ID", "Kind", "Status"],
+			snapshot.providers.map((p) => [
+				`<code>${escapeHtml(p.id)}</code>`,
+				escapeHtml(p.kind),
+				badge("available"),
+			]),
+			"No providers are reported by this workspace.",
+		)}`;
+	return `${heading("Configuration", "Normalized, redacted configuration from the public dashboard API.")}<div class="toolbar"><button data-copy="${escapeHtml(JSON.stringify(data.configuration, null, 2))}">Copy configuration</button></div><details class="config-tree" open><summary>Normalized configuration</summary><pre>${escapeHtml(JSON.stringify(data.configuration, null, 2))}</pre></details>`;
 }
-function table(headers: string[], rows: unknown[][]) {
-	return `<h1>${escapeHtml(headers[0])}</h1><div class="table"><table><thead><tr>${headers.map((item) => `<th>${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((item) => `<td>${escapeHtml(item)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+
+type Graph = {
+	nodes?: { id: string; kind: string }[];
+	edges?: { from: string; to: string; kind: string }[];
+};
+function renderGraph(
+	graph: Graph,
+	states: readonly { id: string; health: string; state: string }[],
+	selected?: string,
+) {
+	const nodes = graph.nodes ?? [],
+		width = 1000,
+		height = Math.max(500, Math.ceil(nodes.length / 4) * 150);
+	const positions = new Map(
+		nodes.map((node, index) => [
+			node.id,
+			{ x: 140 + (index % 4) * 240, y: 90 + Math.floor(index / 4) * 150 },
+		]),
+	);
+	return `${heading("System graph", "Explore dependencies without losing selection or viewport during live updates.")}<div class="graph-shell"><div class="graph-tools" aria-label="Graph controls"><button data-graph="out" aria-label="Zoom out">−</button><button data-graph="fit">Fit view</button><button data-graph="reset">Reset</button><button data-graph="in" aria-label="Zoom in">+</button></div><div class="graph" tabindex="0" aria-label="Interactive system graph"><svg viewBox="0 0 ${width} ${height}" role="img"><g id="graph-viewport">${(
+		graph.edges ?? []
+	)
+		.map((edge) => {
+			const from = positions.get(edge.from),
+				to = positions.get(edge.to);
+			return from && to
+				? `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" class="edge ${escapeHtml(edge.kind)}"><title>${escapeHtml(edge.from)} to ${escapeHtml(edge.to)}: ${escapeHtml(edge.kind)}</title></line>`
+				: "";
+		})
+		.join("")}${nodes
+		.map((node) => {
+			const point = positions.get(node.id) ?? { x: 0, y: 0 },
+				state = states.find((item) => item.id === node.id);
+			return `<g class="graph-node ${selected === node.id ? "selected" : ""} ${tone(state?.health)}" data-node="${escapeHtml(node.id)}" role="button" aria-label="${escapeHtml(node.id)}, ${escapeHtml(state?.state)}, ${escapeHtml(state?.health)}" tabindex="0" transform="translate(${point.x - 85} ${point.y - 32})"><rect width="170" height="64" rx="10"></rect><circle cx="153" cy="17" r="5"></circle><text x="12" y="25">${escapeHtml(node.id)}</text><text x="12" y="47" class="sub">${escapeHtml(node.kind)} · ${escapeHtml(state?.state)}</text></g>`;
+		})
+		.join(
+			"",
+		)}</g></svg></div>${selected ? `<aside class="detail-panel"><button class="close" data-action="clear-selection" aria-label="Close details">×</button><span class="eyebrow">Selected node</span><h2>${escapeHtml(selected)}</h2><p>Selection is preserved across snapshot revisions.</p><button data-route="nodes">Open node list</button></aside>` : ""}</div>`;
 }

@@ -28,3 +28,23 @@ await plane.dispose();
 ```
 
 `startDashboard` never owns or disposes the supplied control plane. Its returned handle closes every open SSE response and the HTTP server.
+
+## Dashboard experience
+
+The responsive workbench groups pages into Workspace, Operations, Observe, and
+System navigation. Desktop navigation can be collapsed and becomes an accessible
+drawer on mobile. Overview summarizes lifecycle, health, operations, artifacts,
+and recent activity; dedicated views cover the graph, nodes, tasks, operations,
+artifacts, events, diagnostics, health, plugins, providers, and redacted
+configuration.
+
+Press `Ctrl+K` or `Cmd+K` to search pages and nodes. The graph supports keyboard
+selection and zoom/fit controls, and preserves selection during live revisions.
+Event streaming can be paused while inspecting history. Lifecycle actions surface
+pending feedback and confirmations for stop/restart; when `mutations: false`, the
+same controls are visibly disabled with an explanation.
+
+Theme selection cycles through system, light, and dark modes and is stored only in
+the browser. Sidebar state is also local. Both themes honor reduced-motion and the
+layout adapts across mobile, tablet, and desktop widths without page-level
+horizontal overflow.

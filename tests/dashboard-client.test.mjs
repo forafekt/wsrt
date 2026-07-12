@@ -8,7 +8,36 @@ import {
 
 test("dashboard routes unknown paths to overview", () => {
 	assert.equal(matchDashboardRoute("/operations"), "operations");
+	assert.equal(matchDashboardRoute("/tasks"), "tasks");
+	assert.equal(matchDashboardRoute("/health"), "health");
+	assert.equal(matchDashboardRoute("/providers"), "providers");
 	assert.equal(matchDashboardRoute("/not-a-page"), "overview");
+});
+
+test("dashboard reducer preserves interaction state across snapshots", () => {
+	const selected = reduceDashboardState(
+		{
+			eventFilter: "failed",
+			search: "api",
+			eventsPaused: true,
+			connected: true,
+		},
+		{ type: "select-node", id: "api" },
+	);
+	const hydrated = reduceDashboardState(selected, {
+		type: "snapshot",
+		snapshot: {
+			revision: 3,
+			controlPlane: {},
+			graph: {},
+			events: [],
+			configuration: {},
+		},
+	});
+	assert.equal(hydrated.selectedNode, "api");
+	assert.equal(hydrated.eventFilter, "failed");
+	assert.equal(hydrated.search, "api");
+	assert.equal(hydrated.eventsPaused, true);
 });
 
 test("dashboard reducer applies only monotonic snapshot revisions", () => {

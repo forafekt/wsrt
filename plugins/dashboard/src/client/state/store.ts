@@ -4,12 +4,18 @@ export type DashboardState = Readonly<{
 	snapshot?: DashboardSnapshot;
 	selectedNode?: string;
 	eventFilter: string;
+	search: string;
+	eventsPaused: boolean;
+	error?: string;
 	connected: boolean;
 }>;
 export type DashboardAction =
 	| { type: "snapshot"; snapshot: DashboardSnapshot }
 	| { type: "select-node"; id?: string }
 	| { type: "filter-events"; value: string }
+	| { type: "search"; value: string }
+	| { type: "pause-events"; value: boolean }
+	| { type: "error"; value?: string }
 	| { type: "connected"; value: boolean };
 export function reduceDashboardState(
 	state: DashboardState,
@@ -23,10 +29,21 @@ export function reduceDashboardState(
 		return Object.freeze({ ...state, selectedNode: action.id });
 	if (action.type === "filter-events")
 		return Object.freeze({ ...state, eventFilter: action.value });
+	if (action.type === "search")
+		return Object.freeze({ ...state, search: action.value });
+	if (action.type === "pause-events")
+		return Object.freeze({ ...state, eventsPaused: action.value });
+	if (action.type === "error")
+		return Object.freeze({ ...state, error: action.value });
 	return Object.freeze({ ...state, connected: action.value });
 }
 export class DashboardStore {
-	#state: DashboardState = Object.freeze({ eventFilter: "", connected: false });
+	#state: DashboardState = Object.freeze({
+		eventFilter: "",
+		search: "",
+		eventsPaused: false,
+		connected: false,
+	});
 	readonly #listeners = new Set<(state: DashboardState) => void>();
 	get state() {
 		return this.#state;

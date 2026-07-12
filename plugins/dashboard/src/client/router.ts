@@ -5,10 +5,13 @@ const routes = new Set<DashboardRoute>([
 	"graph",
 	"nodes",
 	"operations",
+	"tasks",
 	"artifacts",
 	"events",
 	"diagnostics",
+	"health",
 	"plugins",
+	"providers",
 	"configuration",
 ]);
 export function matchDashboardRoute(pathname: string): DashboardRoute {

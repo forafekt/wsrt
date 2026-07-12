@@ -18,7 +18,11 @@ export class SnapshotTransport {
 	) {}
 	async start() {
 		this.#closed = false;
-		await this.refresh();
+		try {
+			await this.refresh();
+		} catch {
+			this.onConnection(false);
+		}
 		this.#connect();
 	}
 	#url(path: string) {
@@ -55,7 +59,9 @@ export class SnapshotTransport {
 			this.#source?.close();
 			if (!this.#closed)
 				this.#timer = setTimeout(() => {
-					void this.refresh().finally(() => this.#connect());
+					void this.refresh()
+						.catch(() => undefined)
+						.finally(() => this.#connect());
 				}, this.options.reconnectMs ?? 1000);
 		};
 	}
