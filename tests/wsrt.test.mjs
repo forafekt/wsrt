@@ -6,16 +6,13 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import test from 'node:test'
 import { createServer } from 'vite'
-import {
-  createOrchestratedViteConfig,
-  createWorkspaceRuntime,
-  environmentForSpawn,
-  hasWsrtVitePlugin,
-  loadWsrtConfig,
-  runMcpTool,
-  startDashboard,
-  wsrt,
-} from '@wsrt/core'
+import { createOrchestratedViteConfig } from '@wsrt/adapter-vite'
+import { loadWsrtConfig } from '@wsrt/config'
+import { environmentForSpawn } from '@wsrt/environment'
+import { runMcpTool } from '@wsrt/mcp'
+import { createWorkspaceRuntime } from '@wsrt/runtime'
+import { startDashboard } from '@wsrt/plugin-dashboard'
+import { hasWsrtVitePlugin, wsrt } from '@wsrt/plugin-vite'
 
 const packageRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 

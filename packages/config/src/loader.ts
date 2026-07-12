@@ -13,6 +13,7 @@ import type {
 } from '@wsrt/types'
 import { mergeWsrtConfig } from './merge.js'
 import { resolveWsrtConfig } from './resolver.js'
+import { normalizeSystemDefinition, type NormalizedSystemDefinition, type SystemDiagnostic, type WorkspaceDefinitionInput } from './system.js'
 
 const configNames = [
   'wsrt.config.ts',
@@ -80,6 +81,13 @@ export async function loadWsrtConfig(
     sources,
     diagnostics,
   }
+}
+
+export async function loadSystemDefinition(root=process.cwd(),explicitFile?:string):Promise<{definition?:NormalizedSystemDefinition;diagnostics:SystemDiagnostic[];file?:string}>{
+  const absoluteRoot=path.resolve(root),file=discoverConfigFile(absoluteRoot,explicitFile)
+  if(!file)return{diagnostics:[{code:'config.not_found',severity:'error',message:'No WSRT configuration file found',source:{file:absoluteRoot,path:''}}]}
+  try{const input=normalizeConfig(await importConfigFile(file)) as unknown as WorkspaceDefinitionInput;const result=normalizeSystemDefinition(input,{root:absoluteRoot,file});return{...result,file}}
+  catch(cause){return{file,diagnostics:[{code:'config.invalid',severity:'error',message:cause instanceof Error?cause.message:String(cause),source:{file,path:''}}]}}
 }
 
 export function discoverConfigFile(root: string, explicitFile?: string): string | undefined {
@@ -308,8 +316,9 @@ function stripJsonComments(source: string): string {
   return output
 }
 async function normalizePluginsConfig(config: WsrtConfig): Promise<WsrtConfig> {
-  for (let index = 0; index < config.plugins.length; index += 1) {
-    const plugin = config.plugins[index]
+  const plugins = config.plugins ?? []
+  for (let index = 0; index < plugins.length; index += 1) {
+    const plugin = plugins[index]
     const isRemoteHttp = typeof plugin === 'string' && (plugin.startsWith('http://') || plugin.startsWith('https://'))
     const isWsrt = typeof plugin === 'string' && plugin.startsWith('wsrt:') && !isRemoteHttp 
     const isModule = typeof plugin === 'string' && !isRemoteHttp && !isWsrt
@@ -317,7 +326,7 @@ async function normalizePluginsConfig(config: WsrtConfig): Promise<WsrtConfig> {
     if (isWsrt) {
       const pluginNameQuery = plugin.slice('wsrt:'.length)
       const pluginName = plugin.split('?')[0].slice('wsrt:'.length).trim();
-      config.plugins[index] = await import(`@wsrt/${pluginName}`).catch(() => {
+      plugins[index] = await import(`@wsrt/${pluginName}`).catch(() => {
         throw new Error(`Plugin not found: ${pluginName}. Please try installing '${pluginName}'`)
       }).then((plugin) => {
         if (typeof plugin?.default !== 'function') {
@@ -330,7 +339,7 @@ async function normalizePluginsConfig(config: WsrtConfig): Promise<WsrtConfig> {
     if (isModule) {
       const pluginNameQuery = plugin
        const pluginName = plugin.split('?')[0].trim();
-      config.plugins[index] = await import(pluginName).catch(() => {
+      plugins[index] = await import(pluginName).catch(() => {
         throw new Error(`Plugin not found: ${pluginName}. Please try installing '${pluginName}'`)
       }).then((plugin) => {
         if (typeof plugin?.default !== 'function') {

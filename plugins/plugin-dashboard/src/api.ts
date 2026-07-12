@@ -4,6 +4,10 @@ import type {
   WorkspaceRuntime,
   WorkspacePackage,
 } from '@wsrt/types'
+import type { WsrtControlPlane } from '@wsrt/control-plane'
+
+export function controlPlaneDashboardSnapshot(controlPlane:WsrtControlPlane){return{overview:{name:controlPlane.definition().name,root:controlPlane.definition().root,nodes:controlPlane.graph().nodes().length,events:controlPlane.listEvents().length,artifacts:controlPlane.listArtifacts().length},graph:controlPlane.graph().toJSON(),nodes:controlPlane.graph().nodes().map(node=>({...node,state:controlPlane.getNodeState(node.id)})),events:controlPlane.listEvents(),diagnostics:controlPlane.validate(),artifacts:controlPlane.listArtifacts()}}
+export async function controlPlaneDashboardOperation(controlPlane:WsrtControlPlane,operation:'start'|'stop'|'restart'|'run',ids:string[]){if(operation==='start')return controlPlane.start(ids);if(operation==='stop')return controlPlane.stop(ids);if(operation==='restart')return controlPlane.restart(ids);if(ids.length!==1)throw new Error('Task operation requires exactly one task');return controlPlane.runTask(ids[0])}
 
 export type DashboardOverview = {
   root: string

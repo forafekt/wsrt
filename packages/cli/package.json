@@ -28,6 +28,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@wsrt/runtime": "workspace:*"
+    "@wsrt/control-plane": "workspace:*"
   }
 }

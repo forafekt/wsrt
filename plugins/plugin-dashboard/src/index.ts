@@ -18,6 +18,7 @@ import {
   dashboardProject,
   dashboardServerStatus,
 } from './api.js'
+export { controlPlaneDashboardOperation, controlPlaneDashboardSnapshot } from './api.js'
 import { dashboardHtml } from './app/dashboard-html.js'
 import type { DashboardPluginPage, DashboardRoute } from './types/index.js'
 

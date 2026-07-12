@@ -27,9 +27,21 @@ importers:
       '@types/node':
         specifier: ^24.12.2
         version: 24.13.3
-      '@wsrt/core':
+      '@wsrt/adapter-vite':
         specifier: workspace:*
-        version: link:packages/core
+        version: link:adapters/adapter-vite
+      '@wsrt/config':
+        specifier: workspace:*
+        version: link:packages/config
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:packages/control-plane
+      '@wsrt/environment':
+        specifier: workspace:*
+        version: link:packages/environment
+      '@wsrt/mcp':
+        specifier: workspace:*
+        version: link:packages/mcp
       '@wsrt/plugin-dashboard':
         specifier: workspace:*
         version: link:plugins/plugin-dashboard
@@ -48,6 +60,9 @@ importers:
       '@wsrt/plugin-workspace':
         specifier: workspace:*
         version: link:plugins/plugin-workspace
+      '@wsrt/runtime':
+        specifier: workspace:*
+        version: link:packages/runtime
       rimraf:
         specifier: ^6.1.3
         version: 6.1.3
@@ -136,17 +151,22 @@ importers:
         specifier: workspace:*
         version: link:../types
 
+  packages/capabilities: {}
+
   packages/cli:
     dependencies:
-      '@wsrt/runtime':
+      '@wsrt/control-plane':
         specifier: workspace:*
-        version: link:../runtime
+        version: link:../control-plane
 
   packages/config:
     dependencies:
       '@wsrt/diagnostics':
         specifier: workspace:*
         version: link:../diagnostics
+      '@wsrt/graph':
+        specifier: workspace:*
+        version: link:../graph
       '@wsrt/types':
         specifier: workspace:*
         version: link:../types
@@ -156,6 +176,24 @@ importers:
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
+
+  packages/control-plane:
+    dependencies:
+      '@wsrt/capabilities':
+        specifier: workspace:*
+        version: link:../capabilities
+      '@wsrt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@wsrt/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@wsrt/lifecycle':
+        specifier: workspace:*
+        version: link:../lifecycle
+      '@wsrt/runtime-node':
+        specifier: workspace:*
+        version: link:../../runtimes/node
 
   packages/core:
     dependencies:
@@ -229,8 +267,17 @@ importers:
         specifier: workspace:*
         version: link:../types
 
+  packages/lifecycle:
+    dependencies:
+      '@wsrt/graph':
+        specifier: workspace:*
+        version: link:../graph
+
   packages/mcp:
     dependencies:
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
       '@wsrt/types':
         specifier: workspace:*
         version: link:../types
@@ -330,6 +377,9 @@ importers:
 
   plugins/plugin-dashboard:
     dependencies:
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
       '@wsrt/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -371,6 +421,12 @@ importers:
       '@wsrt/types':
         specifier: workspace:*
         version: link:../../packages/types
+
+  runtimes/node:
+    dependencies:
+      '@wsrt/capabilities':
+        specifier: workspace:*
+        version: link:../../packages/capabilities
 
 packages:
 

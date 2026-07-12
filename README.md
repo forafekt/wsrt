@@ -1,5 +1,7 @@
 # wsrt
 
+> The new system-lifecycle vertical slice is documented in [ARCHITECTURE.md](./ARCHITECTURE.md) and demonstrated by `examples/system-lifecycle`.
+
 wsrt is a runtime-first workspace orchestrator for JavaScript and TypeScript projects. It builds a live model of projects, packages, processes, services, events, diagnostics, artifacts, and tool integrations, then lets adapters such as Vite, Node, command processes, and composite projects run against that model.
 
 ## Vision

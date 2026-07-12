@@ -27,6 +27,7 @@
   "dependencies": {
     "@wsrt/types": "workspace:*",
     "@wsrt/diagnostics": "workspace:*",
+    "@wsrt/graph": "workspace:*",
     "esbuild": "^0.28.1",
     "yaml": "^2.9.0"
   }

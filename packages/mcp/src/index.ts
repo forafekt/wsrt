@@ -1,4 +1,10 @@
 import type { McpEntry, McpRuntimeState, WsrtConfig, WorkspaceRuntime } from '@wsrt/types'
+import type { WsrtControlPlane } from '@wsrt/control-plane'
+
+export type ControlPlaneMcpRequest={tool:string;input?:Record<string,unknown>;mutating?:boolean}
+export async function runControlPlaneMcpTool(controlPlane:WsrtControlPlane,request:ControlPlaneMcpRequest,options:{allowMutations?:boolean}={}):Promise<unknown>{const input=request.input??{};switch(request.tool){case'workspace.overview':return{name:controlPlane.definition().name,root:controlPlane.definition().root,nodes:controlPlane.graph().nodes().length,artifacts:controlPlane.listArtifacts().length,diagnostics:controlPlane.validate().length};case'workspace.graph':return controlPlane.graph().toJSON();case'workspace.node':return controlPlane.getNode(String(input.id??''));case'workspace.dependencies':return controlPlane.getDependencies(String(input.id??''));case'workspace.consumers':return controlPlane.getConsumers(String(input.id??''));case'workspace.diagnostics':return controlPlane.validate();case'workspace.state':return controlPlane.getNodeState(String(input.id??''));case'workspace.events':return controlPlane.listEvents();case'workspace.artifacts':return controlPlane.listArtifacts();case'workspace.start':assertMutation(options);return controlPlane.start(toIds(input));case'workspace.stop':assertMutation(options);return controlPlane.stop(toIds(input));case'workspace.restart':assertMutation(options);return controlPlane.restart(toIds(input));case'workspace.runTask':assertMutation(options);return controlPlane.runTask(String(input.id??''));default:throw new Error(`Unknown control-plane MCP tool: ${request.tool}`)}}
+function assertMutation(options:{allowMutations?:boolean}){if(!options.allowMutations)throw new Error('MCP mutating operations are disabled')}
+function toIds(input:Record<string,unknown>):string[]{return Array.isArray(input.ids)?input.ids.map(String):typeof input.id==='string'?[input.id]:[]}
 
 export function createMcpState(config: WsrtConfig): McpRuntimeState {
   const mcp = typeof config.mcp === 'object' ? config.mcp : undefined
