@@ -21,6 +21,8 @@ export async function runMcpTool(
 			return controlPlane.snapshot();
 		case "workspace.operations":
 			return controlPlane.listOperations();
+		case "workspace.operation":
+			return controlPlane.getOperation(String(input.id ?? ""));
 		case "workspace.node":
 			return controlPlane.getNode(String(input.id ?? ""));
 		case "workspace.dependencies":
@@ -37,6 +39,11 @@ export async function runMcpTool(
 			return controlPlane.listEvents();
 		case "workspace.artifacts":
 			return controlPlane.listArtifacts();
+		case "workspace.artifact":
+			return controlPlane.listArtifacts().find((item) => item.id === String(input.id ?? ""));
+		case "workspace.cancel":
+			mutation(options);
+			return { operationId: String(input.id ?? ""), cancelled: controlPlane.cancelOperation(String(input.id ?? "")) };
 		case "workspace.start":
 			mutation(options);
 			return controlPlane.start(ids(input));

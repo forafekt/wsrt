@@ -30,3 +30,6 @@ export async function dashboardOperation(
 		throw new Error("Task operation requires exactly one task");
 	return plane.runTask(ids[0]);
 }
+export function dashboardCancelOperation(plane: WsrtControlPlane, operationId: string) {
+	return { operationId, cancelled: plane.cancelOperation(operationId) };
+}

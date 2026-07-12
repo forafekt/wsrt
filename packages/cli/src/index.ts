@@ -59,6 +59,10 @@ try {
 		case "artifacts":
 			result = plane.listArtifacts();
 			break;
+		case "cancel":
+			if (!values[0]) throw new Error("Usage: wsrt cancel <operation-id>");
+			result = { operationId: values[0], cancelled: plane.cancelOperation(values[0]) };
+			break;
 		default:
 			throw new Error(`Unknown command: ${command}`);
 	}

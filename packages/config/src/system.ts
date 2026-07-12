@@ -18,13 +18,15 @@ export type CommandInput =
 	| string
 	| { command: string; args?: string[]; shell?: boolean };
 export type HealthcheckInput =
-	| { type: "process" }
+	| { type: "process"; unhealthyThreshold?: number; healthyThreshold?: number }
 	| {
 			type: "http";
 			url: string;
 			intervalMs?: number;
 			timeoutMs?: number;
 			retries?: number;
+			unhealthyThreshold?: number;
+			healthyThreshold?: number;
 	  }
 	| {
 			type: "tcp";
@@ -33,13 +35,28 @@ export type HealthcheckInput =
 			intervalMs?: number;
 			timeoutMs?: number;
 			retries?: number;
+			unhealthyThreshold?: number;
+			healthyThreshold?: number;
 	  };
+export type RestartPolicyInput =
+	| { policy: "never" }
+	| {
+			policy: "on-failure" | "always";
+			attempts?: number;
+			delayMs?: number;
+			backoff?: "fixed" | "exponential";
+			maximumDelayMs?: number;
+			restartOnUnhealthy?: boolean;
+	  };
+export type TaskOutputInput = { artifact: string; path: string; type?: string; directory?: boolean };
 export type ExecutableInput = {
 	root?: string;
 	runtime?: string;
 	command?: CommandInput;
 	dependsOn?: Record<string, { condition?: DependencyCondition }> | string[];
 	healthcheck?: HealthcheckInput;
+	restart?: RestartPolicyInput;
+	critical?: boolean;
 	environment?: Record<string, string>;
 	provider?: { provider: string; options?: unknown };
 };
@@ -47,7 +64,7 @@ export type ApplicationInput = ExecutableInput & {
 	processes?: Record<string, ExecutableInput>;
 	consumes?: string[];
 };
-export type TaskInput = ExecutableInput & { produces?: string[] };
+export type TaskInput = ExecutableInput & { produces?: string[]; outputs?: TaskOutputInput[] };
 export type ArtifactInput = {
 	type: string;
 	producer?: string;
@@ -87,6 +104,9 @@ export type NormalizedExecutable = {
 	command?: NormalizedCommand;
 	dependencies: readonly { id: string; condition: DependencyCondition }[];
 	healthcheck?: HealthcheckInput;
+	restart: RestartPolicyInput;
+	critical: boolean;
+	outputs: readonly TaskOutputInput[];
 	environment: Readonly<Record<string, string>>;
 	source: SourceReference;
 };
@@ -172,6 +192,9 @@ export function normalizeSystemDefinition(
 			command: command(value.command),
 			dependencies: dependencies(value.dependsOn),
 			healthcheck: value.healthcheck,
+			restart: value.restart ?? { policy: "never" },
+			critical: value.critical ?? true,
+			outputs: Object.freeze([...(kind === "task" ? (value as TaskInput).outputs ?? [] : [])]),
 			environment: Object.freeze({ ...value.environment }),
 			source: { file: options.file, path: `${kind}s.${name}` },
 		});

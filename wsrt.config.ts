@@ -4,14 +4,20 @@ export default defineSystem({
 	name: "wsrt",
 	workspace: { packageManager: "pnpm" },
 	tasks: {
-		typecheck: { command: { command: "pnpm", args: ["typecheck"] } },
+		architecture: { command: { command: "node", args: ["scripts/check-architecture.mjs"] } },
+		lint: { command: { command: "pnpm", args: ["exec", "biome", "check", "."] } },
+		typecheck: { command: { command: "pnpm", args: ["-r", "typecheck"] } },
 		build: {
-			command: { command: "pnpm", args: ["build"] },
+			command: { command: "pnpm", args: ["-r", "build"] },
 			dependsOn: { typecheck: { condition: "successful" } },
 		},
 		test: {
-			command: { command: "pnpm", args: ["test"] },
+			command: { command: "node", args: ["--test", "tests/*.mjs"], shell: true },
 			dependsOn: { build: { condition: "successful" } },
+		},
+		validate: {
+			command: { command: "node", args: ["-e", "console.log('WSRT validation complete')"] },
+			dependsOn: { architecture: { condition: "successful" }, lint: { condition: "successful" }, test: { condition: "successful" } },
 		},
 		demo: {
 			command: { command: "echo", args: ["Hello World"] },
