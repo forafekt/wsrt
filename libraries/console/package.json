@@ -1,0 +1,20 @@
+{
+  "name": "@wsrt/console",
+  "version": "0.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "./src/mod.ts",
+  "module": "./src/mod.ts",
+  "types": "./src/mod.ts",
+  "exports": {
+    ".": {
+      "import": "./src/mod.ts",
+      "require": "./src/mod.ts"
+    }
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
