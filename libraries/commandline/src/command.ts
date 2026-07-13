@@ -11,7 +11,7 @@ interface CommandArg {
   variadic: boolean;
 }
 
-interface HelpSection {
+export interface HelpSection {
   title?: string;
   body: string;
 }
@@ -19,6 +19,8 @@ interface HelpSection {
 interface CommandConfig {
   allowUnknownOptions?: boolean;
   ignoreOptionDefaultValue?: boolean;
+  group?: string;
+  hidden?: boolean;
 }
 
 type HelpCallback = (sections: HelpSection[]) => void | HelpSection[];
@@ -37,6 +39,7 @@ class Command {
   examples: CommandExample[];
   helpCallback?: HelpCallback;
   globalCommand?: GlobalCommand;
+  validators: Array<(...args: any[]) => void | Promise<void>>;
 
   constructor(
     public rawName: string,
@@ -49,6 +52,7 @@ class Command {
     this.name = removeBrackets(rawName);
     this.args = findAllBrackets(rawName);
     this.examples = [];
+    this.validators = [];
   }
 
   usage(text: string) {
@@ -99,6 +103,11 @@ class Command {
     return this;
   }
 
+  validate(callback: (...args: any[]) => void | Promise<void>) {
+    this.validators.push(callback);
+    return this;
+  }
+
   /**
    * Check if a command name is matched by this command
    * @param name Command name
@@ -142,19 +151,23 @@ class Command {
 
     sections.push({
       title: "Usage",
-      body: `  $ ${name} ${this.usageText || this.rawName}`,
+      body: `  $ ${name} ${this.usageText || this.rawName}`.trimEnd(),
     });
 
     const showCommands = (this.isGlobalCommand || this.isDefaultCommand) &&
       commands.length > 0;
 
     if (showCommands) {
-      const longestCommandName = findLongest(
-        commands.map((command) => command.rawName),
-      );
-      sections.push({
-        title: "Commands",
-        body: commands
+      const visibleCommands = commands.filter((command) => !command.config.hidden);
+      const longestCommandName = findLongest(visibleCommands.map((command) => command.rawName));
+      const groups = new Map<string, Command[]>();
+      for (const command of visibleCommands) {
+        const group = command.config.group ?? "Commands";
+        groups.set(group, [...(groups.get(group) ?? []), command]);
+      }
+      sections.push(...[...groups].map(([title, groupedCommands]) => ({
+        title,
+        body: groupedCommands
           .map((command) => {
             return `  ${
               padRight(
@@ -164,7 +177,7 @@ class Command {
             }  ${command.description}`;
           })
           .join("\n"),
-      });
+      })));
       sections.push({
         title: `For more info, run any command with the \`--help\` flag`,
         body: commands
@@ -187,9 +200,9 @@ class Command {
         title: "Options",
         body: options
           .map((option) => {
-            return `  ${padRight(option.rawName, longestOptionName.length)}  ${option.description} ${
-              option.config.default === undefined ? "" : `(default: ${option.config.default})`
-            }`;
+            return `  ${padRight(option.rawName, longestOptionName.length)}  ${option.description}${
+              option.config.default === undefined ? "" : ` (default: ${option.config.default})`
+            }`.trimEnd();
           })
           .join("\n"),
       });
@@ -236,6 +249,15 @@ class Command {
     if (this.cli.args.length < minimalArgsCount) {
       throw new CommandLineError(
         `missing required args for command \`${this.rawName}\``,
+      );
+    }
+  }
+
+  checkExtraArgs() {
+    const variadic = this.args.some((arg) => arg.variadic);
+    if (!variadic && this.cli.args.length > this.args.length) {
+      throw new CommandLineError(
+        `unexpected argument \`${this.cli.args[this.args.length]}\` for command \`${this.rawName}\``,
       );
     }
   }

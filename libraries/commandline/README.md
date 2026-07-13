@@ -1,16 +1,16 @@
 # @wsrt/commandline
 
-A **Deno-first, composable command-line framework** for building modern CLIs with subcommands, typed options, nested flags, events, and rich help output.
+A **runtime-portable, composable command-line framework** for building modern CLIs with subcommands, typed options, nested flags, events, and rich help output.
 
 `@wsrt/commandline` is designed to feel familiar if you’ve used tools like `commander`, but with a few strong opinions:
 
-* Native **Deno support**
+* Native **Deno and Node.js support**
 * Explicit command + option modeling
 * Built-in **subcommands**, **aliases**, and **global options**
 * Dot-notation options (`--config.db.host`)
 * Variadic and required args (`<arg>`, `[arg]`, `[...args]`)
 * Event-driven command lifecycle
-* Zero Node.js shims
+* No runtime compatibility shims
 
 ---
 
@@ -52,8 +52,49 @@ cli
   .help()
   .version("1.0.0");
 
-cli.parse(Deno.args);
+await cli.parseAsync();
 ```
+
+For asynchronous actions, use `await cli.parseAsync()` so validation and the
+selected action finish before control returns to the caller.
+
+## Declarative CLI
+
+`createCli` is the preferred API for application CLIs. It builds on the same
+`CommandLine` and `Command` classes, so declarative and fluent definitions can
+be composed.
+
+```ts
+import { createCli } from "@wsrt/commandline";
+
+const cli = createCli({
+  name: "mycli",
+  version: "1.0.0",
+  description: "Manage the example workspace.",
+  options: [
+    { name: "--json", description: "Emit JSON" },
+  ],
+  commands: [
+    {
+      name: "plugin",
+      description: "Manage plugins",
+      commands: [
+        {
+          name: "install <name>",
+          description: "Install a plugin",
+          aliases: ["add"],
+          action: async (name, options) => {},
+        },
+      ],
+    },
+  ],
+});
+
+await cli.parseAsync();
+```
+
+Nested definitions are matched longest-first, aliases retain their parent
+path, and groups can be assigned with `group` for structured global help.
 
 Running:
 
@@ -308,6 +349,29 @@ import { CommandLineError } from "@wsrt/commandline/mod.ts";
 ```
 
 You can catch and format them yourself if needed.
+
+Unknown commands produce a nearest-command suggestion when there is a useful
+match. Commands can add synchronous or asynchronous validation before their
+action:
+
+```ts
+cli.command("deploy <environment>", "Deploy")
+  .validate((environment) => {
+    if (!environments.includes(environment)) {
+      throw new CommandLineError(`unknown environment: ${environment}`);
+    }
+  });
+```
+
+## Shell Completion
+
+Generate a completion script from the registered command model:
+
+```ts
+import { generateCompletions } from "@wsrt/commandline";
+
+console.log(generateCompletions(cli, "zsh")); // bash, fish, or zsh
+```
 
 ---
 

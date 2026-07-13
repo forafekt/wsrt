@@ -89,6 +89,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@wsrt/commandline':
+        specifier: workspace:*
+        version: link:../../libraries/commandline
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:../control-plane

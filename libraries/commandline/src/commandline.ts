@@ -12,6 +12,8 @@ import { processArgs } from './deno.js'
 import type { OptionConfig } from './option.js'
 import {
   camelcaseOptionName,
+  CommandLineError,
+  editDistance,
   getArgParseOptions,
   getFileName,
   setByType,
@@ -127,7 +129,7 @@ class CommandLine extends EventEmitter {
    * Otherwise output the global one.
    */
   outputHelp() {
-    if (this.matchedCommand) {
+    if (this.matchedCommand && !this.matchedCommand.isDefaultCommand) {
       this.matchedCommand.outputHelp()
     } else {
       this.globalCommand.outputHelp()
@@ -179,19 +181,28 @@ class CommandLine extends EventEmitter {
 
     let shouldParse = true
 
-    // Search sub-commands
-    for (const command of this.commands) {
+    // Search longest command path first so `plugin list` wins over `plugin`.
+    const commands = [...this.commands].sort(
+      (left, right) => right.name.split(/\s+/).length - left.name.split(/\s+/).length,
+    )
+    for (const command of commands) {
+      if (command.isDefaultCommand) continue
       const parsed = this.argparse(argv.slice(2), command)
-
-      const commandName = parsed.args[0]
-      if (command.isMatched(commandName)) {
+      const commandNames = [command.name, ...command.aliasNames]
+      const matchedName = commandNames.find((name) => {
+        const parts = name.split(/\s+/).filter(Boolean)
+        return parts.every((part, index) => parsed.args[index] === part)
+      })
+      if (matchedName !== undefined) {
         shouldParse = false
+        const depth = matchedName.split(/\s+/).filter(Boolean).length
         const parsedInfo = {
           ...parsed,
-          args: parsed.args.slice(1),
+          args: parsed.args.slice(depth),
         }
-        this.setParsedInfo(parsedInfo, command, commandName)
-        this.emit(`command:${commandName}`, command)
+        this.setParsedInfo(parsedInfo, command, matchedName)
+        this.emit(`command:${matchedName}`, command)
+        break
       }
     }
 
@@ -199,8 +210,10 @@ class CommandLine extends EventEmitter {
       // Search the default command
       for (const command of this.commands) {
         if (command.name === '') {
-          shouldParse = false
           const parsed = this.argparse(argv.slice(2), command)
+          const acceptsExtra = command.args.some((arg) => arg.variadic)
+          if (!acceptsExtra && parsed.args.length > command.args.length) continue
+          shouldParse = false
           this.setParsedInfo(parsed, command)
           this.emit(`command:!`, command)
         }
@@ -235,6 +248,32 @@ class CommandLine extends EventEmitter {
     }
 
     return parsedArgv
+  }
+
+  /** Parse argv and await validation and the selected command action. */
+  async parseAsync(
+    argv = processArgs,
+    { run = true } = {},
+  ): Promise<ParsedArgv> {
+    const parsed = this.parse(argv, { run: false })
+    if (run && this.matchedCommand) await this.runMatchedCommand()
+    if (!this.matchedCommand && this.args[0] && !this.options.help && !this.options.version) {
+      throw this.unknownCommandError(String(this.args[0]))
+    }
+    return parsed
+  }
+
+  private unknownCommandError(input: string) {
+    const names = this.commands
+      .filter((command) => !command.config.hidden && command.name)
+      .map((command) => command.name.split(/\s+/)[0])
+    const suggestion = [...new Set(names)]
+      .map((name) => ({ name, distance: editDistance(input, name) }))
+      .sort((left, right) => left.distance - right.distance)[0]
+    const hint = suggestion && suggestion.distance <= Math.max(2, Math.floor(input.length / 2))
+      ? ` Did you mean \`${suggestion.name}\`?`
+      : ' Run with `--help` to see available commands.'
+    return new CommandLineError(`unknown command \`${input}\`.${hint}`)
   }
 
   private argparse(argv: string[], /** Matched command */ command?: Command): ParsedArgv {
@@ -319,6 +358,8 @@ class CommandLine extends EventEmitter {
 
     command.checkRequiredArgs()
 
+    command.checkExtraArgs()
+
     const actionArgs: any[] = []
     command.args.forEach((arg, index) => {
       if (arg.variadic) {
@@ -328,7 +369,20 @@ class CommandLine extends EventEmitter {
       }
     })
     actionArgs.push(options)
-    return command.commandAction.apply(this, actionArgs)
+    let pending: Promise<unknown> | undefined
+    for (const validator of command.validators) {
+      if (pending) {
+        pending = pending.then(() => validator.apply(this, actionArgs))
+      } else {
+        const result = validator.apply(this, actionArgs)
+        if (result && typeof (result as Promise<unknown>).then === 'function') {
+          pending = result as Promise<unknown>
+        }
+      }
+    }
+    return pending
+      ? pending.then(() => command.commandAction?.apply(this, actionArgs))
+      : command.commandAction.apply(this, actionArgs)
   }
 }
 
