@@ -1,49 +1,51 @@
 # AI Handoff: DevIntrospect Repository Analysis
 
-Generated using `/home/jonnydoyle/.local/bin/dvi . --format ai -o AGENTS.md`
+[DevIntrospect](https://github.com/forafekt/devintrospect)
+
+Generated using `dvi . --format ai -o AGENTS.md`
 
 Use this as compact project context for maintenance, review, or implementation work.
 
 Root: wsrt
-Files: 251
+Files: 228
 Languages: JavaScript, TypeScript, JSON, YAML
 Frameworks: none
-Tools: pnpm, biome
+Tools: pnpm, Biome
 
 ## Manifest Facts
 
 
 ## Hotspots
 
-- pnpm-lock.yaml: 1984 lines
-- tests/wsrt.test.mjs: 1277 lines
-- libraries/events/src/index.ts: 745 lines
-- packages/types/src/index.ts: 732 lines
-- README.md: 677 lines
+- pnpm-lock.yaml: 1891 lines
+- packages/control-plane/src/index.ts: 1100 lines
+- libraries/event-targets/src/index.ts: 745 lines
+- libraries/console/src/transporters/console-ui.ts: 741 lines
 - libraries/worker-pool/src/pool.ts: 528 lines
-- plugins/plugin-dashboard/src/index.ts: 521 lines
 - libraries/di/README.md: 512 lines
+- libraries/console/src/transporters/console.ts: 484 lines
+- AGENTS.md: 438 lines
+- packages/config/src/system.ts: 429 lines
 - libraries/di/src/mod.ts: 405 lines
-- packages/config/src/module-reference.ts: 405 lines
+- libraries/commandline/README.md: 399 lines
+- libraries/commandline/src/commandline.ts: 389 lines
+- plugins/dashboard/src/server/dashboard-server.ts: 388 lines
 - libraries/prompts/src/components/autocomplete.ts: 358 lines
-- packages/config/src/loader.ts: 353 lines
-- libraries/commandline/src/commandline.ts: 335 lines
-- libraries/commandline/README.md: 335 lines
 - libraries/di/di.test.ts: 328 lines
+- libraries/commandline/src/command.ts: 321 lines
 - libraries/prompts/src/core/controllers/prompt.ts: 318 lines
-- packages/runtime/src/index.ts: 312 lines
-- libraries/commandline/src/command.ts: 299 lines
-- plugins/plugin-dashboard/src/api.ts: 296 lines
-- packages/config/src/resolver.ts: 279 lines
+- plugins/dashboard/src/client/main.ts: 317 lines
+- plugins/dashboard/src/client/pages/index.ts: 310 lines
+- packages/cli/src/cli.ts: 296 lines
 
-# DevIntrospect: WSRT
+# DevIntrospect: wsrt
 
 ## Summary
 
-- Files: 251
-- Directories: 105
-- Size: 741.6 KB
-- Lines: 24371
+- Files: 228
+- Directories: 80
+- Size: 634.7 KB
+- Lines: 22213
 
 ## Detected
 
@@ -57,53 +59,68 @@ Tools: pnpm, biome
 ```text
 wsrt
 ├── adapters
-│   ├── adapter-command
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── adapter-composite
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── adapter-core
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── adapter-node
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── adapter-vite
-│   │   ├── src
-│   │   │   ├── config.ts
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
 │   └── .gitkeep
 ├── apps
 │   └── .gitkeep
 ├── examples
+│   ├── system-lifecycle
+│   │   ├── apps
+│   │   │   ├── api
+│   │   │   │   └── server.mjs
+│   │   │   └── web
+│   │   │       └── server.mjs
+│   │   ├── scripts
+│   │   │   └── generate-contracts.mjs
+│   │   ├── README.md
+│   │   ├── wsrt.config.ts
+│   │   └── wsrt.yaml
 │   └── .gitkeep
 ├── libraries
+│   ├── ansi-tools
+│   │   ├── src
+│   │   │   ├── ansi-colors.ts
+│   │   │   ├── ansi-escape-codes.ts
+│   │   │   ├── mod.ts
+│   │   │   └── utils.ts
+│   │   ├── LICENSE
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
 │   ├── argparse
 │   │   ├── src
 │   │   │   └── mod.ts
 │   │   ├── LICENSE
-│   │   └── README.md
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
 │   ├── commandline
 │   │   ├── src
 │   │   │   ├── command.ts
 │   │   │   ├── commandline.ts
+│   │   │   ├── create.ts
 │   │   │   ├── deno.ts
+│   │   │   ├── index.ts
 │   │   │   ├── mod.ts
 │   │   │   ├── option.ts
 │   │   │   └── utils.ts
 │   │   ├── LICENSE
-│   │   └── README.md
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── console
+│   │   ├── src
+│   │   │   ├── transporters
+│   │   │   │   ├── console-ui.ts
+│   │   │   │   ├── console.ts
+│   │   │   │   ├── file.ts
+│   │   │   │   ├── http.ts
+│   │   │   │   └── mod.ts
+│   │   │   ├── mod.ts
+│   │   │   └── types.ts
+│   │   ├── LICENSE
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
 │   ├── decouple
 │   │   ├── src
 │   │   │   ├── sources
@@ -130,7 +147,7 @@ wsrt
 │   │   ├── di.test.ts
 │   │   ├── LICENSE
 │   │   └── README.md
-│   ├── events
+│   ├── event-targets
 │   │   ├── src
 │   │   │   └── index.ts
 │   │   ├── package.json
@@ -215,34 +232,38 @@ wsrt
 │       │   ├── typecheck.ts
 │       │   └── worker-pool.test.mjs
 │       ├── package.json
-│       └── README.md
+│       ├── README.md
+│       ├── tsconfig.build.json
+│       ├── tsconfig.json
+│       └── tsconfig.test.json
 ├── packages
-│   ├── adapter-command
-│   ├── adapter-composite
-│   ├── adapter-core
-│   ├── adapter-node
-│   ├── adapter-vite
 │   ├── artifacts
+│   │   ├── src
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── capabilities
 │   │   ├── src
 │   │   │   └── index.ts
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   ├── cli
 │   │   ├── src
-│   │   │   └── index.ts
+│   │   │   ├── cli.ts
+│   │   │   ├── executable.ts
+│   │   │   ├── index.ts
+│   │   │   └── logger.ts
 │   │   ├── package.json
+│   │   ├── README.md
 │   │   └── tsconfig.json
 │   ├── config
 │   │   ├── src
-│   │   │   ├── define.ts
 │   │   │   ├── index.ts
 │   │   │   ├── loader.ts
-│   │   │   ├── merge.ts
-│   │   │   ├── module-reference.ts
-│   │   │   └── resolver.ts
+│   │   │   └── system.ts
 │   │   ├── package.json
 │   │   └── tsconfig.json
-│   ├── core
+│   ├── control-plane
 │   │   ├── src
 │   │   │   └── index.ts
 │   │   ├── package.json
@@ -267,144 +288,77 @@ wsrt
 │   │   │   └── index.ts
 │   │   ├── package.json
 │   │   └── tsconfig.json
+│   ├── lifecycle
+│   │   ├── src
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
 │   ├── mcp
 │   │   ├── src
 │   │   │   └── index.ts
 │   │   ├── package.json
 │   │   └── tsconfig.json
-│   ├── plugin-dashboard
-│   ├── plugin-git
-│   ├── plugin-typescript
-│   ├── plugin-utils
-│   ├── plugin-vite
-│   ├── plugin-workspace
-│   ├── plugins
+│   └── plugins
+│       ├── src
+│       │   ├── index.ts
+│       │   └── resolver.ts
+│       ├── package.json
+│       └── tsconfig.json
+├── plugins
+│   ├── dashboard
+│   │   ├── src
+│   │   │   ├── client
+│   │   │   │   ├── pages
+│   │   │   │   │   └── index.ts
+│   │   │   │   ├── state
+│   │   │   │   │   └── store.ts
+│   │   │   │   ├── transport
+│   │   │   │   │   └── sse.ts
+│   │   │   │   ├── main.ts
+│   │   │   │   ├── router.ts
+│   │   │   │   └── styles.ts
+│   │   │   ├── plugin
+│   │   │   │   └── index.ts
+│   │   │   ├── server
+│   │   │   │   ├── dashboard-server.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── snapshots.ts
+│   │   │   ├── shared
+│   │   │   │   └── contracts.ts
+│   │   │   ├── api.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   └── tsconfig.json
+│   ├── vite
 │   │   ├── src
 │   │   │   └── index.ts
 │   │   ├── package.json
 │   │   └── tsconfig.json
-│   ├── reports
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── resolve
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── runtime
-│   │   ├── src
-│   │   │   ├── builtins.ts
-│   │   │   ├── index.ts
-│   │   │   ├── model.ts
-│   │   │   ├── packages.ts
-│   │   │   ├── projects.ts
-│   │   │   ├── query.ts
-│   │   │   └── registries.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── services
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── sync
-│   │   ├── src
-│   │   │   ├── json.ts
-│   │   │   ├── manifests.ts
-│   │   │   └── tsconfig.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── types
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   └── virtual
+│   └── .gitkeep
+├── runtimes
+│   └── node
 │       ├── src
 │       │   └── index.ts
 │       ├── package.json
 │       └── tsconfig.json
-├── plugins
-│   ├── plugin-dashboard
-│   │   ├── src
-│   │   │   ├── app
-│   │   │   │   ├── client
-│   │   │   │   │   ├── components
-│   │   │   │   │   │   ├── wsrt-app.ts
-│   │   │   │   │   │   ├── wsrt-graph.ts
-│   │   │   │   │   │   ├── wsrt-sidebar.ts
-│   │   │   │   │   │   └── wsrt-topbar.ts
-│   │   │   │   │   ├── lib
-│   │   │   │   │   │   └── html.ts
-│   │   │   │   │   ├── pages
-│   │   │   │   │   │   ├── aliases-page.ts
-│   │   │   │   │   │   ├── artifacts-page.ts
-│   │   │   │   │   │   ├── config-page.ts
-│   │   │   │   │   │   ├── diagnostics-page.ts
-│   │   │   │   │   │   ├── exports-page.ts
-│   │   │   │   │   │   ├── graph-page.ts
-│   │   │   │   │   │   ├── mcp-page.ts
-│   │   │   │   │   │   ├── overview-page.ts
-│   │   │   │   │   │   ├── packages-page.ts
-│   │   │   │   │   │   ├── plugin-page.ts
-│   │   │   │   │   │   ├── plugins-page.ts
-│   │   │   │   │   │   ├── projects-page.ts
-│   │   │   │   │   │   ├── services-page.ts
-│   │   │   │   │   │   ├── settings-page.ts
-│   │   │   │   │   │   ├── tasks-page.ts
-│   │   │   │   │   │   ├── timeline-page.ts
-│   │   │   │   │   │   └── virtual.ts
-│   │   │   │   │   ├── api.ts
-│   │   │   │   │   ├── main.ts
-│   │   │   │   │   ├── router.ts
-│   │   │   │   │   ├── state.ts
-│   │   │   │   │   └── types.ts
-│   │   │   │   ├── dashboard-html.ts
-│   │   │   │   ├── index.ts
-│   │   │   │   ├── README.md
-│   │   │   │   └── styles.ts
-│   │   │   ├── types
-│   │   │   │   └── index.ts
-│   │   │   ├── api.ts
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── plugin-git
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── plugin-typescript
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── plugin-utils
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── plugin-vite
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── plugin-workspace
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   └── .gitkeep
 ├── scripts
+│   └── check-architecture.mjs
 ├── tests
-│   └── wsrt.test.mjs
+│   ├── commandline-cli.test.mjs
+│   ├── config-outputs.test.mjs
+│   ├── dashboard-client.test.mjs
+│   ├── hardening.test.mjs
+│   ├── plugin-architecture.test.mjs
+│   └── system-lifecycle.test.mjs
 ├── tooling
 │   └── .gitkeep
 ├── .example.wsrt.yml
 ├── .gitignore
+├── AGENTS.md
+├── ARCHITECTURE.md
 ├── biome.json
+├── EXTENSIONS.md
 ├── package.json
 ├── PLANS.md
 ├── pnpm-lock.yaml
@@ -416,23 +370,23 @@ wsrt
 
 ## Hotspots
 
-- pnpm-lock.yaml: 1984 lines
-- tests/wsrt.test.mjs: 1277 lines
-- libraries/events/src/index.ts: 745 lines
-- packages/types/src/index.ts: 732 lines
-- README.md: 677 lines
+- pnpm-lock.yaml: 1891 lines
+- packages/control-plane/src/index.ts: 1100 lines
+- libraries/event-targets/src/index.ts: 745 lines
+- libraries/console/src/transporters/console-ui.ts: 741 lines
 - libraries/worker-pool/src/pool.ts: 528 lines
-- plugins/plugin-dashboard/src/index.ts: 521 lines
 - libraries/di/README.md: 512 lines
+- libraries/console/src/transporters/console.ts: 484 lines
+- AGENTS.md: 438 lines
+- packages/config/src/system.ts: 429 lines
 - libraries/di/src/mod.ts: 405 lines
-- packages/config/src/module-reference.ts: 405 lines
+- libraries/commandline/README.md: 399 lines
+- libraries/commandline/src/commandline.ts: 389 lines
+- plugins/dashboard/src/server/dashboard-server.ts: 388 lines
 - libraries/prompts/src/components/autocomplete.ts: 358 lines
-- packages/config/src/loader.ts: 353 lines
-- libraries/commandline/src/commandline.ts: 335 lines
-- libraries/commandline/README.md: 335 lines
 - libraries/di/di.test.ts: 328 lines
+- libraries/commandline/src/command.ts: 321 lines
 - libraries/prompts/src/core/controllers/prompt.ts: 318 lines
-- packages/runtime/src/index.ts: 312 lines
-- libraries/commandline/src/command.ts: 299 lines
-- plugins/plugin-dashboard/src/api.ts: 296 lines
-- packages/config/src/resolver.ts: 279 lines
+- plugins/dashboard/src/client/main.ts: 317 lines
+- plugins/dashboard/src/client/pages/index.ts: 310 lines
+- packages/cli/src/cli.ts: 296 lines
