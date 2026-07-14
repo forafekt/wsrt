@@ -13,7 +13,7 @@
 		"wsrt": "pnpm exec node ./packages/cli/dist/index.js",
 		"dashboard": "pnpm run wsrt exec dashboard",
 		"clean:prune": "rimraf --glob **/node_modules **/pnpm-lock.yaml **/dist",
-		"clean:install": "pnpm clean:prune && pnpm install",
+		"clean:install": "pnpm clean:prune && pnpm install && pnpm build",
 		"clean:vue-dts": "find packages -type f -path \"*/src/*.vue.d.ts\" -delete",
 		"clean:dts": "find packages -type f -path \"*/src/*.d.ts\" -delete",
 		"clean:js": "find packages -type f -path \"*/src/*.js\" -delete",

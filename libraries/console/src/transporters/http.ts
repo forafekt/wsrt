@@ -1,4 +1,4 @@
-import type { ConsoleLogTransport, ConsoleLogEntry } from "../types.ts";
+import type { ConsoleLogTransport, ConsoleLogEntry } from "../types.js";
 
 export class HttpTransport implements ConsoleLogTransport {
   constructor(private endpoint: string) {}

@@ -4,7 +4,8 @@ export type ConsoleLogLevelName =
   | "info"
   | "warn"
   | "error"
-  | "fatal";
+  | "fatal"
+  | "log";
 
 export interface ConsoleLogEntry {
   timestamp: string;
@@ -23,6 +24,7 @@ export interface ConsoleLogTransport {
 }
 
 export const CONSOLE_LOG_LEVELS: Record<ConsoleLogLevelName, number> = {
+  log: 0,
   trace: 10,
   debug: 20,
   info: 30,

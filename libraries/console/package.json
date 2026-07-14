@@ -10,11 +10,23 @@
   "types": "./src/mod.ts",
   "exports": {
     ".": {
-      "import": "./src/mod.ts",
-      "require": "./src/mod.ts"
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    },
+    "./transporters": {
+      "types": "./dist/transporters/mod.d.ts",
+      "import": "./dist/transporters/mod.js"
+
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
     }
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@wsrt/ansi-tools": "workspace:*"
   }
 }

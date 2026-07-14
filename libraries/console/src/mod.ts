@@ -24,6 +24,7 @@ export class ConsoleLogger {
       options.transports ?? [new ConsoleTransport(this.pretty)];
   }
 
+
   private shouldLog(level: ConsoleLogLevelName): boolean {
     return CONSOLE_LOG_LEVELS[level] >= this.level;
   }
@@ -57,48 +58,53 @@ export class ConsoleLogger {
 
   private async write(entry: ConsoleLogEntry) {
     for (const transport of this.transports) {
+      if (!transport?.log) continue;
       await transport.log(entry);
     }
   }
 
-  private log(
+  private _log = (
     level: ConsoleLogLevelName,
     message: string,
     context?: Record<string, unknown>,
     error?: unknown
-  ) {
+  ) => {
     if (!this.shouldLog(level)) return;
 
     const entry = this.buildEntry(level, message, context, error);
     this.write(entry);
   }
 
+  log(msg: string, ctx?: Record<string, unknown>) {
+    this._log("info", msg, ctx);
+  }
+
   trace(msg: string, ctx?: Record<string, unknown>) {
-    this.log("trace", msg, ctx);
+    this._log("trace", msg, ctx);
   }
 
   debug(msg: string, ctx?: Record<string, unknown>) {
-    this.log("debug", msg, ctx);
+    this._log("debug", msg, ctx);
   }
 
   info(msg: string, ctx?: Record<string, unknown>) {
-    this.log("info", msg, ctx);
+    this._log("info", msg, ctx);
   }
   
   infoWithIn(msg: string, inName: string, ctx?: Record<string, unknown>) {
-    this.log("info", msg, { ...ctx, in: inName, in1: inName, in2: inName,in3: inName,in4: inName });
+    this._log("info", msg, { ...ctx, in: inName, in1: inName, in2: inName,in3: inName,in4: inName });
   }
 
   warn(msg: string, ctx?: Record<string, unknown>) {
-    this.log("warn", msg, ctx);
+    this._log("warn", msg, ctx);
   }
 
   error(msg: string, err?: unknown, ctx?: Record<string, unknown>) {
-    this.log("error", msg, ctx, err);
+    this._log("error", msg, ctx, err);
   }
 
   fatal(msg: string, err?: unknown, ctx?: Record<string, unknown>) {
-    this.log("fatal", msg, ctx, err);
+    this._log("fatal", msg, ctx, err);
   }
 
   child(context: Record<string, unknown>) {

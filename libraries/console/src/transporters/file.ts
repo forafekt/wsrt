@@ -1,6 +1,7 @@
-import type { ConsoleLogTransport, ConsoleLogEntry } from "../types.ts";
-import type { Runtime } from "@wsrt/runtime";
+import type { ConsoleLogTransport, ConsoleLogEntry } from "../types.js";
+// import type { Runtime } from "@wsrt/runtime";
 
+type Runtime = any;
 export class FileTransport implements ConsoleLogTransport {
   constructor(private runtime: Runtime, private filePath: string) {}
 

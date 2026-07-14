@@ -6,6 +6,7 @@ import {
 	generateCompletions,
 } from "@wsrt/commandline";
 import { createControlPlane } from "@wsrt/control-plane";
+import { logger } from "./logger.js";
 
 export const version = "0.1.0";
 
@@ -237,7 +238,7 @@ export function createWsrtCli() {
 						);
 				},
 				action: (shell: CompletionShell | undefined) => {
-					console.log(generateCompletions(cli, shell ?? detectShell()));
+					logger.log(generateCompletions(cli, shell ?? detectShell()));
 				},
 			},
 		],
@@ -250,21 +251,21 @@ export async function run(argv = process.argv): Promise<void> {
 		await createWsrtCli().parseAsync(argv);
 	} catch (cause) {
 		process.exitCode = 1;
-		console.error(
+		logger.error(
 			`Error: ${cause instanceof Error ? cause.message : String(cause)}`,
 		);
 	}
 }
 
-function printResult(result: unknown, pretty: boolean): void {
+function printResult(result: any, _pretty: boolean): void {
 	if (result !== undefined)
-		console.log(JSON.stringify(result, null, pretty ? 2 : 0));
+		logger.log(`wsrt ${process.argv.slice(2).join(" ")}`, result);
 }
 
 function printExecutableList(
 	items: Array<{ id: string; description?: string; owner: { id: string } }>,
 ): void {
-	console.log(
+	logger.log(
 		items.length
 			? `Available executables\n\n${items.map((item) => `${item.id}\n  Plugin: ${item.owner.id}\n  Description: ${item.description ?? "—"}`).join("\n\n")}`
 			: "Available executables\n\n  none",

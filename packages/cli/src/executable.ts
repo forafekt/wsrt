@@ -4,6 +4,7 @@ import {
 	PluginSession,
 	resolveWorkspacePlugins,
 } from "@wsrt/plugins";
+import { logger } from "./logger.js";
 
 type ControlPlane = Awaited<ReturnType<typeof createControlPlane>>;
 
@@ -46,9 +47,9 @@ export async function executeContribution(
 					controlPlane,
 					signal: controller.signal,
 					logger: {
-						info: console.log,
-						warn: console.warn,
-						error: console.error,
+						info: logger.info.bind(logger),
+						warn: logger.warn.bind(logger),
+						error: logger.error.bind(logger),
 					},
 				},
 				validated,
