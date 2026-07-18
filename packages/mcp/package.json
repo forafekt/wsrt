@@ -25,6 +25,8 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@wsrt/control-plane": "workspace:*"
+		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@wsrt/control-plane": "workspace:*",
+		"zod": "^3.25.76"
 	}
 }

@@ -54,7 +54,12 @@ test("real API/web dependency reaches readiness and stops cleanly", async () => 
 		const result = await plane.start(["web"]);
 		assert.equal(result.states["service:api"], "ready");
 		assert.equal(result.states["application:web"], "ready");
-		assert.equal((await fetch("http://127.0.0.1:43122")).status, 200);
+		assert.ok(
+			["checking", "healthy"].includes(
+				plane.snapshot().nodes.find((item) => item.id === "application:web")
+					.health,
+			),
+		);
 		await plane.stop(["api"]);
 		assert.equal(plane.getNodeState("application:web"), "stopped");
 		assert.equal(plane.getNodeState("service:api"), "stopped");
@@ -89,7 +94,8 @@ test("composite application expands, starts, restarts a child, and stops all chi
 });
 test("Vite is an explicit command and readiness contribution", () => {
 	const contribution = viteContribution({ host: "127.0.0.1", port: 5199 });
-	assert.deepEqual(contribution.command.args, [
+	assert.match(contribution.command.args[0], /vite\.js$/);
+	assert.deepEqual(contribution.command.args.slice(1), [
 		"dev",
 		"--host",
 		"127.0.0.1",

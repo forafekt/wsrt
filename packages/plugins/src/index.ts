@@ -304,7 +304,10 @@ export class PluginSession {
 		context: PluginContext,
 		run: (context: PluginContext) => T | Promise<T>,
 	): Promise<T> {
-		if (this.#disposed) throw new Error("Plugin session is disposed");
+		if (this.#disposed)
+			throw new Error(
+				"WSRT_PLUGIN_INVOCATION_DISPOSED: Plugin session is disposed",
+			);
 		const plugin = this.owner(kind, id);
 		if (!plugin) throw new Error(`Unknown ${kind} contribution: ${id}`);
 		const key = `${kind}:${id}`;

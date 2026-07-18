@@ -352,7 +352,9 @@ export function createWsrtCli(
 						);
 				},
 				action: (shell: CompletionShell | undefined) => {
-					logger.log(generateCompletions(cli, shell ?? detectShell()));
+					process.stdout.write(
+						`${generateCompletions(cli, shell ?? detectShell())}\n`,
+					);
 				},
 			},
 		],
@@ -396,9 +398,12 @@ export async function run(argv = process.argv): Promise<void> {
 		await createWsrtCli(resolved.commands, session).parseAsync(argv);
 	} catch (cause) {
 		process.exitCode = 1;
-		logger.error(
-			`Error: ${cause instanceof Error ? cause.message : String(cause)}`,
-		);
+		const message = cause instanceof Error ? cause.message : String(cause);
+		if (argv.includes("--json"))
+			process.stderr.write(
+				`${JSON.stringify({ error: { code: errorCode(cause), message } })}\n`,
+			);
+		else logger.error(`Error: ${message}`);
 	} finally {
 		await session
 			?.dispose()
@@ -483,14 +488,28 @@ function argumentsAfterPath(
 	return [];
 }
 
-function printResult(result: unknown, _pretty: boolean): void {
-	if (result !== undefined)
+function printResult(result: unknown, json: boolean): void {
+	if (result !== undefined) {
+		if (json) {
+			process.stdout.write(`${JSON.stringify(result)}\n`);
+			return;
+		}
 		logger.log(
 			`wsrt ${process.argv.slice(2).join(" ")}`,
 			result && typeof result === "object"
 				? (result as Record<string, unknown>)
 				: { result },
 		);
+	}
+}
+
+function errorCode(cause: unknown): string {
+	if (cause instanceof Error) {
+		const match = cause.message.match(/\b(WSRT_[A-Z0-9_]+)\b/);
+		if (match) return match[1];
+		if (cause.name.startsWith("WSRT_")) return cause.name;
+	}
+	return "WSRT_INTERNAL_ERROR";
 }
 
 function printExecutableList(

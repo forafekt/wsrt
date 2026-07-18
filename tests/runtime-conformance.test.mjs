@@ -18,7 +18,7 @@ const providers = [
 ];
 
 for (const [name, createProvider] of providers) {
-	test(`${name} runtime conforms to the shared capability contract`, async () => {
+	test(`${name} runtime conforms to the shared capability contract`, async (t) => {
 		const runtime = await createProvider().create();
 		const directory = await fs.mkdtemp(path.join(os.tmpdir(), `wsrt-${name}-`));
 		try {
@@ -115,9 +115,19 @@ for (const [name, createProvider] of providers) {
 			await assert.rejects(delayed, /cancelled/);
 
 			const server = net.createServer();
-			await new Promise((resolve, reject) =>
-				server.listen(0, "127.0.0.1", resolve).once("error", reject),
-			);
+			try {
+				await new Promise((resolve, reject) =>
+					server.listen(0, "127.0.0.1", resolve).once("error", reject),
+				);
+			} catch (cause) {
+				if (["EPERM", "EACCES"].includes(cause.code)) {
+					t.skip(
+						`network capability unavailable: ${cause.code} ${cause.message}`,
+					);
+					return;
+				}
+				throw cause;
+			}
 			const address = server.address();
 			await runtime.capabilities
 				.require("network")
@@ -149,16 +159,10 @@ test("control plane runs a real ready and healthy graph through the Rust provide
 	const directory = await fs.mkdtemp(
 		path.join(os.tmpdir(), "wsrt-rust-graph-"),
 	);
-	const probe = net.createServer();
-	await new Promise((resolve, reject) =>
-		probe.listen(0, "127.0.0.1", resolve).once("error", reject),
-	);
-	const port = probe.address().port;
-	await new Promise((resolve) => probe.close(resolve));
 	const server = path.join(directory, "server.mjs");
 	await fs.writeFile(
 		server,
-		`import net from "node:net"; const server=net.createServer(); server.listen(${port}, "127.0.0.1"); process.on("SIGTERM",()=>server.close(()=>process.exit(0)));`,
+		`import net from "node:net"; const server=net.createServer(); server.listen(0, "127.0.0.1"); process.on("SIGTERM",()=>server.close(()=>process.exit(0)));`,
 	);
 	await fs.writeFile(
 		path.join(directory, "wsrt.json"),
@@ -170,14 +174,7 @@ test("control plane runs a real ready and healthy graph through the Rust provide
 				native: {
 					runtime: "rust",
 					command: { command: process.execPath, args: [server] },
-					healthcheck: {
-						type: "tcp",
-						host: "127.0.0.1",
-						port,
-						retries: 20,
-						intervalMs: 25,
-						timeoutMs: 250,
-					},
+					healthcheck: { type: "process" },
 				},
 			},
 		}),

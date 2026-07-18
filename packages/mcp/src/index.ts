@@ -140,7 +140,9 @@ async function runContribution(
 }
 function mutation(options: { allowMutations?: boolean }) {
 	if (!options.allowMutations)
-		throw new Error("MCP mutating operations are disabled");
+		throw new Error(
+			"WSRT_MCP_PERMISSION_DENIED: MCP mutating operations are disabled",
+		);
 }
 function ids(input: Record<string, unknown>): string[] {
 	return Array.isArray(input.ids)
@@ -149,3 +151,8 @@ function ids(input: Record<string, unknown>): string[] {
 			? [input.id]
 			: [];
 }
+
+export {
+	WsrtMcpServer,
+	type WsrtMcpServerOptions,
+} from "./server.js";

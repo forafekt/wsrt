@@ -78,3 +78,9 @@ are unique per execution and removed after readiness or build collection. The
 idempotent close path terminates Vite, disposes its runtime, and removes the
 temporary directory. Native Vite use without WSRT remains supported; telemetry
 is simply disabled when no WSRT channel is present.
+
+The envelope, validation, ownership, and crash-recovery rules are specified in
+[`docs/protocols/execution-telemetry.md`](../../docs/protocols/execution-telemetry.md).
+Provider port `0` selects a collision-resistant high ephemeral candidate with
+Vite `strictPort`; the structured listening event remains authoritative. Tests
+never assume that a requested port is the bound port.

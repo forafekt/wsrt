@@ -154,6 +154,7 @@ export interface ExecutionAdapter<Options = unknown> {
 		shell?: boolean;
 		environment?: Readonly<Record<string, string>>;
 		metadata?: Readonly<Record<string, unknown>>;
+		dispose?(): void | Promise<void>;
 	};
 }
 export interface ReadinessProvider<Options = unknown> {

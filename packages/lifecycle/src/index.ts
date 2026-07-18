@@ -225,7 +225,10 @@ async function withTimeout<T>(
 	timeoutMs: number,
 	signal: AbortSignal,
 ): Promise<T> {
-	if (signal.aborted) throw signal.reason ?? new Error("Operation cancelled");
+	if (signal.aborted) {
+		void promise.catch(() => {});
+		throw signal.reason ?? new Error("Operation cancelled");
+	}
 	let timer: ReturnType<typeof setTimeout>;
 	const timeout = new Promise<never>((_, reject) => {
 		timer = setTimeout(
@@ -234,17 +237,18 @@ async function withTimeout<T>(
 			timeoutMs,
 		);
 	});
-	const cancelled = new Promise<never>((_, reject) =>
-		signal.addEventListener(
-			"abort",
-			() => reject(signal.reason ?? new Error("Operation cancelled")),
-			{ once: true },
-		),
-	);
+	let rejectCancellation: (cause: unknown) => void = () => {};
+	const abort = () =>
+		rejectCancellation(signal.reason ?? new Error("Operation cancelled"));
+	const cancelled = new Promise<never>((_, reject) => {
+		rejectCancellation = reject;
+		signal.addEventListener("abort", abort, { once: true });
+	});
 	try {
 		return await Promise.race([promise, timeout, cancelled]);
 	} finally {
 		if (timer !== undefined) clearTimeout(timer);
+		signal.removeEventListener("abort", abort);
 	}
 }
 

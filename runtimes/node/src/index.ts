@@ -43,15 +43,16 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 			.provide("timers", {
 				delay: (ms, signal) =>
 					new Promise((resolve, reject) => {
-						const timer = setTimeout(resolve, ms);
-						signal?.addEventListener(
-							"abort",
-							() => {
-								clearTimeout(timer);
-								reject(signal.reason);
-							},
-							{ once: true },
-						);
+						if (signal?.aborted) return reject(signal.reason);
+						const abort = () => {
+							clearTimeout(timer);
+							reject(signal?.reason);
+						};
+						const timer = setTimeout(() => {
+							signal?.removeEventListener("abort", abort);
+							resolve();
+						}, ms);
+						signal?.addEventListener("abort", abort, { once: true });
 					}),
 			})
 			.provide("logger", {
@@ -69,7 +70,6 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 						env: { ...process.env, ...request.environment },
 						shell: request.shell ?? false,
 						stdio: process.env.WSRT_JSON_OUTPUT === "1" ? "ignore" : "inherit",
-						signal: request.signal,
 						detached: process.platform !== "win32",
 					});
 					let running = true;
@@ -85,6 +85,7 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 								settled = true;
 								running = false;
 								children.delete(handle);
+								request.signal?.removeEventListener("abort", abort);
 								resolve({ code, signal });
 							};
 							child.once("exit", finish);
@@ -99,6 +100,9 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 							} else child.kill(signal as NodeJS.Signals);
 						},
 					};
+					const abort = () => handle.terminate();
+					if (request.signal?.aborted) abort();
+					else request.signal?.addEventListener("abort", abort, { once: true });
 					children.add(handle);
 					return handle;
 				},
@@ -108,6 +112,11 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 			capabilities,
 			dispose: async () => {
 				for (const child of children) child.terminate();
+				await Promise.race([
+					Promise.allSettled([...children].map((child) => child.exit)),
+					new Promise((resolve) => setTimeout(resolve, 3000)),
+				]);
+				for (const child of children) child.terminate("SIGKILL");
 				await Promise.allSettled([...children].map((child) => child.exit));
 			},
 		};

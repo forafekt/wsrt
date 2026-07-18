@@ -189,6 +189,8 @@ export class WsrtControlPlane {
 	readonly #executionMetadata = new Map<string, Record<string, unknown>>();
 	readonly #closedExecutions = new Set<string>();
 	readonly #executionSignals = new Map<string, AbortSignal>();
+	readonly #executionCleanup = new Map<string, () => void | Promise<void>>();
+	readonly #telemetryIngestion = new Map<string, Promise<void>>();
 	constructor(readonly options: ControlPlaneOptions = {}) {}
 	async load(): Promise<NormalizedSystemDefinition> {
 		const loaded = await loadSystemDefinition(
@@ -514,6 +516,10 @@ export class WsrtControlPlane {
 	}
 	async runTask(id: string): Promise<OperationResult> {
 		const resolved = this.#resolve(id, "task");
+		if (this.getNodeState(resolved) === "ready")
+			await required(this.#engine, "Control plane is not loaded").stop([
+				resolved,
+			]);
 		return this.#operate(
 			"task",
 			[resolved],
@@ -608,6 +614,8 @@ export class WsrtControlPlane {
 					this.#executionMetadata.set(item.id, {
 						...(prepared.metadata ?? {}),
 					});
+					if (prepared.dispose)
+						this.#executionCleanup.set(item.id, prepared.dispose);
 					command = {
 						command: prepared.command,
 						args: prepared.args,
@@ -621,7 +629,12 @@ export class WsrtControlPlane {
 						command: command.command,
 						args: command.args,
 						cwd: item.root,
-						environment: { ...item.environment, ...providerEnvironment },
+						environment: {
+							...item.environment,
+							...providerEnvironment,
+							WSRT_NODE_ID: item.id,
+							WSRT_OPERATION_ID: this.#operationId(item.id),
+						},
 						shell: command.shell,
 						signal,
 					});
@@ -631,22 +644,36 @@ export class WsrtControlPlane {
 					timestamp: new Date().toISOString(),
 				});
 				if (item.kind === "task") {
-					await this.#invalidateOutputs(item);
-					const exit = await handle.exit;
-					if (exit.code !== 0) {
-						await this.#failOutputs(
-							item,
-							`Task ${item.name} exited with code ${exit.code}`,
-						);
-						throw new Error(`Task ${item.name} exited with code ${exit.code}`);
+					try {
+						await this.#invalidateOutputs(item);
+						const exit = await handle.exit;
+						if (exit.code !== 0) {
+							await this.#failOutputs(
+								item,
+								`Task ${item.name} exited with code ${exit.code}`,
+							);
+							throw new Error(
+								`Task ${item.name} exited with code ${exit.code}`,
+							);
+						}
+						await this.#telemetryIngestion.get(item.id);
+						await this.#collectArtifacts(item, signal);
+						await this.#verifyOutputs(item);
+					} finally {
+						this.#closedExecutions.add(item.id);
+						await this.#cleanupExecution(item.id);
 					}
-					await this.#collectArtifacts(item, signal);
-					await this.#verifyOutputs(item);
-					this.#closedExecutions.add(item.id);
 				} else {
-					void handle.exit.then((exit) =>
-						this.#processExited(item, handle, exit),
-					);
+					void handle.exit
+						.then((exit) => this.#processExited(item, handle, exit))
+						.catch((cause) => {
+							this.#diagnostics.push({
+								code: "WSRT_PROCESS_EXIT_SUPERVISION_FAILED",
+								severity: "warning",
+								message: cause instanceof Error ? cause.message : String(cause),
+								source: item.source,
+							});
+						});
 				}
 			},
 			stop: async () => {
@@ -665,6 +692,7 @@ export class WsrtControlPlane {
 				await handle.exit;
 				this.#handles.delete(item.id);
 				this.#closedExecutions.add(item.id);
+				await this.#cleanupExecution(item.id);
 				this.#manualStops.delete(item.id);
 			},
 			ready: async ({ signal }: { signal: AbortSignal }) => {
@@ -891,6 +919,7 @@ export class WsrtControlPlane {
 		if (this.#handles.get(item.id) !== handle) return;
 		this.#handles.delete(item.id);
 		this.#closedExecutions.add(item.id);
+		await this.#cleanupExecution(item.id);
 		this.#stopMonitor(item.id);
 		const manual = this.#manualStops.has(item.id),
 			expected = manual || this.#disposed;
@@ -1037,6 +1066,27 @@ export class WsrtControlPlane {
 	#operationId(nodeId: string): string {
 		return this.#nodeOperations.get(nodeId) ?? nodeId;
 	}
+	async #cleanupExecution(nodeId: string): Promise<void> {
+		const cleanup = this.#executionCleanup.get(nodeId);
+		this.#executionCleanup.delete(nodeId);
+		this.#executionMetadata.delete(nodeId);
+		this.#executionSignals.delete(nodeId);
+		this.#telemetryIngestion.delete(nodeId);
+		if (!cleanup) return;
+		try {
+			await cleanup();
+		} catch (cause) {
+			this.#diagnostics.push({
+				code: "WSRT_EXECUTION_CLEANUP_FAILED",
+				severity: "warning",
+				message: cause instanceof Error ? cause.message : String(cause),
+				source: {
+					file: this.#definition?.sourceFile ?? "<execution>",
+					path: nodeId,
+				},
+			});
+		}
+	}
 	#providerContext(
 		item: NormalizedExecutable,
 		contributionId: string,
@@ -1093,7 +1143,19 @@ export class WsrtControlPlane {
 				readiness: event.details ?? true,
 			});
 		} else if (event.type === "artifact.discovered") {
-			void this.#ingestCandidate(item, event.artifact);
+			const pending = (
+				this.#telemetryIngestion.get(item.id) ?? Promise.resolve()
+			)
+				.then(() => this.#ingestCandidate(item, event.artifact))
+				.catch((cause) => {
+					this.#diagnostics.push({
+						code: "WSRT_ARTIFACT_INVALID_CANDIDATE",
+						severity: "warning",
+						message: cause instanceof Error ? cause.message : String(cause),
+						source: item.source,
+					});
+				});
+			this.#telemetryIngestion.set(item.id, pending);
 		}
 		this.#event(`provider.${event.type}`, item.id, operationId, event);
 		this.#changed();
@@ -1136,6 +1198,7 @@ export class WsrtControlPlane {
 		const id = `artifact:${name}`;
 		const existing = this.#artifacts.get(id);
 		this.#artifacts.set(id, {
+			...existing,
 			id,
 			type: candidate.kind ?? existing?.type ?? "file",
 			producer: item.name,

@@ -15,9 +15,33 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
-		"./*": {
-			"types": "./dist/*.d.ts",
-			"import": "./dist/*.js"
+		"./vite": {
+			"types": "./dist/vite.d.ts",
+			"import": "./dist/vite.js"
+		},
+		"./adapter": {
+			"types": "./dist/adapter.d.ts",
+			"import": "./dist/adapter.js"
+		},
+		"./aliases": {
+			"types": "./dist/aliases.d.ts",
+			"import": "./dist/aliases.js"
+		},
+		"./bridge": {
+			"types": "./dist/bridge.d.ts",
+			"import": "./dist/bridge.js"
+		},
+		"./config": {
+			"types": "./dist/config.d.ts",
+			"import": "./dist/config.js"
+		},
+		"./plugin": {
+			"types": "./dist/plugin.d.ts",
+			"import": "./dist/plugin.js"
+		},
+		"./types": {
+			"types": "./dist/types.d.ts",
+			"import": "./dist/types.js"
 		}
 	},
 	"scripts": {

@@ -1,14 +1,24 @@
 import fs from "node:fs/promises";
-import os from "node:os";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ArtifactProvider, ReadinessProvider } from "@wsrt/capabilities";
+import type {
+	ArtifactProvider,
+	ProcessHandle,
+	ReadinessProvider,
+} from "@wsrt/capabilities";
 import {
 	definePlugin,
 	type ExecutableContribution,
 	type WsrtPlugin,
 } from "@wsrt/plugins";
 import { viteAdapter } from "./adapter.js";
+import {
+	createOwnedExecutionState,
+	ExecutionTelemetryReader,
+	type OwnedExecutionState,
+	removeOwnedExecutionState,
+} from "./telemetry.js";
 import type { ViteAdapterOptions, VitePluginOptions } from "./types.js";
 
 const owner = { id: "@wsrt/plugin-vite", version: "0.1.0" } as const;
@@ -20,39 +30,40 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 			diagnostics: [],
 		}),
 		async wait(_input, context) {
-			if (context.signal.aborted) throw context.signal.reason;
+			if (context.signal.aborted)
+				throw context.signal.reason ?? new Error("WSRT_READINESS_CANCELLED");
 			if (!context.process?.running)
 				throw new Error(`Vite process for ${context.nodeId} is not running`);
-			const telemetryFile = context.executionMetadata.telemetryFile;
-			if (typeof telemetryFile !== "string") return;
+			const state = ownedState(context.executionMetadata.executionState);
+			if (!state) return;
+			const reader = new ExecutionTelemetryReader(
+				state.telemetryFile,
+				state.executionId,
+			);
 			const deadline = Date.now() + 30_000;
 			try {
 				while (Date.now() < deadline) {
-					if (context.signal.aborted) throw context.signal.reason;
+					if (context.signal.aborted)
+						throw (
+							context.signal.reason ?? new Error("WSRT_READINESS_CANCELLED")
+						);
 					if (!context.process.running)
-						throw new Error("Vite exited before reporting readiness");
-					try {
-						const contents = await fs.readFile(telemetryFile, "utf8");
-						for (const line of contents.split("\n").filter(Boolean)) {
-							const record = JSON.parse(line) as {
-								version?: number;
-								event?: unknown;
-							};
-							if (record.version !== 1 || !isTelemetryEvent(record.event))
-								continue;
-							context.report(record.event);
-							if (record.event.type === "server.listening") return;
-						}
-					} catch (cause) {
-						if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
-					}
+						throw new Error(
+							"WSRT_PROCESS_EXIT_BEFORE_READY: Vite exited before reporting readiness",
+						);
+					const records = await consumeTelemetry(reader, context.report);
+					if (
+						records.some((record) => record.event.type === "server.listening")
+					)
+						return;
 					await context.capabilities
 						.require("timers")
 						.delay(50, context.signal);
 				}
 				throw new Error("Timed out waiting for structured Vite readiness");
 			} finally {
-				await fs.rm(telemetryFile, { force: true }).catch(() => {});
+				await reader.close({ drain: !context.signal.aborted }).catch(() => []);
+				await removeOwnedExecutionState(state).catch(() => {});
 			}
 		},
 	};
@@ -60,20 +71,19 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 		id: "vite",
 		async collect(input, context) {
 			if (input.command !== "build") return [];
-			const telemetryFile = context.executionMetadata.telemetryFile;
-			if (typeof telemetryFile === "string") {
+			const state = ownedState(context.executionMetadata.executionState);
+			if (state) {
+				const reader = new ExecutionTelemetryReader(
+					state.telemetryFile,
+					state.executionId,
+				);
 				try {
-					const contents = await fs.readFile(telemetryFile, "utf8");
-					for (const line of contents.split("\n").filter(Boolean)) {
-						const record = JSON.parse(line) as {
-							version?: number;
-							event?: unknown;
-						};
-						if (record.version === 1 && isTelemetryEvent(record.event))
-							context.report(record.event);
-					}
+					await consumeTelemetry(reader, context.report);
 				} finally {
-					await fs.rm(telemetryFile, { force: true }).catch(() => {});
+					await reader
+						.close({ drain: !context.signal.aborted })
+						.catch(() => []);
+					await removeOwnedExecutionState(state).catch(() => {});
 				}
 			}
 			const outputRoot = path.resolve(
@@ -102,28 +112,46 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 			const instance = await new runtime.NodeRuntimeProvider().create();
 			const configured = takeConfigArgument(context.arguments, cwd);
 			const discovered = configured.file ?? (await findViteConfig(cwd));
-			const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "wsrt-vite-"));
-			const wrapper = path.join(temporary, "vite.config.mjs");
+			const executionState = createOwnedExecutionState();
+			const wrapper = path.join(executionState.directory, "vite.config.mjs");
 			const nativePlugin = new URL("./vite.js", import.meta.url).href;
 			const userImport = discovered
 				? `import userExport from ${JSON.stringify(pathToFileURL(discovered).href)};`
 				: "const userExport = {};";
-			await fs.writeFile(
-				wrapper,
-				`${userImport}\nimport { wsrt } from ${JSON.stringify(nativePlugin)};\nexport default async (env) => { const user = typeof userExport === 'function' ? await userExport(env) : await userExport; return { ...user, plugins: [...(user.plugins || []), wsrt(${JSON.stringify(options)})] }; };\n`,
-			);
+			try {
+				await fs.writeFile(
+					wrapper,
+					`${userImport}\nimport { wsrt } from ${JSON.stringify(nativePlugin)};\nexport default async (env) => { const user = typeof userExport === 'function' ? await userExport(env) : await userExport; return { ...user, plugins: [...(user.plugins || []), wsrt(${JSON.stringify(options)})] }; };\n`,
+				);
+			} catch (cause) {
+				await removeOwnedExecutionState(executionState).catch(() => {});
+				await instance.dispose().catch(() => {});
+				throw cause;
+			}
 			const args = [...configured.args, "--config", wrapper];
-			const handle = instance.capabilities.require("spawn").spawn({
-				command: "vite",
-				args: args.length > 2 ? args : ["dev", ...args],
-				cwd,
-				environment: {
-					WSRT_WORKSPACE_ROOT: workspaceRoot,
-					WSRT_PROJECT_ROOT: cwd,
-					WSRT_VITE_REPORT: "1",
-				},
-				signal: context.signal,
-			});
+			let handle: ProcessHandle;
+			try {
+				handle = instance.capabilities.require("spawn").spawn({
+					command: process.execPath,
+					args: [
+						viteExecutable(),
+						...(args.length > 2 ? args : ["dev", ...args]),
+					],
+					cwd,
+					environment: {
+						WSRT_WORKSPACE_ROOT: workspaceRoot,
+						WSRT_PROJECT_ROOT: cwd,
+						WSRT_VITE_REPORT: "1",
+						WSRT_EXECUTION_TELEMETRY: executionState.telemetryFile,
+						WSRT_EXECUTION_ID: executionState.executionId,
+					},
+					signal: context.signal,
+				});
+			} catch (cause) {
+				await removeOwnedExecutionState(executionState).catch(() => {});
+				await instance.dispose().catch(() => {});
+				throw cause;
+			}
 			return {
 				wait: async () => {
 					const exit = await handle.exit;
@@ -134,7 +162,7 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 					handle.terminate();
 					await handle.exit;
 					await instance.dispose();
-					await fs.rm(temporary, { recursive: true, force: true });
+					await removeOwnedExecutionState(executionState);
 				},
 			};
 		},
@@ -216,6 +244,13 @@ async function findViteConfig(root: string): Promise<string | undefined> {
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value);
 }
+function viteExecutable(): string {
+	const require = createRequire(import.meta.url);
+	return path.resolve(
+		path.dirname(require.resolve("vite")),
+		"../../bin/vite.js",
+	);
+}
 function argumentValue(
 	args: readonly string[],
 	name: string,
@@ -223,17 +258,31 @@ function argumentValue(
 	const index = args.indexOf(name);
 	return index >= 0 ? args[index + 1] : undefined;
 }
-function isTelemetryEvent(
-	value: unknown,
-): value is import("@wsrt/capabilities").ExecutionTelemetryEvent {
-	return (
-		isRecord(value) &&
-		[
-			"server.listening",
-			"readiness.available",
-			"artifact.discovered",
-			"diagnostic",
-			"custom",
-		].includes(String(value.type))
-	);
+function ownedState(value: unknown): OwnedExecutionState | undefined {
+	if (
+		!isRecord(value) ||
+		typeof value.executionId !== "string" ||
+		typeof value.directory !== "string" ||
+		typeof value.telemetryFile !== "string" ||
+		typeof value.manifestFile !== "string"
+	)
+		return;
+	return value as OwnedExecutionState;
+}
+async function consumeTelemetry(
+	reader: ExecutionTelemetryReader,
+	report: (event: import("@wsrt/capabilities").ExecutionTelemetryEvent) => void,
+) {
+	const result = await reader.read();
+	for (const issue of result.issues)
+		report({
+			type: "diagnostic",
+			diagnostic: {
+				code: issue.code,
+				severity: "warning",
+				message: issue.message,
+			},
+		});
+	for (const record of result.records) report(record.event);
+	return result.records;
 }
