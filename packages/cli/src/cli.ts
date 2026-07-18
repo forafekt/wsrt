@@ -38,7 +38,10 @@ const workspaceOptions = [
 	{ name: "--json", description: "Emit machine-readable JSON" },
 ];
 
-export function createWsrtCli(pluginCommands: readonly CliContribution[] = []) {
+export function createWsrtCli(
+	pluginCommands: readonly CliContribution[] = [],
+	pluginSession?: PluginSession,
+) {
 	const execute =
 		(
 			action: (
@@ -53,6 +56,7 @@ export function createWsrtCli(pluginCommands: readonly CliContribution[] = []) {
 			const plane = await createControlPlane({
 				root: options.root,
 				config: options.config,
+				pluginSession,
 			});
 			let retained = false;
 			try {
@@ -316,6 +320,25 @@ export function createWsrtCli(pluginCommands: readonly CliContribution[] = []) {
 					})(options),
 			})),
 			{
+				name: "completion query [input]",
+				description: "Resolve runtime completion candidates",
+				hidden: true,
+				action: async (input: string | undefined, options: GlobalOptions) => {
+					const plane = await createControlPlane({
+						root: options.root,
+						config: options.config,
+						pluginSession,
+					});
+					try {
+						process.stdout.write(
+							`${(await plane.complete(input ?? "")).join("\n")}\n`,
+						);
+					} finally {
+						await plane.dispose();
+					}
+				},
+			},
+			{
 				name: "completion [shell]",
 				description: "Generate shell completion setup (bash, fish, or zsh)",
 				group: "Utilities",
@@ -366,19 +389,30 @@ async function workspaceCommand(
 }
 
 export async function run(argv = process.argv): Promise<void> {
+	let session: PluginSession | undefined;
 	try {
-		await createWsrtCli(await discoverPluginCommands(argv)).parseAsync(argv);
+		const resolved = await discoverPluginCommands(argv);
+		session = resolved.session;
+		await createWsrtCli(resolved.commands, session).parseAsync(argv);
 	} catch (cause) {
 		process.exitCode = 1;
 		logger.error(
 			`Error: ${cause instanceof Error ? cause.message : String(cause)}`,
 		);
+	} finally {
+		await session
+			?.dispose()
+			.catch((cause) =>
+				logger.error(
+					`Error: ${cause instanceof Error ? cause.message : String(cause)}`,
+				),
+			);
 	}
 }
 
 async function discoverPluginCommands(
 	argv: readonly string[],
-): Promise<readonly CliContribution[]> {
+): Promise<{ commands: readonly CliContribution[]; session?: PluginSession }> {
 	const rootIndex = argv.findIndex(
 		(item) => item === "--root" || item === "-r",
 	);
@@ -392,19 +426,20 @@ async function discoverPluginCommands(
 			? argv[configIndex + 1]
 			: undefined;
 	const loaded = await loadSystemDefinition(root, config);
-	if (!loaded.definition) return [];
+	if (!loaded.definition) return { commands: [] };
 	const plugins = await resolveWorkspacePlugins(
 		loaded.definition.plugins,
 		loaded.definition.root,
 	);
-	const contributions = new PluginSession(plugins).contributions("cli");
+	const session = new PluginSession(plugins);
+	const contributions = session.contributions("cli");
 	const paths = new Set<string>();
 	for (const contribution of contributions) {
 		if (paths.has(contribution.path))
 			throw new Error(`WSRT_PLUGIN_CLI_DUPLICATE: ${contribution.path}`);
 		paths.add(contribution.path);
 	}
-	return contributions;
+	return { commands: contributions, session };
 }
 function pluginContext(
 	plane: Awaited<ReturnType<typeof createControlPlane>>,

@@ -55,3 +55,26 @@ apps by selecting a declared node root or the plugin `project` option.
 Migration: replace `viteContribution()` with the generic execution provider
 shown above. The former default native Vite plugin is now the explicit
 `@wsrt/plugin-vite/vite` `wsrt()` export.
+
+## Structured WSRT integration
+
+The execution adapter creates a collision-free telemetry channel for each
+execution. The native `wsrt()` plugin reports the actual address selected by
+Vite as a versioned `server.listening` event, including the selected port and
+resolved URLs. WSRT waits for that structured event before declaring the node
+ready and starts configured health monitoring only afterward. The old textual
+readiness/artifact markers are no longer the primary protocol.
+
+Build bundle entries are reported as `artifact.discovered` events. After a
+successful build, the Vite artifact provider enumerates the output directory
+and returns candidates to the control plane; WSRT retains ownership of path
+validation, existence checks, hashing, unchanged detection, timestamps, events,
+and snapshots. Diagnostic telemetry uses the generic diagnostic event and is
+attributed to the Vite contribution and current node/operation.
+
+Cancellation aborts readiness polling and artifact collection. Telemetry files
+are unique per execution and removed after readiness or build collection. The
+`wsrt exec vite` wrapper likewise uses a unique temporary configuration and its
+idempotent close path terminates Vite, disposes its runtime, and removes the
+temporary directory. Native Vite use without WSRT remains supported; telemetry
+is simply disabled when no WSRT channel is present.

@@ -2,8 +2,13 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type {
+	ArtifactCandidate,
+	ArtifactProvider,
 	ExecutionAdapter,
+	ExecutionTelemetryEvent,
 	ProcessHandle,
+	ProviderInvocationContext,
+	ReadinessProvider,
 	RuntimeInstance,
 	RuntimeProvider,
 } from "@wsrt/capabilities";
@@ -23,6 +28,7 @@ import {
 import {
 	type ContributionDiagnostic,
 	type PluginContext,
+	type PluginContributions,
 	PluginSession,
 	type PluginSnapshot,
 	resolveWorkspacePluginsReport,
@@ -149,6 +155,7 @@ export type ControlPlaneOptions = {
 	config?: string;
 	providers?: RuntimeProvider[];
 	allowMutations?: boolean;
+	pluginSession?: PluginSession;
 };
 export class WsrtControlPlane {
 	readonly #events: WorkspaceEvent[] = [];
@@ -177,6 +184,11 @@ export class WsrtControlPlane {
 	#providerIds: string[] = [];
 	#pluginSession?: PluginSession;
 	readonly #adapters = new Map<string, ExecutionAdapter>();
+	readonly #readinessProviders = new Map<string, ReadinessProvider>();
+	readonly #artifactProviders = new Map<string, ArtifactProvider>();
+	readonly #executionMetadata = new Map<string, Record<string, unknown>>();
+	readonly #closedExecutions = new Set<string>();
+	readonly #executionSignals = new Map<string, AbortSignal>();
 	constructor(readonly options: ControlPlaneOptions = {}) {}
 	async load(): Promise<NormalizedSystemDefinition> {
 		const loaded = await loadSystemDefinition(
@@ -187,17 +199,20 @@ export class WsrtControlPlane {
 		if (!loaded.definition)
 			throw new Error(this.#diagnostics.map((d) => d.message).join("\n"));
 		this.#definition = loaded.definition;
-		const report = await resolveWorkspacePluginsReport(
-			loaded.definition.plugins,
-			loaded.definition.root,
-		);
+		const report = this.options.pluginSession
+			? { plugins: this.options.pluginSession.list(), diagnostics: [] }
+			: await resolveWorkspacePluginsReport(
+					loaded.definition.plugins,
+					loaded.definition.root,
+				);
 		for (const diagnostic of report.diagnostics)
 			this.#diagnostics.push(this.#pluginDiagnostic(diagnostic));
 		if (report.diagnostics.length)
 			throw new Error(
 				report.diagnostics.map((item) => item.message).join("\n"),
 			);
-		this.#pluginSession = new PluginSession(report.plugins);
+		this.#pluginSession =
+			this.options.pluginSession ?? new PluginSession(report.plugins);
 		await this.#pluginSession.runStage("discover", this.#pluginContext());
 		for (const contribution of this.#pluginSession.contributions(
 			"configuration",
@@ -228,6 +243,10 @@ export class WsrtControlPlane {
 		for (const plugin of this.#pluginSession.list())
 			for (const adapter of plugin.contributions?.adapters ?? [])
 				this.#adapters.set(adapter.id, adapter);
+		for (const provider of this.#pluginSession.contributions("readiness"))
+			this.#readinessProviders.set(provider.id, provider);
+		for (const provider of this.#pluginSession.contributions("artifacts"))
+			this.#artifactProviders.set(provider.id, provider);
 		await this.#pluginSession.runStage("providers", this.#pluginContext());
 		for (const issue of this.#graph.validate())
 			this.#diagnostics.push({
@@ -306,6 +325,50 @@ export class WsrtControlPlane {
 	}
 	listArtifacts() {
 		return [...this.#artifacts.values()];
+	}
+	pluginContributions<Kind extends keyof PluginContributions>(kind: Kind) {
+		return required(
+			this.#pluginSession,
+			"Control plane is not loaded",
+		).contributions(kind);
+	}
+	async invokePluginContribution<T>(
+		kind: keyof PluginContributions,
+		id: string,
+		run: (context: PluginContext) => T | Promise<T>,
+	): Promise<T> {
+		return required(this.#pluginSession, "Control plane is not loaded").invoke(
+			kind,
+			id,
+			this.#pluginContext(),
+			run,
+		);
+	}
+	async complete(input: string): Promise<readonly string[]> {
+		const values = new Set<string>();
+		for (const item of this.definition().executables) {
+			values.add(item.id);
+			values.add(item.name);
+		}
+		for (const plugin of this.snapshot().plugins) values.add(plugin.id);
+		for (const provider of this.#providerIds) values.add(provider);
+		for (const executable of required(
+			this.#pluginSession,
+			"Control plane is not loaded",
+		).executables())
+			values.add(executable.id);
+		for (const contribution of this.pluginContributions("completion"))
+			try {
+				for (const value of await this.invokePluginContribution(
+					"completion",
+					contribution.id,
+					(context) => contribution.complete(input, context),
+				))
+					values.add(value);
+			} catch {}
+		return Object.freeze(
+			[...values].filter((value) => value.startsWith(input)).sort(),
+		);
 	}
 	snapshot(): ControlPlaneSnapshot {
 		const definition = this.definition();
@@ -524,7 +587,10 @@ export class WsrtControlPlane {
 			);
 		return {
 			start: async ({ signal }: { signal: AbortSignal }) => {
+				this.#closedExecutions.delete(item.id);
+				this.#executionSignals.set(item.id, signal);
 				let command = item.command;
+				let providerEnvironment: Readonly<Record<string, string>> = {};
 				if (item.provider) {
 					const adapter = this.#adapters.get(item.provider.provider);
 					if (!adapter)
@@ -538,6 +604,10 @@ export class WsrtControlPlane {
 								`Invalid adapter options: ${item.provider.provider}`,
 						);
 					const prepared = adapter.prepare(validation.options);
+					providerEnvironment = prepared.environment ?? {};
+					this.#executionMetadata.set(item.id, {
+						...(prepared.metadata ?? {}),
+					});
 					command = {
 						command: prepared.command,
 						args: prepared.args,
@@ -545,15 +615,21 @@ export class WsrtControlPlane {
 					};
 				}
 				if (!command) return;
-				const handle = runtime().capabilities.require("spawn").spawn({
-					command: command.command,
-					args: command.args,
-					cwd: item.root,
-					environment: item.environment,
-					shell: command.shell,
-					signal,
-				});
+				const handle = runtime()
+					.capabilities.require("spawn")
+					.spawn({
+						command: command.command,
+						args: command.args,
+						cwd: item.root,
+						environment: { ...item.environment, ...providerEnvironment },
+						shell: command.shell,
+						signal,
+					});
 				this.#handles.set(item.id, handle);
+				this.#telemetry(item, {
+					type: "execution.started",
+					timestamp: new Date().toISOString(),
+				});
 				if (item.kind === "task") {
 					await this.#invalidateOutputs(item);
 					const exit = await handle.exit;
@@ -564,7 +640,9 @@ export class WsrtControlPlane {
 						);
 						throw new Error(`Task ${item.name} exited with code ${exit.code}`);
 					}
+					await this.#collectArtifacts(item, signal);
 					await this.#verifyOutputs(item);
+					this.#closedExecutions.add(item.id);
 				} else {
 					void handle.exit.then((exit) =>
 						this.#processExited(item, handle, exit),
@@ -586,10 +664,47 @@ export class WsrtControlPlane {
 				if (handle.running) handle.terminate("SIGKILL");
 				await handle.exit;
 				this.#handles.delete(item.id);
+				this.#closedExecutions.add(item.id);
 				this.#manualStops.delete(item.id);
 			},
 			ready: async ({ signal }: { signal: AbortSignal }) => {
 				if (item.kind === "task") return;
+				const providerId = item.provider?.provider;
+				const provider = providerId
+					? this.#readinessProviders.get(providerId)
+					: undefined;
+				if (provider && providerId) {
+					const validation = provider.validate(item.provider?.options ?? {});
+					if (!validation.options || validation.diagnostics.length)
+						throw new Error(
+							validation.diagnostics.join("\n") ||
+								`Invalid readiness options: ${providerId}`,
+						);
+					await required(
+						this.#pluginSession,
+						"Plugin session unavailable",
+					).invoke("readiness", providerId, this.#pluginContext(), () =>
+						provider.wait(
+							validation.options,
+							this.#providerContext(item, providerId, signal),
+						),
+					);
+					if (signal.aborted || !this.#handles.get(item.id)?.running)
+						throw (
+							signal.reason ??
+							new Error(`Process ${item.name} exited before readiness`)
+						);
+					this.#event(
+						"node.readiness.succeeded",
+						item.id,
+						this.#operationId(item.id),
+						{
+							provider: providerId,
+						},
+					);
+					this.#startMonitor(item);
+					return;
+				}
 				if (!item.healthcheck) {
 					this.#setHealth(item.id, "healthy");
 					return;
@@ -775,6 +890,7 @@ export class WsrtControlPlane {
 	) {
 		if (this.#handles.get(item.id) !== handle) return;
 		this.#handles.delete(item.id);
+		this.#closedExecutions.add(item.id);
 		this.#stopMonitor(item.id);
 		const manual = this.#manualStops.has(item.id),
 			expected = manual || this.#disposed;
@@ -917,6 +1033,125 @@ export class WsrtControlPlane {
 				currentRestartAttempt: 0,
 			}
 		);
+	}
+	#operationId(nodeId: string): string {
+		return this.#nodeOperations.get(nodeId) ?? nodeId;
+	}
+	#providerContext(
+		item: NormalizedExecutable,
+		contributionId: string,
+		signal: AbortSignal,
+	): ProviderInvocationContext {
+		const pluginId =
+			required(this.#pluginSession, "Plugin session unavailable").owner(
+				this.#readinessProviders.has(contributionId)
+					? "readiness"
+					: "artifacts",
+				contributionId,
+			) ?? "unknown";
+		return Object.freeze({
+			pluginId,
+			contributionId,
+			nodeId: item.id,
+			operationId: this.#operationId(item.id),
+			workspaceRoot: this.definition().root,
+			projectRoot: item.root,
+			runtimeProviderId: this.definition().runtimes[item.runtime].provider,
+			environment: item.environment,
+			process: this.#handles.get(item.id),
+			executionMetadata: Object.freeze({
+				...(this.#executionMetadata.get(item.id) ?? {}),
+			}),
+			signal,
+			capabilities: this.#runtime(item).capabilities,
+			report: (event) => this.#telemetry(item, event),
+		});
+	}
+	#telemetry(item: NormalizedExecutable, event: ExecutionTelemetryEvent): void {
+		if (
+			this.#disposed ||
+			this.#closedExecutions.has(item.id) ||
+			this.#executionSignals.get(item.id)?.aborted
+		)
+			return;
+		const operationId = this.#operationId(item.id);
+		if (event.type === "diagnostic") {
+			this.#diagnostics.push({
+				...event.diagnostic,
+				source: item.source,
+			});
+		} else if (event.type === "server.listening") {
+			this.#executionMetadata.set(item.id, {
+				...(this.#executionMetadata.get(item.id) ?? {}),
+				host: event.host,
+				port: event.port,
+				urls: event.urls,
+			});
+		} else if (event.type === "readiness.available") {
+			this.#executionMetadata.set(item.id, {
+				...(this.#executionMetadata.get(item.id) ?? {}),
+				readiness: event.details ?? true,
+			});
+		} else if (event.type === "artifact.discovered") {
+			void this.#ingestCandidate(item, event.artifact);
+		}
+		this.#event(`provider.${event.type}`, item.id, operationId, event);
+		this.#changed();
+	}
+	async #collectArtifacts(item: NormalizedExecutable, signal: AbortSignal) {
+		const providerId = item.provider?.provider;
+		const provider = providerId
+			? this.#artifactProviders.get(providerId)
+			: undefined;
+		if (!provider || !providerId || signal.aborted) return;
+		const candidates = await required(
+			this.#pluginSession,
+			"Plugin session unavailable",
+		).invoke("artifacts", providerId, this.#pluginContext(), () =>
+			provider.collect(
+				item.provider?.options ?? {},
+				this.#providerContext(item, providerId, signal),
+			),
+		);
+		if (signal.aborted) return;
+		const unique = new Map<string, ArtifactCandidate>();
+		for (const candidate of candidates)
+			unique.set(`${candidate.name ?? ""}:${candidate.path}`, candidate);
+		for (const candidate of [...unique.values()].sort((a, b) =>
+			a.path.localeCompare(b.path),
+		))
+			await this.#ingestCandidate(item, candidate);
+	}
+	async #ingestCandidate(
+		item: NormalizedExecutable,
+		candidate: ArtifactCandidate,
+	) {
+		const file = path.resolve(item.root, candidate.path);
+		if (
+			!file.startsWith(`${this.definition().root}${path.sep}`) &&
+			file !== this.definition().root
+		)
+			throw new Error(`WSRT_ARTIFACT_PATH_INVALID: ${file}`);
+		const name = candidate.name ?? path.basename(candidate.path);
+		const id = `artifact:${name}`;
+		const existing = this.#artifacts.get(id);
+		this.#artifacts.set(id, {
+			id,
+			type: candidate.kind ?? existing?.type ?? "file",
+			producer: item.name,
+			consumers: existing?.consumers ?? [],
+			location: file,
+			status: "generating",
+			metadata: Object.freeze({
+				...(existing?.metadata ?? {}),
+				...(candidate.metadata ?? {}),
+				mediaType: candidate.mediaType,
+				outputGroup: candidate.outputGroup,
+			}),
+		});
+		this.#event("artifact.discovered", id, this.#operationId(item.id), {
+			path: file,
+		});
 	}
 	async #invalidateOutputs(item: NormalizedExecutable) {
 		for (const artifact of this.#artifacts.values())

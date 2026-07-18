@@ -62,7 +62,9 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 			})
 			.provide("spawn", {
 				spawn: (request) => {
-					const child = spawn(request.command, [...request.args], {
+					const command =
+						request.command === "node" ? process.execPath : request.command;
+					const child = spawn(command, [...request.args], {
 						cwd: request.cwd,
 						env: { ...process.env, ...request.environment },
 						shell: request.shell ?? false,

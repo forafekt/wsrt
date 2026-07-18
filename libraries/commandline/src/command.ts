@@ -180,7 +180,7 @@ class Command {
       })));
       sections.push({
         title: `For more info, run any command with the \`--help\` flag`,
-        body: commands
+		body: visibleCommands
           .map(
             (command) => `  $ ${name}${command.name === "" ? "" : ` ${command.name}`} --help`,
           )

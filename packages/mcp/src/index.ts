@@ -3,9 +3,33 @@ export type McpRequest = { tool: string; input?: Record<string, unknown> };
 export async function runMcpTool(
 	controlPlane: WsrtControlPlane,
 	request: McpRequest,
-	options: { allowMutations?: boolean } = {},
+	options: { allowMutations?: boolean; signal?: AbortSignal } = {},
 ): Promise<unknown> {
 	const input = request.input ?? {};
+	const contributed = controlPlane
+		.pluginContributions("mcp")
+		.find(
+			(item) =>
+				item.kind === "tool" &&
+				`${controlPlane.snapshot().plugins.find((plugin) => plugin.contributions.some((value) => value.kind === "mcp" && value.id === item.id))?.id}/${item.id}` ===
+					request.tool,
+		);
+	if (contributed) {
+		if (contributed.mutation) mutation(options);
+		const diagnostics = contributed.validate?.(input) ?? [];
+		if (diagnostics.some((item) => item.severity === "error"))
+			throw new Error(diagnostics.map((item) => item.message).join("\n"));
+		return controlPlane.invokePluginContribution(
+			"mcp",
+			contributed.id,
+			(context) =>
+				contributed.run(
+					input,
+					context,
+					options.signal ?? new AbortController().signal,
+				),
+		);
+	}
 	switch (request.tool) {
 		case "workspace.overview":
 			return {
@@ -64,6 +88,55 @@ export async function runMcpTool(
 		default:
 			throw new Error(`Unknown MCP tool: ${request.tool}`);
 	}
+}
+export async function readMcpResource(
+	controlPlane: WsrtControlPlane,
+	id: string,
+	options: { signal?: AbortSignal } = {},
+): Promise<unknown> {
+	return runContribution(
+		controlPlane,
+		"resource",
+		id,
+		undefined,
+		options.signal,
+	);
+}
+export async function getMcpPrompt(
+	controlPlane: WsrtControlPlane,
+	id: string,
+	input?: unknown,
+	options: { signal?: AbortSignal } = {},
+): Promise<unknown> {
+	return runContribution(controlPlane, "prompt", id, input, options.signal);
+}
+async function runContribution(
+	controlPlane: WsrtControlPlane,
+	kind: "resource" | "prompt",
+	id: string,
+	input: unknown,
+	signal?: AbortSignal,
+) {
+	const plugin = controlPlane
+		.snapshot()
+		.plugins.find((item) =>
+			item.contributions.some(
+				(contribution) =>
+					contribution.kind === "mcp" &&
+					contribution.id === id.slice(item.id.length + 1),
+			),
+		);
+	const contributionId = plugin ? id.slice(plugin.id.length + 1) : id;
+	const contribution = controlPlane
+		.pluginContributions("mcp")
+		.find((item) => item.kind === kind && item.id === contributionId);
+	if (!contribution || !plugin) throw new Error(`Unknown MCP ${kind}: ${id}`);
+	return controlPlane.invokePluginContribution(
+		"mcp",
+		contribution.id,
+		(context) =>
+			contribution.run(input, context, signal ?? new AbortController().signal),
+	);
 }
 function mutation(options: { allowMutations?: boolean }) {
 	if (!options.allowMutations)

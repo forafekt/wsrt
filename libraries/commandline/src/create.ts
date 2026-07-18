@@ -68,10 +68,10 @@ export function generateCompletions(cli: CommandLine, shell: CompletionShell): s
 	const commands = cli.commands.filter((command) => !command.config.hidden && command.name);
 	const names = commands.map((command) => command.name).join(" ");
 	if (shell === "fish")
-		return commands.map((command) =>
+		return `${commands.map((command) =>
 			`complete -c ${cli.name} -f -a '${command.name}' -d '${command.description.replaceAll("'", "\\'")}'`
-		).join("\n");
+		).join("\n")}\ncomplete -c ${cli.name} -f -a '(${cli.name} completion query (commandline -ct) 2>/dev/null)'`;
 	if (shell === "zsh")
-		return `#compdef ${cli.name}\n_arguments '1:command:(${names})' '*::arg:->args'`;
-	return `_${cli.name}_completion() {\n  local cur="\${COMP_WORDS[COMP_CWORD]}"\n  COMPREPLY=( $(compgen -W '${names}' -- "$cur") )\n}\ncomplete -F _${cli.name}_completion ${cli.name}`;
+		return `#compdef ${cli.name}\n_${cli.name}() { local -a values; values=(\${(f)"$(${cli.name} completion query "$words[CURRENT]" 2>/dev/null)"}); _describe 'value' values }\ncompdef _${cli.name} ${cli.name}`;
+	return `_${cli.name}_completion() {\n  local cur="\${COMP_WORDS[COMP_CWORD]}"\n  local dynamic="$(${cli.name} completion query "$cur" 2>/dev/null)"\n  COMPREPLY=( $(compgen -W '${names} '"$dynamic" -- "$cur") )\n}\ncomplete -F _${cli.name}_completion ${cli.name}`;
 }

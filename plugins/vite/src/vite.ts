@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { mergeAliases } from "./aliases.js";
@@ -40,19 +41,29 @@ export function wsrt(
 		configureServer(server) {
 			server.httpServer?.once("listening", () => {
 				const address = server.httpServer?.address();
-				process.emitWarning(
-					address && typeof address === "object"
-						? `WSRT_VITE_READY ${address.address}:${address.port}`
-						: "WSRT_VITE_READY",
-				);
+				if (address && typeof address === "object")
+					void report({
+						type: "server.listening",
+						host: address.address,
+						port: address.port,
+						urls: Object.values(server.resolvedUrls ?? {}).flat(),
+					});
 			});
 		},
 		generateBundle(_options, bundle) {
 			if (process.env.WSRT_VITE_REPORT === "1")
 				for (const file of Object.keys(bundle))
-					process.stderr.write(`WSRT_VITE_ARTIFACT ${file}\n`);
+					void report({
+						type: "artifact.discovered",
+						artifact: { path: file, name: `vite-${file.replaceAll("/", "-")}` },
+					});
 		},
 	};
+}
+async function report(event: unknown): Promise<void> {
+	const file = process.env.WSRT_EXECUTION_TELEMETRY;
+	if (!file) return;
+	await fs.appendFile(file, `${JSON.stringify({ version: 1, event })}\n`);
 }
 async function findWorkspaceRoot(start: string): Promise<string> {
 	let current = start;

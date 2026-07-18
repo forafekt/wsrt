@@ -12,6 +12,61 @@ export type ProcessHandle = {
 	exit: Promise<{ code: number | null; signal: string | null }>;
 	terminate(signal?: string): void;
 };
+export type ArtifactCandidate = {
+	readonly path: string;
+	readonly name?: string;
+	readonly kind?: string;
+	readonly mediaType?: string;
+	readonly outputGroup?: string;
+	readonly expected?: boolean;
+	readonly metadata?: Readonly<Record<string, unknown>>;
+};
+export type ExecutionTelemetryEvent =
+	| { readonly type: "execution.started"; readonly timestamp?: string }
+	| {
+			readonly type: "server.listening";
+			readonly host: string;
+			readonly port: number;
+			readonly urls?: readonly string[];
+	  }
+	| {
+			readonly type: "readiness.available";
+			readonly details?: Readonly<Record<string, unknown>>;
+	  }
+	| {
+			readonly type: "artifact.discovered";
+			readonly artifact: ArtifactCandidate;
+	  }
+	| {
+			readonly type: "diagnostic";
+			readonly diagnostic: {
+				readonly code: string;
+				readonly severity: "info" | "warning" | "error";
+				readonly message: string;
+				readonly detail?: Readonly<Record<string, unknown>>;
+			};
+	  }
+	| {
+			readonly type: "custom";
+			readonly namespace: string;
+			readonly name: string;
+			readonly payload?: unknown;
+	  };
+export type ProviderInvocationContext = {
+	readonly pluginId: string;
+	readonly contributionId: string;
+	readonly nodeId: string;
+	readonly operationId: string;
+	readonly workspaceRoot: string;
+	readonly projectRoot: string;
+	readonly runtimeProviderId: string;
+	readonly environment: Readonly<Record<string, string>>;
+	readonly process?: ProcessHandle;
+	readonly executionMetadata: Readonly<Record<string, unknown>>;
+	readonly signal: AbortSignal;
+	readonly capabilities: CapabilityRegistry;
+	report(event: ExecutionTelemetryEvent): void;
+};
 export interface SpawnCapability {
 	spawn(request: SpawnRequest): ProcessHandle;
 }
@@ -97,6 +152,8 @@ export interface ExecutionAdapter<Options = unknown> {
 		command: string;
 		args: readonly string[];
 		shell?: boolean;
+		environment?: Readonly<Record<string, string>>;
+		metadata?: Readonly<Record<string, unknown>>;
 	};
 }
 export interface ReadinessProvider<Options = unknown> {
@@ -105,11 +162,7 @@ export interface ReadinessProvider<Options = unknown> {
 		options?: Options;
 		diagnostics: readonly string[];
 	};
-	wait(
-		options: Options,
-		capabilities: CapabilityRegistry,
-		signal: AbortSignal,
-	): Promise<void>;
+	wait(options: Options, context: ProviderInvocationContext): Promise<void>;
 }
 export interface HealthProvider<Options = unknown> {
 	readonly id: string;
@@ -129,11 +182,10 @@ export interface HealthProvider<Options = unknown> {
 }
 export interface ArtifactProvider<Input = unknown> {
 	readonly id: string;
-	generate(
+	collect(
 		input: Input,
-		capabilities: CapabilityRegistry,
-		signal: AbortSignal,
-	): Promise<{ location?: string; hash?: string; changed: boolean }>;
+		context: ProviderInvocationContext,
+	): Promise<readonly ArtifactCandidate[]>;
 }
 export type ProviderKind =
 	| "runtime"

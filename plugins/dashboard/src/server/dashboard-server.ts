@@ -173,7 +173,7 @@ async function route(
 	return textResponse(response, 200, "text/html; charset=utf-8", html(options));
 }
 
-function api(
+async function api(
 	plane: WsrtControlPlane,
 	mutations: boolean,
 	method: string,
@@ -205,7 +205,34 @@ function api(
 		else if (resource === "providers") value = snapshot.controlPlane.providers;
 		else if (resource === "configuration")
 			value = safeConfiguration(plane.definition());
-		else
+		else if (resource === "contributions") {
+			const contributions = plane
+				.pluginContributions("dashboard")
+				.filter((item) => item.kind !== "action");
+			value = await Promise.all(
+				contributions.map(async (contribution) => {
+					try {
+						const data = contribution.load
+							? await plane.invokePluginContribution(
+									"dashboard",
+									contribution.id,
+									(context) =>
+										contribution.load?.(context, new AbortController().signal),
+								)
+							: undefined;
+						JSON.stringify(data);
+						return { ...contribution, load: undefined, run: undefined, data };
+					} catch (cause) {
+						return {
+							id: contribution.id,
+							kind: contribution.kind,
+							title: contribution.title,
+							error: cause instanceof Error ? cause.message : String(cause),
+						};
+					}
+				}),
+			);
+		} else
 			return error(
 				response,
 				404,
@@ -235,6 +262,29 @@ function api(
 			"dashboard.read_only",
 			"Dashboard mutations are disabled",
 		);
+	if (resource === "contributions" && id && action === "run") {
+		const contribution = plane
+			.pluginContributions("dashboard")
+			.find((item) => item.kind === "action" && item.id === id);
+		if (!contribution?.run)
+			return error(
+				response,
+				404,
+				"dashboard.not_found",
+				`Action ${id} was not found`,
+			);
+		try {
+			const value = await plane.invokePluginContribution(
+				"dashboard",
+				id,
+				(context) =>
+					contribution.run?.({}, context, new AbortController().signal),
+			);
+			return json(response, 200, value);
+		} catch (cause) {
+			return error(response, 409, "dashboard.action_failed", String(cause));
+		}
+	}
 	if (
 		resource === "nodes" &&
 		id &&

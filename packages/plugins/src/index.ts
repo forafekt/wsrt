@@ -39,6 +39,9 @@ export type ContributionDiagnostic = {
 	readonly severity: "info" | "warning" | "error";
 	readonly message: string;
 	readonly plugin?: string;
+	readonly contributionId?: string;
+	readonly contributionKind?: keyof PluginContributions;
+	readonly lifecycleStage?: string;
 	readonly detail?: Readonly<Record<string, unknown>>;
 };
 export type ValidationResult<T> =
@@ -120,12 +123,29 @@ export type DashboardContribution = {
 	readonly id: string;
 	readonly kind: "page" | "widget" | "panel" | "action";
 	readonly title?: string;
-	readonly render?: unknown;
+	readonly refreshMs?: number;
+	readonly mutation?: boolean;
+	load?(
+		context: PluginContext,
+		signal: AbortSignal,
+	): unknown | Promise<unknown>;
+	run?(
+		input: unknown,
+		context: PluginContext,
+		signal: AbortSignal,
+	): unknown | Promise<unknown>;
 };
 export type McpContribution = {
 	readonly id: string;
 	readonly kind: "tool" | "resource" | "prompt";
-	run?: unknown;
+	readonly description?: string;
+	readonly mutation?: boolean;
+	validate?(input: unknown): readonly ContributionDiagnostic[];
+	run(
+		input: unknown,
+		context: PluginContext,
+		signal: AbortSignal,
+	): unknown | Promise<unknown>;
 };
 export type CompletionContribution = {
 	readonly id: string;
@@ -212,15 +232,35 @@ export type PluginState =
 	| "running"
 	| "failed"
 	| "disposed";
+export type ContributionOperationalStatus =
+	| "operational"
+	| "declarative"
+	| "experimental"
+	| "inactive";
+export type ContributionSnapshot = {
+	readonly id: string;
+	readonly kind: keyof PluginContributions;
+	readonly status: ContributionOperationalStatus;
+	readonly registered: boolean;
+	readonly activeInvocations: number;
+	readonly lastInvokedAt?: string;
+	readonly lastFailure?: string;
+};
 export type PluginSnapshot = PluginMetadata & {
 	readonly state: PluginState;
 	readonly registrations: Readonly<Record<string, readonly string[]>>;
 	readonly diagnostics: readonly ContributionDiagnostic[];
+	readonly contributions: readonly ContributionSnapshot[];
 };
 export class PluginSession {
 	readonly #plugins: readonly WsrtPlugin[];
 	readonly #states = new Map<string, PluginState>();
 	readonly #diagnostics: ContributionDiagnostic[] = [];
+	readonly #invocations = new Map<
+		string,
+		{ active: number; lastInvokedAt?: string; lastFailure?: string }
+	>();
+	#disposed = false;
 	constructor(plugins: readonly WsrtPlugin[]) {
 		this.#plugins = orderPlugins(plugins);
 		assertUniqueContributions(this.#plugins);
@@ -250,6 +290,47 @@ export class PluginSession {
 				>[number][]),
 			]),
 		);
+	}
+	owner(kind: keyof PluginContributions, id: string): string | undefined {
+		return this.#plugins.find((plugin) =>
+			(
+				plugin.contributions?.[kind] as readonly { id?: string }[] | undefined
+			)?.some((item) => item.id === id),
+		)?.id;
+	}
+	async invoke<T>(
+		kind: keyof PluginContributions,
+		id: string,
+		context: PluginContext,
+		run: (context: PluginContext) => T | Promise<T>,
+	): Promise<T> {
+		if (this.#disposed) throw new Error("Plugin session is disposed");
+		const plugin = this.owner(kind, id);
+		if (!plugin) throw new Error(`Unknown ${kind} contribution: ${id}`);
+		const key = `${kind}:${id}`;
+		const state = this.#invocations.get(key) ?? { active: 0 };
+		state.active++;
+		state.lastInvokedAt = new Date().toISOString();
+		this.#invocations.set(key, state);
+		try {
+			return await run(scopedContext(context, plugin, this.#diagnostics));
+		} catch (cause) {
+			state.lastFailure =
+				cause instanceof Error ? cause.message : String(cause);
+			const diagnostic: ContributionDiagnostic = {
+				code: "plugin.contribution_failed",
+				severity: "error",
+				message: `${kind} contribution ${id} failed: ${state.lastFailure}`,
+				plugin,
+				contributionId: id,
+				contributionKind: kind,
+			};
+			this.#diagnostics.push(diagnostic);
+			context.diagnostics.add(diagnostic);
+			throw cause;
+		} finally {
+			state.active--;
+		}
 	}
 	async initialize(context: PluginContext): Promise<void> {
 		for (const stage of [
@@ -292,11 +373,16 @@ export class PluginSession {
 					diagnostics: Object.freeze(
 						this.#diagnostics.filter((item) => item.plugin === plugin.id),
 					),
+					contributions: Object.freeze(
+						contributionSnapshots(plugin, this.#invocations),
+					),
 				}),
 			),
 		);
 	}
 	async dispose(context?: PluginContext): Promise<void> {
+		if (this.#disposed) return;
+		this.#disposed = true;
 		const errors: unknown[] = [];
 		for (const plugin of [...this.#plugins].reverse()) {
 			try {
@@ -308,6 +394,9 @@ export class PluginSession {
 				this.#states.set(plugin.id, "disposed");
 			} catch (cause) {
 				this.#states.set(plugin.id, "failed");
+				const diagnostic = failureDiagnostic(plugin.id, "shutdown", cause);
+				this.#diagnostics.push(diagnostic);
+				context?.diagnostics.add(diagnostic);
 				errors.push(new PluginLifecycleError(plugin.id, "shutdown", cause));
 			}
 		}
@@ -451,6 +540,49 @@ function registrations(plugin: WsrtPlugin): Record<string, readonly string[]> {
 						.sort(),
 				),
 			]),
+	);
+}
+function contributionSnapshots(
+	plugin: WsrtPlugin,
+	invocations: Map<
+		string,
+		{ active: number; lastInvokedAt?: string; lastFailure?: string }
+	>,
+): ContributionSnapshot[] {
+	const operational = new Set<keyof PluginContributions>([
+		"runtimes",
+		"adapters",
+		"readiness",
+		"artifacts",
+		"cli",
+		"workspace",
+		"graph",
+		"configuration",
+		"dashboard",
+		"mcp",
+		"completion",
+		"executables",
+	]);
+	return Object.entries(plugin.contributions ?? {}).flatMap(([kind, values]) =>
+		Array.isArray(values)
+			? (values as readonly { id?: string }[]).map((value) => {
+					const id = value.id ?? "anonymous";
+					const invocation = invocations.get(`${kind}:${id}`);
+					return Object.freeze({
+						id,
+						kind: kind as keyof PluginContributions,
+						status: (kind === "diagnostics"
+							? "declarative"
+							: operational.has(kind as keyof PluginContributions)
+								? "operational"
+								: "inactive") as ContributionOperationalStatus,
+						registered: true,
+						activeInvocations: invocation?.active ?? 0,
+						lastInvokedAt: invocation?.lastInvokedAt,
+						lastFailure: invocation?.lastFailure,
+					});
+				})
+			: [],
 	);
 }
 function metadata(plugin: WsrtPlugin): PluginMetadata {

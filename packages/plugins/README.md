@@ -181,3 +181,54 @@ implementation objects. The Dashboard plugin renders this same public model.
 - Make hooks idempotent and disposal safe after partial initialization.
 - Avoid module-level mutable singletons and hidden registration side effects.
 - Keep contribution IDs stable across releases and version breaking contracts.
+
+## Operational contribution matrix
+
+Contribution snapshots expose `operational`, `declarative`, `experimental`, or
+`inactive` status together with invocation counts and the last attributed failure.
+`diagnostics` is intentionally declarative (it is ingested at registration); all
+other contribution families below have a runtime consumer.
+
+| Contribution | Invoked by | Lifecycle boundary | Cancellation | Snapshot visibility |
+| --- | --- | --- | --- | --- |
+| runtimes | control plane | provider registration/load | runtime disposal | registration/status |
+| adapters | control plane | node start | operation signal | registration/status |
+| readiness | control plane | after spawn, before ready | operation signal | invocation/status/failure |
+| artifacts | control plane | streaming telemetry and successful task exit | operation signal | invocation/status/failure |
+| diagnostics | control plane | plugin registration | not applicable | declarative/diagnostic count |
+| CLI | CLI | parsed plugin command | control-plane disposal | registration/status |
+| workspace | control plane | workspace compilation | load failure/disposal | registration/status |
+| graph | control plane | graph compilation | load failure/disposal | registration/status |
+| configuration | control plane | configuration validation | load failure/disposal | registration/status |
+| dashboard | dashboard server | data request or explicit action | request signal | invocation/status/failure |
+| MCP | MCP package | tool, resource, or prompt request | transport signal | invocation/status/failure |
+| completion | CLI runtime completion query | lazily per query | control-plane disposal | invocation/status/failure |
+| executables | CLI `exec` | explicit invocation | executable signal | registration/status |
+
+Provider invocations receive immutable, capability-oriented context: plugin and
+contribution identity, node and operation identity, workspace/project roots,
+runtime identity, environment, process handle, execution metadata, runtime
+capabilities, an `AbortSignal`, and a structured telemetry reporter. Failures are
+recorded with plugin/contribution attribution and become control-plane diagnostics.
+
+Execution telemetry is versioned at process boundaries and maps
+`server.listening`, `readiness.available`, `artifact.discovered`, `diagnostic`, and
+namespaced `custom` events into the existing event journal. Providers must stop on
+abort and must not retain the reporter after their process or session is disposed.
+
+Readiness providers run only after the process handle exists. Successful readiness
+emits `node.readiness.succeeded`; only then does normal health observation begin.
+Artifact providers return untrusted candidates. The control plane normalizes paths,
+deduplicates candidates, verifies existence, hashes contents, detects unchanged
+outputs, timestamps records, and emits the existing artifact events.
+
+Dashboard contributions are server-executed and return JSON-serializable view
+models; third-party HTML or frontend modules are not supported. MCP IDs are
+namespaced as `<plugin-id>/<contribution-id>`, validated before invocation, and use
+the same scoped contexts. Completion providers are read-only, lazy, isolated on
+failure, sorted, and deduplicated.
+
+`PluginSession` is the invocation-scoped resolution plan. The CLI uses one session
+for command discovery and control-plane startup, disposes it on early exits, and
+performs idempotent reverse-order shutdown. Programmatic callers may construct a
+session explicitly and pass it as `pluginSession` when creating a control plane.
