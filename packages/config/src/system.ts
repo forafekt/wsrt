@@ -85,6 +85,11 @@ export type ArtifactInput = {
 export type EnvironmentInput = {
 	activate?: { applications?: string[]; services?: string[]; tasks?: string[] };
 };
+export type PluginObjectInput = {
+	readonly id: string;
+	readonly version: string;
+	readonly [key: string]: unknown;
+};
 export type WorkspaceDefinitionInput = {
 	schemaVersion?: "1";
 	name: string;
@@ -98,7 +103,9 @@ export type WorkspaceDefinitionInput = {
 	tasks?: Record<string, TaskInput>;
 	artifacts?: Record<string, ArtifactInput>;
 	environments?: Record<string, EnvironmentInput>;
-	plugins?: Array<string | { provider: string; options?: unknown }>;
+	plugins?: Array<
+		string | { provider: string; options?: unknown } | PluginObjectInput
+	>;
 };
 export type NormalizedCommand = {
 	command: string;
@@ -139,7 +146,11 @@ export type NormalizedSystemDefinition = {
 	executables: readonly NormalizedExecutable[];
 	artifacts: readonly NormalizedArtifact[];
 	environments: Readonly<Record<string, EnvironmentInput>>;
-	plugins: readonly (string | { provider: string; options?: unknown })[];
+	plugins: readonly (
+		| string
+		| { provider: string; options?: unknown }
+		| PluginObjectInput
+	)[];
 	sourceFile: string;
 };
 

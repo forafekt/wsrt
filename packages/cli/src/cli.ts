@@ -5,7 +5,14 @@ import {
 	createCli,
 	generateCompletions,
 } from "@wsrt/commandline";
+import { loadSystemDefinition } from "@wsrt/config";
 import { createControlPlane } from "@wsrt/control-plane";
+import {
+	type CliContribution,
+	type PluginContext,
+	PluginSession,
+	resolveWorkspacePlugins,
+} from "@wsrt/plugins";
 import { logger } from "./logger.js";
 
 export const version = "0.1.0";
@@ -31,7 +38,7 @@ const workspaceOptions = [
 	{ name: "--json", description: "Emit machine-readable JSON" },
 ];
 
-export function createWsrtCli() {
+export function createWsrtCli(pluginCommands: readonly CliContribution[] = []) {
 	const execute =
 		(
 			action: (
@@ -129,6 +136,44 @@ export function createWsrtCli() {
 				description: "Print the compiled system graph",
 				group: "Inspection",
 				action: execute((plane) => plane.graph().toJSON()),
+			},
+			{
+				name: "plugins",
+				description: "List loaded plugins and their capabilities",
+				group: "Plugins",
+				action: execute((plane) => plane.snapshot().plugins),
+			},
+			{
+				name: "plugins inspect [plugin]",
+				description: "Inspect plugin metadata and registrations",
+				group: "Plugins",
+				action: (plugin: string | undefined, options: GlobalOptions) =>
+					execute((plane) => {
+						const plugins = plane.snapshot().plugins;
+						if (!plugin) return plugins;
+						const match = plugins.find((item) => item.id === plugin);
+						if (!match) throw new Error(`WSRT_PLUGIN_NOT_LOADED: ${plugin}`);
+						return match;
+					})(options),
+			},
+			{
+				name: "plugins graph",
+				description: "Show plugin dependency relationships",
+				group: "Plugins",
+				action: execute((plane) =>
+					plane.snapshot().plugins.flatMap((plugin) => [
+						...(plugin.requires ?? []).map((dependency) => ({
+							from: plugin.id,
+							to: typeof dependency === "string" ? dependency : dependency.id,
+							type: "required",
+						})),
+						...(plugin.optional ?? []).map((dependency) => ({
+							from: plugin.id,
+							to: typeof dependency === "string" ? dependency : dependency.id,
+							type: "optional",
+						})),
+					]),
+				),
 			},
 			{
 				name: "up",
@@ -259,6 +304,17 @@ export function createWsrtCli() {
 					workspaceCommand(plane.definition().root, "check"),
 				),
 			},
+			...pluginCommands.map((contribution) => ({
+				name: `${contribution.path} [...pluginArguments]`,
+				description: contribution.description,
+				group: `Plugin: ${contribution.owner.id}`,
+				allowUnknownOptions: true,
+				action: (_pluginArguments: string[], options: GlobalOptions) =>
+					execute(async (plane) => {
+						const args = argumentsAfterPath(process.argv, contribution.path);
+						return contribution.run(pluginContext(plane), args);
+					})(options),
+			})),
 			{
 				name: "completion [shell]",
 				description: "Generate shell completion setup (bash, fish, or zsh)",
@@ -311,13 +367,85 @@ async function workspaceCommand(
 
 export async function run(argv = process.argv): Promise<void> {
 	try {
-		await createWsrtCli().parseAsync(argv);
+		await createWsrtCli(await discoverPluginCommands(argv)).parseAsync(argv);
 	} catch (cause) {
 		process.exitCode = 1;
 		logger.error(
 			`Error: ${cause instanceof Error ? cause.message : String(cause)}`,
 		);
 	}
+}
+
+async function discoverPluginCommands(
+	argv: readonly string[],
+): Promise<readonly CliContribution[]> {
+	const rootIndex = argv.findIndex(
+		(item) => item === "--root" || item === "-r",
+	);
+	const configIndex = argv.findIndex(
+		(item) => item === "--config" || item === "-c",
+	);
+	const root =
+		rootIndex >= 0 && argv[rootIndex + 1] ? argv[rootIndex + 1] : undefined;
+	const config =
+		configIndex >= 0 && argv[configIndex + 1]
+			? argv[configIndex + 1]
+			: undefined;
+	const loaded = await loadSystemDefinition(root, config);
+	if (!loaded.definition) return [];
+	const plugins = await resolveWorkspacePlugins(
+		loaded.definition.plugins,
+		loaded.definition.root,
+	);
+	const contributions = new PluginSession(plugins).contributions("cli");
+	const paths = new Set<string>();
+	for (const contribution of contributions) {
+		if (paths.has(contribution.path))
+			throw new Error(`WSRT_PLUGIN_CLI_DUPLICATE: ${contribution.path}`);
+		paths.add(contribution.path);
+	}
+	return contributions;
+}
+function pluginContext(
+	plane: Awaited<ReturnType<typeof createControlPlane>>,
+): PluginContext {
+	return Object.freeze({
+		root: plane.definition().root,
+		configuration: plane.definition(),
+		logger: {
+			info: logger.info.bind(logger),
+			warn: logger.warn.bind(logger),
+			error: logger.error.bind(logger),
+		},
+		diagnostics: {
+			add: (diagnostic) =>
+				logger[
+					diagnostic.severity === "warning" ? "warn" : diagnostic.severity
+				](diagnostic.message),
+		},
+		events: {
+			emit: (type, payload) =>
+				logger.info(
+					type,
+					payload && typeof payload === "object"
+						? (payload as Record<string, unknown>)
+						: { payload },
+				),
+		},
+		services: Object.freeze({ controlPlane: plane, graph: plane.graph() }),
+	});
+}
+function argumentsAfterPath(
+	argv: readonly string[],
+	commandPath: string,
+): string[] {
+	const parts = commandPath.split(/\s+/).filter(Boolean);
+	for (let index = 0; index <= argv.length - parts.length; index++)
+		if (parts.every((part, offset) => argv[index + offset] === part)) {
+			const result = argv.slice(index + parts.length);
+			return result[0] === "--" ? result.slice(1) : result;
+		}
+	return [];
 }
 
 function printResult(result: unknown, _pretty: boolean): void {

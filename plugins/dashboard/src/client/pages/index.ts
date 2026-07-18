@@ -249,10 +249,17 @@ export function renderPage(
 	if (route === "plugins")
 		return `${heading("Plugins", "Explicitly configured extensions visible in the public snapshot.")}${table(
 			"Installed plugins",
-			["Plugin ID", "Status"],
+			["Plugin ID", "Version", "State", "Capabilities", "Registrations"],
 			snapshot.plugins.map((p) => [
-				`<code>${escapeHtml(p)}</code>`,
-				badge("registered"),
+				`<code>${escapeHtml(p.id)}</code>`,
+				escapeHtml(p.version),
+				badge(p.state),
+				escapeHtml((p.capabilities ?? []).join(", ") || "—"),
+				escapeHtml(
+					Object.entries(p.registrations)
+						.map(([kind, ids]) => `${kind}: ${ids.join(", ")}`)
+						.join("; ") || "—",
+				),
 			]),
 			"No plugins are reported by this workspace.",
 		)}`;

@@ -57,7 +57,7 @@ export default defineSystem({
 		rustDemo: {
 			runtime: "rust",
 			command: { command: "echo", args: ["Hello World"] },
-		}
+		},
 	},
 	artifacts: {
 		build: {

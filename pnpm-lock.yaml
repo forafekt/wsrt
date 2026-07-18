@@ -100,6 +100,9 @@ importers:
       '@wsrt/commandline':
         specifier: workspace:*
         version: link:../../libraries/commandline
+      '@wsrt/config':
+        specifier: workspace:*
+        version: link:../config
       '@wsrt/console':
         specifier: workspace:*
         version: link:../../libraries/console

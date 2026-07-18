@@ -20,7 +20,13 @@ import {
 	type LifecycleEvent,
 	type LifecycleState,
 } from "@wsrt/lifecycle";
-import { PluginSession, resolveWorkspacePlugins } from "@wsrt/plugins";
+import {
+	type ContributionDiagnostic,
+	type PluginContext,
+	PluginSession,
+	type PluginSnapshot,
+	resolveWorkspacePluginsReport,
+} from "@wsrt/plugins";
 import { NodeRuntimeProvider } from "@wsrt/runtime-node";
 import { RustRuntimeProvider } from "@wsrt/runtime-rust";
 
@@ -135,7 +141,7 @@ export type ControlPlaneSnapshot = {
 	artifacts: readonly ArtifactRecord[];
 	diagnostics: readonly SystemDiagnostic[];
 	events: { size: number };
-	plugins: readonly string[];
+	plugins: readonly PluginSnapshot[];
 	providers: readonly { id: string; kind: "runtime" }[];
 };
 export type ControlPlaneOptions = {
@@ -181,16 +187,48 @@ export class WsrtControlPlane {
 		if (!loaded.definition)
 			throw new Error(this.#diagnostics.map((d) => d.message).join("\n"));
 		this.#definition = loaded.definition;
-		this.#graph = compileSystemGraph(loaded.definition);
-		this.#pluginSession = new PluginSession(
-			await resolveWorkspacePlugins(
-				loaded.definition.plugins,
-				loaded.definition.root,
-			),
+		const report = await resolveWorkspacePluginsReport(
+			loaded.definition.plugins,
+			loaded.definition.root,
 		);
+		for (const diagnostic of report.diagnostics)
+			this.#diagnostics.push(this.#pluginDiagnostic(diagnostic));
+		if (report.diagnostics.length)
+			throw new Error(
+				report.diagnostics.map((item) => item.message).join("\n"),
+			);
+		this.#pluginSession = new PluginSession(report.plugins);
+		await this.#pluginSession.runStage("discover", this.#pluginContext());
+		for (const contribution of this.#pluginSession.contributions(
+			"configuration",
+		)) {
+			const reference = loaded.definition.plugins.find(
+				(item) =>
+					typeof item !== "string" &&
+					"provider" in item &&
+					item.provider === contribution.id,
+			);
+			for (const diagnostic of contribution.validate(
+				typeof reference === "object" && "options" in reference
+					? reference.options
+					: undefined,
+			))
+				this.#diagnostics.push(this.#pluginDiagnostic(diagnostic));
+		}
+		if (this.#diagnostics.some((item) => item.severity === "error"))
+			throw new Error(this.#diagnostics.map((item) => item.message).join("\n"));
+		await this.#pluginSession.runStage("configure", this.#pluginContext());
+		for (const contribution of this.#pluginSession.contributions("workspace"))
+			await contribution.compile(this.#pluginContext());
+		await this.#pluginSession.runStage("workspace", this.#pluginContext());
+		this.#graph = compileSystemGraph(loaded.definition);
+		for (const contribution of this.#pluginSession.contributions("graph"))
+			await contribution.contribute(this.#graph, this.#pluginContext());
+		await this.#pluginSession.runStage("graph", this.#pluginContext());
 		for (const plugin of this.#pluginSession.list())
 			for (const adapter of plugin.contributions?.adapters ?? [])
 				this.#adapters.set(adapter.id, adapter);
+		await this.#pluginSession.runStage("providers", this.#pluginContext());
 		for (const issue of this.#graph.validate())
 			this.#diagnostics.push({
 				code: `graph.${issue.code}`,
@@ -204,6 +242,7 @@ export class WsrtControlPlane {
 		const providers = this.options.providers ?? [
 			new NodeRuntimeProvider(),
 			new RustRuntimeProvider(),
+			...this.#pluginSession.contributions("runtimes"),
 		];
 		this.#providerIds = providers.map((provider) => provider.id).sort();
 		for (const runtime of Object.values(loaded.definition.runtimes)) {
@@ -231,6 +270,7 @@ export class WsrtControlPlane {
 				status: "pending",
 				metadata: artifact.metadata,
 			});
+		await this.#pluginSession.runStage("runtime", this.#pluginContext());
 		return loaded.definition;
 	}
 	definition(): NormalizedSystemDefinition {
@@ -327,13 +367,7 @@ export class WsrtControlPlane {
 			),
 			diagnostics: Object.freeze([...this.#diagnostics]),
 			events: Object.freeze({ size: this.#events.length }),
-			plugins: Object.freeze(
-				definition.plugins
-					.map((plugin) =>
-						typeof plugin === "string" ? plugin : plugin.provider,
-					)
-					.sort(),
-			),
+			plugins: this.#pluginSession?.snapshots() ?? [],
 			providers: Object.freeze(
 				this.#providerIds.map((id) =>
 					Object.freeze({ id, kind: "runtime" as const }),
@@ -447,7 +481,40 @@ export class WsrtControlPlane {
 		);
 		this.#runtimes.clear();
 		this.#subscribers.clear();
-		await this.#pluginSession?.dispose();
+		await this.#pluginSession?.dispose(this.#pluginContext());
+	}
+	#pluginContext(): PluginContext {
+		return Object.freeze({
+			root: this.#definition?.root ?? path.resolve(this.options.root ?? "."),
+			configuration: this.#definition,
+			logger: {
+				info: (message) =>
+					this.#event("plugin.log.info", "plugin", "plugin", { message }),
+				warn: (message) =>
+					this.#event("plugin.log.warning", "plugin", "plugin", { message }),
+				error: (message) =>
+					this.#event("plugin.log.error", "plugin", "plugin", { message }),
+			},
+			diagnostics: {
+				add: (diagnostic) =>
+					this.#diagnostics.push(this.#pluginDiagnostic(diagnostic)),
+			},
+			events: {
+				emit: (type, payload) => this.#event(type, "plugin", "plugin", payload),
+			},
+			services: Object.freeze({ graph: this.#graph, controlPlane: this }),
+		});
+	}
+	#pluginDiagnostic(diagnostic: ContributionDiagnostic): SystemDiagnostic {
+		return {
+			code: diagnostic.code,
+			severity: diagnostic.severity,
+			message: diagnostic.message,
+			source: {
+				file: this.#definition?.sourceFile ?? "<plugin>",
+				path: diagnostic.plugin ? `plugins.${diagnostic.plugin}` : "plugins",
+			},
+		};
 	}
 	#handler(item: NormalizedExecutable) {
 		const runtime = () =>

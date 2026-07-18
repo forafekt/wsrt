@@ -1,5 +1,9 @@
 import type { WsrtControlPlane } from "@wsrt/control-plane";
-import type { ExecutableContribution, WsrtPlugin } from "@wsrt/plugins";
+import {
+	definePlugin,
+	type ExecutableContribution,
+	type WsrtPlugin,
+} from "@wsrt/plugins";
 
 export type DashboardOptions = {
 	enabled?: boolean;
@@ -97,10 +101,19 @@ export function dashboardPlugin(options: DashboardOptions = {}): WsrtPlugin {
 			return { result: { url: dashboard.url }, wait: () => waiting, close };
 		},
 	};
-	return {
+	return definePlugin({
 		...owner,
-		contributions: { executables: [executable] },
-	};
+		name: "Dashboard",
+		description: "Live control-plane dashboard and inspection API",
+		capabilities: ["dashboard", "cli"],
+		contributions: {
+			executables: [executable],
+			dashboard: [
+				{ id: "control-plane", kind: "page", title: "Control plane" },
+				{ id: "plugins", kind: "page", title: "Plugins" },
+			],
+		},
+	});
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

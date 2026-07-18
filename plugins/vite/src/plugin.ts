@@ -2,7 +2,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ExecutableContribution, WsrtPlugin } from "@wsrt/plugins";
+import {
+	definePlugin,
+	type ExecutableContribution,
+	type WsrtPlugin,
+} from "@wsrt/plugins";
 import { viteAdapter } from "./adapter.js";
 import type { VitePluginOptions } from "./types.js";
 
@@ -57,11 +61,14 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 			};
 		},
 	};
-	return {
+	return definePlugin({
 		id: owner.id,
+		name: "Vite",
 		version: owner.version,
+		description: "Vite execution, configuration, and workspace integration",
+		capabilities: ["execution-provider", "workspace-provider"],
 		contributions: { adapters: [viteAdapter], executables: [executable] },
-	};
+	});
 }
 
 function takeConfigArgument(

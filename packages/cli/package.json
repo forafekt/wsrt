@@ -28,11 +28,11 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
+		"@wsrt/commandline": "workspace:*",
+		"@wsrt/config": "workspace:*",
+		"@wsrt/console": "workspace:*",
 		"@wsrt/control-plane": "workspace:*",
 		"@wsrt/plugins": "workspace:*",
-		"@wsrt/workspace": "workspace:*",
-		"@wsrt/commandline": "workspace:*",
-		"@wsrt/console": "workspace:*"
-
+		"@wsrt/workspace": "workspace:*"
 	}
 }
