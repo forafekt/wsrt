@@ -4,6 +4,18 @@ WSRT is a runtime-centric lifecycle platform for local software systems. One def
 
 Use WSRT when a project needs dependency-aware startup, readiness, task execution, artifact tracking, or several user interfaces over the same runtime state. Do not use it as a container orchestrator, deployment platform, or replacement for a package manager.
 
+It differs from a task runner such as Turborepo or Nx by owning long-running process lifecycle, readiness, health, and runtime state; those tools remain better suited to cached repository task graphs. It differs from Docker Compose because it operates local processes and plugins rather than defining container deployment. WSRT can sit alongside all three.
+
+## Alpha quick start
+
+The initial npm release is being prepared and has not been published. After publication, install the `next` prerelease:
+
+```bash
+pnpm add -D @wsrt/cli@next @wsrt/config@next @wsrt/plugin-vite@next
+```
+
+Create a typed definition with `defineSystem`, then run `pnpm wsrt validate`, `pnpm wsrt workspace inspect`, and a finite task before adopting services. See [first use](./docs/FIRST_USE.md), the [package publication matrix](./docs/PUBLICATION.md), and the [Activeline trial](./docs/ACTIVELANE_TRIAL.md). The CLI, Node runtime, config, workspace inspection, Vite integration, plugin contracts, dashboard, and MCP are alpha. Low-level graph/lifecycle/CLI dependencies are provisional. Rust npm distribution, durable state, deployment, and distributed operation are not supported.
+
 ## System definition
 
 WSRT loads `wsrt.config.ts`, JavaScript module formats, JSON/JSONC, or YAML. All formats become the same normalized model.
@@ -32,7 +44,7 @@ Unknown core properties and missing runtime, dependency, producer, or consumer r
 
 `@wsrt/config` normalizes definitions and compiles `@wsrt/graph`. The graph owns stable nodes, containment, dependencies, traversal, cycle detection, and deterministic startup/shutdown plans. `@wsrt/lifecycle` executes those plans with explicit transitions, parallel safe stages, retries, cancellation, readiness, and structured events.
 
-Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` and `@wsrt/runtime-rust` implement the same filesystem, environment, process, spawn, HTTP, networking, timers, and logging capabilities. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI and MCP depend only on core contracts. Optional plugins depend inward on those contracts; core packages never import concrete plugins.
+Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` implements filesystem, environment, process, spawn, HTTP, networking, timers, and logging capabilities. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI and MCP depend only on core contracts. Optional plugins depend inward on those contracts; core packages never import concrete plugins. The Rust provider remains source-only and is not part of the initial npm release.
 
 Vite is an explicit plugin contribution, not a runtime. It translates Vite options into command and readiness configuration. Composite applications expand into application and child process graph nodes; the control plane owns their execution.
 
@@ -58,7 +70,7 @@ Runtime providers implement focused capability contracts. Plugins declare determ
 
 ## Current limitations
 
-Node is the default runtime; Rust is an explicitly registered alternative with process-tree supervision and TCP support. State is in memory. Deployments, distributed operation, and durable state are deferred. See [`runtimes/rust/README.md`](./runtimes/rust/README.md) for Rust build, selection, platform, protocol, and parity details.
+Node is the only published runtime. Rust can be built from a source checkout and explicitly registered for experiments, but no npm binary is distributed. State is in memory. Deployments, distributed operation, and durable state are deferred. See [`runtimes/rust/README.md`](./runtimes/rust/README.md) for source-build details.
 
 ## Development
 

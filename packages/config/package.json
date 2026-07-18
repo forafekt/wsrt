@@ -1,6 +1,6 @@
 {
 	"name": "@wsrt/config",
-	"version": "0.1.0",
+	"version": "0.1.0-alpha.0",
 	"type": "module",
 	"private": false,
 	"main": "./dist/index.js",
@@ -14,10 +14,6 @@
 		".": {
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
-		},
-		"./*": {
-			"types": "./dist/*.d.ts",
-			"import": "./dist/*.js"
 		}
 	},
 	"scripts": {
@@ -28,5 +24,29 @@
 		"@wsrt/graph": "workspace:*",
 		"esbuild": "^0.28.1",
 		"yaml": "^2.9.0"
-	}
+	},
+	"description": "Configuration loading, normalization, and system definition helpers for WSRT.",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "packages/config"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
 }

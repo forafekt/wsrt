@@ -1,0 +1,50 @@
+# Publication strategy
+
+WSRT's first release is a fixed-version `0.1.0-alpha.0` prerelease. Every public `@wsrt/*` package moves together so consumers cannot accidentally combine incompatible control-plane, plugin, runtime, and telemetry contracts. SemVer applies to the package set; before 1.0, a minor release may contain breaking public API changes and a patch release must remain compatible. Deprecations should be documented for at least one minor release when practical. Plugin and telemetry protocol changes are versioned with the package set and must reject unsupported versions explicitly.
+
+## Publication matrix
+
+| Package | Publish? | Audience | Stability | Entry points | Dependencies | Notes |
+| --- | ---: | --- | --- | --- | --- | --- |
+| `@wsrt/cli` | Yes | User-facing | Alpha | `.`, `wsrt` bin | commandline, config, console, control-plane, plugins, workspace | Primary install |
+| `@wsrt/config` | Yes | User-facing | Alpha | `.` | graph, esbuild, yaml | Typed config and loader |
+| `@wsrt/control-plane` | Yes | Advanced | Alpha | `.` | capabilities, config, graph, lifecycle, plugins, runtime-node | Programmatic orchestration |
+| `@wsrt/capabilities` | Yes | Advanced | Provisional | `.` | none | Provider contracts |
+| `@wsrt/workspace` | Yes | User-facing | Alpha | `.` | yaml | Workspace inspection and projections |
+| `@wsrt/plugins` | Yes | Plugin authors | Alpha | `.` | capabilities | Plugin contracts and consumer-relative loading |
+| `@wsrt/runtime-node` | Yes | Runtime provider | Alpha | `.` | capabilities | Default runtime |
+| `@wsrt/plugin-vite` | Yes | Plugin users | Alpha | `.`, `./vite` | capabilities, plugins, runtime-node, workspace, Vite | Integration and native Vite entry |
+| `@wsrt/plugin-dashboard` | Yes | Plugin users | Alpha | `.` | control-plane, plugins | Binds to loopback by default |
+| `@wsrt/mcp` | Yes | Advanced | Alpha | `.` | MCP SDK, control-plane, zod | Transport supplied by consumer |
+| `@wsrt/graph` | Yes | Advanced/internal-facing | Provisional | `.` | none | Required public dependency of config/control-plane |
+| `@wsrt/lifecycle` | Yes | Advanced/internal-facing | Provisional | `.` | graph | Required public dependency of control-plane |
+| `@wsrt/commandline` | Yes | Advanced/internal-facing | Provisional | `.` | argparse, event-targets | CLI dependency closure |
+| `@wsrt/argparse` | Yes | Advanced/internal-facing | Provisional | `.` | none | CLI dependency closure |
+| `@wsrt/event-targets` | Yes | Advanced/internal-facing | Provisional | `.` | none | CLI dependency closure |
+| `@wsrt/console` | Yes | Advanced/internal-facing | Provisional | `.`, `./transporters` | ansi-tools | CLI dependency closure |
+| `@wsrt/ansi-tools` | Yes | Advanced/internal-facing | Provisional | `.` | none | CLI dependency closure |
+| `@wsrt/runtime-rust` | No | Runtime provider | Experimental source-only | none published | capabilities, native Rust host | No npm binary distribution yet; Rust is not a default dependency |
+| `@wsrt/artifacts` | No | Implementation | Experimental | none | none | Empty/early abstraction; avoid API commitment |
+| `@wsrt/diagnostics` | No | Implementation | Experimental | none | none | Not required by public dependency closure |
+| `@wsrt/environment` | No | Implementation | Experimental | none | none | Not required by public dependency closure |
+| `@wsrt/events` | No | Implementation | Experimental | none | none | Not required by public dependency closure |
+| `@wsrt/worker-pool` | No | Unrelated library | Independent | none | none | Not part of initial WSRT product |
+| decouple, DI, prompts | No package | Repository libraries | Independent | none | n/a | Development/source libraries, outside this release |
+| adapters/apps/testing helpers | No package | Development-only | n/a | none | n/a | No publishable implementation exists |
+
+There is no `@wsrt/runtime-rust` npm release until CI can build, sign, package, and test platform binaries without requiring consumers to install Rust. A platform-specific optional-package design is the likely future direction. There is currently no standalone workspace umbrella package, runtime-rust platform package, or testing helper package.
+
+## Compatibility
+
+| Area | First-release support |
+| --- | --- |
+| Node.js | 22 and 24; ESM only (22 is the declared minimum) |
+| Package managers | pnpm 11 tested; npm installation is intended but packed CI uses pnpm initially |
+| TypeScript | 5.9 used to build; consumers need TypeScript only for typed config authoring |
+| Linux | CI and packed-consumer target |
+| macOS / Windows | Provisional until the release matrix exercises packed installs |
+| Vite | 8.x direct dependency in the alpha |
+| Browser | Current evergreen browsers for dashboard assets; no library browser entry points |
+| Rust runtime | Deferred; source checkout experimentation only |
+
+The package quality script is the executable source of truth for the public/private sets and rejects wildcard exports, missing build targets, inconsistent versions, unresolved public dependencies, development-path leaks, and a missing root license.

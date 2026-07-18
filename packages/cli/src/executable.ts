@@ -105,10 +105,7 @@ export function parseForwardedOptions(
 	const result: Record<string, unknown> = {};
 	for (let index = 0; index < args.length; index++) {
 		const argument = args[index];
-		if (!argument.startsWith("--"))
-			throw new Error(
-				`WSRT_EXECUTABLE_INVALID_OPTIONS: Unexpected argument ${argument}`,
-			);
+		if (!argument.startsWith("--")) continue;
 		const negative = argument.startsWith("--no-");
 		const raw = argument.slice(negative ? 5 : 2);
 		const key = raw.replace(/-([a-z])/g, (_, letter: string) =>

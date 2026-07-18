@@ -148,9 +148,6 @@ importers:
       '@wsrt/runtime-node':
         specifier: workspace:*
         version: link:../../runtimes/node
-      '@wsrt/runtime-rust':
-        specifier: workspace:*
-        version: link:../../runtimes/rust
 
   packages/diagnostics: {}
 

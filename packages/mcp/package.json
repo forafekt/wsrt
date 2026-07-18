@@ -1,6 +1,6 @@
 {
 	"name": "@wsrt/mcp",
-	"version": "0.1.0",
+	"version": "0.1.0-alpha.0",
 	"type": "module",
 	"private": false,
 	"main": "./dist/index.js",
@@ -14,10 +14,6 @@
 		".": {
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
-		},
-		"./*": {
-			"types": "./dist/*.d.ts",
-			"import": "./dist/*.js"
 		}
 	},
 	"scripts": {
@@ -28,5 +24,29 @@
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@wsrt/control-plane": "workspace:*",
 		"zod": "^3.25.76"
-	}
+	},
+	"description": "An MCP server exposing a WSRT control plane.",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "packages/mcp"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
 }

@@ -34,7 +34,6 @@ import {
 	resolveWorkspacePluginsReport,
 } from "@wsrt/plugins";
 import { NodeRuntimeProvider } from "@wsrt/runtime-node";
-import { RustRuntimeProvider } from "@wsrt/runtime-rust";
 
 export type WorkspaceEvent =
 	| LifecycleEvent
@@ -262,7 +261,6 @@ export class WsrtControlPlane {
 			});
 		const providers = this.options.providers ?? [
 			new NodeRuntimeProvider(),
-			new RustRuntimeProvider(),
 			...this.#pluginSession.contributions("runtimes"),
 		];
 		this.#providerIds = providers.map((provider) => provider.id).sort();

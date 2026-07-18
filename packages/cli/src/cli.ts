@@ -15,7 +15,7 @@ import {
 } from "@wsrt/plugins";
 import { logger } from "./logger.js";
 
-export const version = "0.1.0";
+export const version = "0.1.0-alpha.0";
 
 interface GlobalOptions {
 	root?: string;
@@ -232,7 +232,7 @@ export function createWsrtCli(
 					}))(options),
 			},
 			{
-				name: "exec [executable]",
+				name: "exec [executable] [...executableArguments]",
 				description: "Run an executable contributed by a configured plugin",
 				group: "Execution",
 				allowUnknownOptions: true,
@@ -248,6 +248,7 @@ export function createWsrtCli(
 				],
 				action: (
 					id: string | undefined,
+					_executableArguments: string[],
 					options: GlobalOptions & { list?: boolean },
 				) =>
 					execute(async (plane) => {

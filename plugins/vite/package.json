@@ -1,6 +1,6 @@
 {
 	"name": "@wsrt/plugin-vite",
-	"version": "0.1.0",
+	"version": "0.1.0-alpha.0",
 	"type": "module",
 	"private": false,
 	"main": "./dist/index.js",
@@ -18,30 +18,6 @@
 		"./vite": {
 			"types": "./dist/vite.d.ts",
 			"import": "./dist/vite.js"
-		},
-		"./adapter": {
-			"types": "./dist/adapter.d.ts",
-			"import": "./dist/adapter.js"
-		},
-		"./aliases": {
-			"types": "./dist/aliases.d.ts",
-			"import": "./dist/aliases.js"
-		},
-		"./bridge": {
-			"types": "./dist/bridge.d.ts",
-			"import": "./dist/bridge.js"
-		},
-		"./config": {
-			"types": "./dist/config.d.ts",
-			"import": "./dist/config.js"
-		},
-		"./plugin": {
-			"types": "./dist/plugin.d.ts",
-			"import": "./dist/plugin.js"
-		},
-		"./types": {
-			"types": "./dist/types.d.ts",
-			"import": "./dist/types.js"
 		}
 	},
 	"scripts": {
@@ -58,5 +34,29 @@
 	"devDependencies": {
 		"@types/node": "^24.12.2",
 		"typescript": "^5.9.3"
-	}
+	},
+	"description": "Vite execution, workspace aliases, and telemetry integration for WSRT.",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "plugins/vite"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
 }

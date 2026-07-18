@@ -6,7 +6,6 @@ export default defineSystem({
 	workspace: { packageManager: "pnpm" },
 	runtimes: {
 		node: { provider: "node", version: "latest" },
-		rust: { provider: "rust", version: "latest" },
 	},
 	plugins: [
 		{
@@ -52,10 +51,6 @@ export default defineSystem({
 			},
 		},
 		demo: {
-			command: { command: "echo", args: ["Hello World"] },
-		},
-		rustDemo: {
-			runtime: "rust",
 			command: { command: "echo", args: ["Hello World"] },
 		},
 	},

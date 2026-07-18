@@ -1,6 +1,6 @@
 {
 	"name": "@wsrt/runtime-node",
-	"version": "0.1.0",
+	"version": "0.1.0-alpha.0",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -11,7 +11,8 @@
 		}
 	},
 	"files": [
-		"dist"
+		"dist",
+		"README.md"
 	],
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
@@ -19,5 +20,30 @@
 	},
 	"dependencies": {
 		"@wsrt/capabilities": "workspace:*"
-	}
+	},
+	"description": "The default Node.js runtime provider for WSRT.",
+	"private": false,
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "runtimes/node"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
 }

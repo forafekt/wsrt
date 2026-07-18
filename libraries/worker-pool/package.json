@@ -1,7 +1,7 @@
 {
 	"name": "@wsrt/worker-pool",
-	"private": false,
-	"version": "0.1.0",
+	"private": true,
+	"version": "0.1.0-alpha.0",
 	"type": "module",
 	"description": "Typed Node.js worker_threads pool with dynamic scaling, retries, cancellation, events, and metrics.",
 	"main": "./dist/index.js",
