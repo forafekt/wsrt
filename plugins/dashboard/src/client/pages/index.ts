@@ -86,6 +86,41 @@ export function renderPage(
 			"Activity appears here as the system changes.",
 		)}</div>`;
 	}
+	if (route === "workspace") {
+		const graph = data.graph as Graph;
+		const kinds = [...new Set((graph.nodes ?? []).map((node) => node.kind))];
+		return `${heading("Workspace explorer", "Packages, runnable nodes, relationships, imports, and outputs in one searchable model.", `<label class="search"><span class="sr-only">Filter workspace</span><input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Filter workspace…"></label>`)}<div class="explorer-layout"><section class="explorer-tree"><div class="section-heading"><h2>${escapeHtml(snapshot.workspace.name)}</h2><span class="count">${graph.nodes?.length ?? 0}</span></div>${kinds
+			.map(
+				(kind) =>
+					`<details open><summary>${escapeHtml(kind)}</summary>${(
+						graph.nodes ?? []
+					)
+						.filter(
+							(node) =>
+								node.kind === kind &&
+								(!state.search ||
+									node.id.toLowerCase().includes(state.search.toLowerCase())),
+						)
+						.map(
+							(node) =>
+								`<button class="tree-item" data-node="${escapeHtml(node.id)}"><span>◇</span>${escapeHtml(node.id)}</button>`,
+						)
+						.join("")}</details>`,
+			)
+			.join(
+				"",
+			)}</section><section class="relation-panel"><span class="eyebrow">Workspace model</span><h2>${graph.edges?.length ?? 0} relationships</h2><p>Select a package or node to inspect it across the graph and node explorer.</p>${table(
+			"Relationships",
+			["From", "Relation", "To"],
+			(graph.edges ?? [])
+				.slice(0, 100)
+				.map((edge) => [
+					escapeHtml(edge.from),
+					badge(edge.kind),
+					escapeHtml(edge.to),
+				]),
+		)}</section></div>`;
+	}
 	if (route === "graph")
 		return renderGraph(data.graph as Graph, snapshot.nodes, state.selectedNode);
 	if (route === "nodes")
@@ -208,6 +243,17 @@ export function renderPage(
 				: "Events appear as the workspace changes.",
 		)}`;
 	}
+	if (route === "logs") {
+		const filter = state.eventFilter.toLowerCase();
+		const logs = data.events
+			.filter(
+				(event) =>
+					!filter || JSON.stringify(event).toLowerCase().includes(filter),
+			)
+			.slice(-500)
+			.reverse();
+		return `${heading("Logs", "Unified structured output from nodes, plugins, providers, and operations.", `<button data-action="toggle-events">${state.eventsPaused ? "Resume" : "Pause"}</button>`)}<div class="toolbar"><label class="search"><span class="sr-only">Search logs</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Search logs or /regex/…"></label>${badge(state.eventsPaused ? "Paused" : "Following")}</div><section class="log-viewer" aria-label="Log stream">${logs.length ? logs.map((event) => `<article><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><b>${escapeHtml(event.source)}</b><code>${escapeHtml(event.type)}</code><span>${escapeHtml(event.correlationId)}</span></article>`).join("") : `<p>No log-compatible events match this filter.</p>`}</section>`;
+	}
 	if (route === "diagnostics")
 		return `${heading("Diagnostics", "Actionable configuration and runtime findings.")}${table(
 			"Findings",
@@ -274,7 +320,80 @@ export function renderPage(
 			]),
 			"No providers are reported by this workspace.",
 		)}`;
-	return `${heading("Configuration", "Normalized, redacted configuration from the public dashboard API.")}<div class="toolbar"><button data-copy="${escapeHtml(JSON.stringify(data.configuration, null, 2))}">Copy configuration</button></div><details class="config-tree" open><summary>Normalized configuration</summary><pre>${escapeHtml(JSON.stringify(data.configuration, null, 2))}</pre></details>`;
+	if (route === "metrics") {
+		const running = snapshot.nodes.filter(
+			(node) => node.state === "running",
+		).length;
+		const restarts = snapshot.nodes.reduce(
+			(sum, node) => sum + node.restartCount,
+			0,
+		);
+		const failures = snapshot.diagnostics.filter(
+			(item) => item.severity === "error",
+		).length;
+		return `${heading("Metrics", "Lightweight realtime indicators derived from the current public snapshot.")}<div class="summary-grid"><article class="metric"><span>Node availability</span><strong>${snapshot.nodes.length ? Math.round((running / snapshot.nodes.length) * 100) : 100}%</strong><small>${running} currently running</small></article><article class="metric"><span>Restarts</span><strong>${restarts}</strong><small>Across all nodes</small></article><article class="metric"><span>Event throughput</span><strong>${data.events.length}</strong><small>Retained structured events</small></article><article class="metric"><span>Errors</span><strong>${failures}</strong><small>${snapshot.diagnostics.length} total diagnostics</small></article></div>${table(
+			"Operation duration",
+			["Operation", "Type", "Status", "Duration"],
+			snapshot.operations
+				.slice(-30)
+				.reverse()
+				.map((operation) => [
+					`<code>${escapeHtml(operation.id)}</code>`,
+					escapeHtml(operation.type),
+					badge(operation.status),
+					duration(operation.startedAt, operation.completedAt),
+				]),
+		)}`;
+	}
+	if (route === "timeline") {
+		const entries = data.events.slice(-150).reverse();
+		return `${heading("Execution timeline", "Correlated workspace activity across lifecycle, health, artifacts, and plugins.")}<div class="timeline" role="list">${entries.map((event) => `<article role="listitem"><div class="timeline-dot ${tone(event.type)}"></div><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><div><b>${escapeHtml(event.type)}</b><p>${escapeHtml(event.source)} · ${escapeHtml(event.correlationId)}</p></div></article>`).join("") || `<p>No timeline events have been recorded.</p>`}</div>`;
+	}
+	if (route === "settings")
+		return `${heading("Settings", "Dashboard preferences stay local to this browser.")}<div class="settings-list"><section><h2>Appearance</h2><p>Cycle system, light, and dark themes from the top bar. Reduced motion and high-contrast system preferences are respected.</p></section><section><h2>Navigation</h2><p>Collapse the desktop sidebar, use the responsive drawer, or press <kbd>Ctrl K</kbd> / <kbd>⌘ K</kbd> anywhere.</p></section><section><h2>Data & privacy</h2><p>The UI consumes immutable snapshots over SSE. Configuration is redacted by the dashboard server and no workspace data is persisted by the dashboard.</p></section></div>`;
+	if (route.startsWith("ext:")) {
+		const id = route.slice(4),
+			contribution = state.contributions.find(
+				(item) => item.id === id && item.kind === "page",
+			);
+		if (!contribution)
+			return empty(
+				"Plugin page unavailable",
+				"The contribution is not registered in the current workspace.",
+			);
+		return `${heading(contribution.title ?? contribution.id, "Plugin-contributed page rendered from a serializable view model.")}${contribution.error ? `<div class="alert danger" role="alert">${escapeHtml(contribution.error)}</div>` : renderViewModel(contribution.data)}`;
+	}
+	return `${heading("Configuration", "Effective, normalized, and redacted workspace configuration.")}<div class="toolbar"><button data-copy="${escapeHtml(JSON.stringify(data.configuration, null, 2))}">Copy configuration</button></div><div class="config-explorer">${renderConfig(data.configuration)}</div>`;
+}
+
+function renderViewModel(value: unknown): string {
+	if (value == null)
+		return empty(
+			"No contribution data",
+			"This plugin page returned an empty view model.",
+		);
+	if (Array.isArray(value))
+		return `<div class="view-grid">${value.map((item) => `<article>${renderViewModel(item)}</article>`).join("")}</div>`;
+	if (typeof value === "object")
+		return `<dl class="view-model">${Object.entries(
+			value as Record<string, unknown>,
+		)
+			.map(
+				([key, item]) =>
+					`<div><dt>${escapeHtml(key)}</dt><dd>${typeof item === "object" ? renderViewModel(item) : escapeHtml(item)}</dd></div>`,
+			)
+			.join("")}</dl>`;
+	return `<p>${escapeHtml(value)}</p>`;
+}
+function renderConfig(value: unknown, path = "workspace"): string {
+	if (!value || typeof value !== "object")
+		return `<span class="config-value">${escapeHtml(value)}</span>`;
+	return Object.entries(value as Record<string, unknown>)
+		.map(
+			([key, item]) =>
+				`<details open><summary><b>${escapeHtml(key)}</b><span class="config-origin">effective · ${escapeHtml(path)}</span></summary><div>${renderConfig(item, `${path}.${key}`)}</div></details>`,
+		)
+		.join("");
 }
 
 type Graph = {

@@ -206,9 +206,7 @@ async function api(
 		else if (resource === "configuration")
 			value = safeConfiguration(plane.definition());
 		else if (resource === "contributions") {
-			const contributions = plane
-				.pluginContributions("dashboard")
-				.filter((item) => item.kind !== "action");
+			const contributions = plane.pluginContributions("dashboard");
 			value = await Promise.all(
 				contributions.map(async (contribution) => {
 					try {

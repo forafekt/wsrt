@@ -1,4 +1,7 @@
-import type { DashboardSnapshot } from "../../shared/contracts.js";
+import type {
+	DashboardContributionView,
+	DashboardSnapshot,
+} from "../../shared/contracts.js";
 
 export type DashboardState = Readonly<{
 	snapshot?: DashboardSnapshot;
@@ -8,6 +11,7 @@ export type DashboardState = Readonly<{
 	eventsPaused: boolean;
 	error?: string;
 	connected: boolean;
+	contributions: readonly DashboardContributionView[];
 }>;
 export type DashboardAction =
 	| { type: "snapshot"; snapshot: DashboardSnapshot }
@@ -16,7 +20,8 @@ export type DashboardAction =
 	| { type: "search"; value: string }
 	| { type: "pause-events"; value: boolean }
 	| { type: "error"; value?: string }
-	| { type: "connected"; value: boolean };
+	| { type: "connected"; value: boolean }
+	| { type: "contributions"; value: readonly DashboardContributionView[] };
 export function reduceDashboardState(
 	state: DashboardState,
 	action: DashboardAction,
@@ -35,6 +40,11 @@ export function reduceDashboardState(
 		return Object.freeze({ ...state, eventsPaused: action.value });
 	if (action.type === "error")
 		return Object.freeze({ ...state, error: action.value });
+	if (action.type === "contributions")
+		return Object.freeze({
+			...state,
+			contributions: Object.freeze([...action.value]),
+		});
 	return Object.freeze({ ...state, connected: action.value });
 }
 export class DashboardStore {
@@ -43,6 +53,7 @@ export class DashboardStore {
 		search: "",
 		eventsPaused: false,
 		connected: false,
+		contributions: Object.freeze([]),
 	});
 	readonly #listeners = new Set<(state: DashboardState) => void>();
 	get state() {

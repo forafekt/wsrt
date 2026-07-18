@@ -11,7 +11,30 @@ test("dashboard routes unknown paths to overview", () => {
 	assert.equal(matchDashboardRoute("/tasks"), "tasks");
 	assert.equal(matchDashboardRoute("/health"), "health");
 	assert.equal(matchDashboardRoute("/providers"), "providers");
+	assert.equal(matchDashboardRoute("/workspace"), "workspace");
+	assert.equal(matchDashboardRoute("/logs"), "logs");
+	assert.equal(matchDashboardRoute("/metrics"), "metrics");
+	assert.equal(matchDashboardRoute("/timeline"), "timeline");
 	assert.equal(matchDashboardRoute("/not-a-page"), "overview");
+});
+
+test("dashboard stores plugin view models without mutating interaction state", () => {
+	const state = reduceDashboardState(
+		{
+			eventFilter: "api",
+			search: "worker",
+			eventsPaused: false,
+			connected: true,
+			contributions: [],
+		},
+		{
+			type: "contributions",
+			value: [{ id: "deployments", kind: "page", data: { ready: true } }],
+		},
+	);
+	assert.equal(state.contributions[0].id, "deployments");
+	assert.equal(state.search, "worker");
+	assert.equal(Object.isFrozen(state.contributions), true);
 });
 
 test("dashboard reducer preserves interaction state across snapshots", () => {
