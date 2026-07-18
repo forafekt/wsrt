@@ -186,7 +186,7 @@ export function createWsrtCli() {
 				name: "exec [executable]",
 				description: "Run an executable contributed by a configured plugin",
 				group: "Execution",
-				allowUnknownOptions: false,
+				allowUnknownOptions: true,
 				options: [
 					{
 						name: "-l, --list",
@@ -202,14 +202,17 @@ export function createWsrtCli() {
 					options: GlobalOptions & { list?: boolean },
 				) =>
 					execute(async (plane) => {
-						const { executeContribution, parseForwardedOptions } = await import(
-							"./executable.js"
-						);
+						const {
+							executeContribution,
+							forwardedArguments,
+							parseForwardedOptions,
+						} = await import("./executable.js");
 						const result = await executeContribution(
 							plane,
 							id,
 							parseForwardedOptions(options["--"] ?? []),
 							!!options.list,
+							forwardedArguments(process.argv, id),
 						);
 						if ((!id || options.list) && !options.json) {
 							printExecutableList(
@@ -223,6 +226,38 @@ export function createWsrtCli() {
 						}
 						return result;
 					})(options),
+			},
+			{
+				name: "workspace inspect",
+				description: "Inspect discovered packages, aliases, and relationships",
+				group: "Workspace",
+				action: execute(async (plane) =>
+					workspaceCommand(plane.definition().root, "inspect"),
+				),
+			},
+			{
+				name: "workspace resolve",
+				description: "Resolve the workspace model without writing files",
+				group: "Workspace",
+				action: execute(async (plane) =>
+					workspaceCommand(plane.definition().root, "resolve"),
+				),
+			},
+			{
+				name: "workspace sync",
+				description: "Synchronize TypeScript paths and manifest dependencies",
+				group: "Workspace",
+				action: execute(async (plane) =>
+					workspaceCommand(plane.definition().root, "sync"),
+				),
+			},
+			{
+				name: "workspace check",
+				description: "Fail when workspace projections are stale (CI safe)",
+				group: "Workspace",
+				action: execute(async (plane) =>
+					workspaceCommand(plane.definition().root, "check"),
+				),
 			},
 			{
 				name: "completion [shell]",
@@ -246,6 +281,34 @@ export function createWsrtCli() {
 	return cli;
 }
 
+async function workspaceCommand(
+	root: string,
+	command: "inspect" | "resolve" | "sync" | "check",
+) {
+	const { projectWorkspace, resolveWorkspace, syncWorkspace } = await import(
+		"@wsrt/workspace"
+	);
+	const workspace = await resolveWorkspace({ root });
+	if (command === "inspect" || command === "resolve") return workspace;
+	const projections = await projectWorkspace(workspace);
+	const result = await syncWorkspace(
+		projections,
+		command === "sync" ? "write" : "check",
+	);
+	if (!result.ok)
+		throw new Error(
+			`WSRT_WORKSPACE_DRIFT: ${result.changed.flatMap((item) => item.diagnostics.map((diagnostic) => diagnostic.message)).join("\n")}`,
+		);
+	return {
+		mode: command,
+		changed: result.changed.map((item) => ({
+			file: item.file,
+			kind: item.kind,
+		})),
+		diagnostics: result.changed.flatMap((item) => item.diagnostics),
+	};
+}
+
 export async function run(argv = process.argv): Promise<void> {
 	try {
 		await createWsrtCli().parseAsync(argv);
@@ -257,9 +320,14 @@ export async function run(argv = process.argv): Promise<void> {
 	}
 }
 
-function printResult(result: any, _pretty: boolean): void {
+function printResult(result: unknown, _pretty: boolean): void {
 	if (result !== undefined)
-		logger.log(`wsrt ${process.argv.slice(2).join(" ")}`, result);
+		logger.log(
+			`wsrt ${process.argv.slice(2).join(" ")}`,
+			result && typeof result === "object"
+				? (result as Record<string, unknown>)
+				: { result },
+		);
 }
 
 function printExecutableList(

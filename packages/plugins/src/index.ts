@@ -24,6 +24,8 @@ export interface ExecutableHandle<TResult = unknown> {
 export type ExecutableContext = {
 	readonly controlPlane: unknown;
 	readonly signal: AbortSignal;
+	/** Lossless arguments owned by the contributed tool, in original order. */
+	readonly arguments: readonly string[];
 	readonly logger: {
 		info(message: string): void;
 		warn(message: string): void;

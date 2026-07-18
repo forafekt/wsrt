@@ -22,6 +22,7 @@
 		"@wsrt/config": "workspace:*",
 		"@wsrt/graph": "workspace:*",
 		"@wsrt/lifecycle": "workspace:*",
+		"@wsrt/plugins": "workspace:*",
 		"@wsrt/runtime-node": "workspace:*",
 		"@wsrt/runtime-rust": "workspace:*"
 	}

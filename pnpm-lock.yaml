@@ -109,6 +109,9 @@ importers:
       '@wsrt/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@wsrt/workspace':
+        specifier: workspace:*
+        version: link:../workspace
 
   packages/config:
     dependencies:
@@ -136,6 +139,9 @@ importers:
       '@wsrt/lifecycle':
         specifier: workspace:*
         version: link:../lifecycle
+      '@wsrt/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@wsrt/runtime-node':
         specifier: workspace:*
         version: link:../../runtimes/node
@@ -169,6 +175,19 @@ importers:
         specifier: workspace:*
         version: link:../capabilities
 
+  packages/workspace:
+    dependencies:
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.12.2
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   plugins/dashboard:
     dependencies:
       '@wsrt/control-plane':
@@ -180,9 +199,28 @@ importers:
 
   plugins/vite:
     dependencies:
+      '@wsrt/capabilities':
+        specifier: workspace:*
+        version: link:../../packages/capabilities
+      '@wsrt/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@wsrt/runtime-node':
+        specifier: workspace:*
+        version: link:../../runtimes/node
+      '@wsrt/workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace
       vite:
         specifier: ^8.0.8
         version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.12.2
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   runtimes/node:
     dependencies:

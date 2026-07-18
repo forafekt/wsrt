@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { forwardedArguments } from "../packages/cli/dist/executable.js";
+import { mergeAliases } from "../plugins/vite/dist/aliases.js";
+import vitePlugin, { viteAdapter } from "../plugins/vite/dist/index.js";
+import { wsrt } from "../plugins/vite/dist/vite.js";
+
+test("Vite CLI arguments are forwarded losslessly with or without separator", () => {
+	assert.deepEqual(
+		forwardedArguments(
+			["node", "wsrt", "exec", "vite", "dev", "--host", "0.0.0.0"],
+			"vite",
+		),
+		["dev", "--host", "0.0.0.0"],
+	);
+	assert.deepEqual(
+		forwardedArguments(
+			["node", "wsrt", "exec", "vite", "--", "build", "--mode", "production"],
+			"vite",
+		),
+		["build", "--mode", "production"],
+	);
+});
+test("alias merging preserves user precedence by default", () => {
+	const aliases = mergeAliases(
+		{ "@fixture/ui": "/user", "user/*": "/owned" },
+		{ "@fixture/ui": "/wsrt", "@fixture/core": "/core" },
+	);
+	assert.equal(aliases[0].replacement, "/user");
+	assert.ok(aliases.some((item) => item.replacement === "/core"));
+});
+test("published entry points expose WSRT plugin, adapter, and native Vite plugin", () => {
+	const plugin = vitePlugin();
+	assert.equal(plugin.id, "@wsrt/plugin-vite");
+	assert.equal(plugin.contributions.adapters[0], viteAdapter);
+	assert.equal(wsrt().name, "wsrt:workspace");
+});

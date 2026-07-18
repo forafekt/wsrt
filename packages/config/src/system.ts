@@ -64,6 +64,8 @@ export type ExecutableInput = {
 	critical?: boolean;
 	environment?: Record<string, string>;
 	provider?: { provider: string; options?: unknown };
+	/** Execution adapter contribution id (for example `vite`). */
+	adapter?: string;
 };
 export type ApplicationInput = ExecutableInput & {
 	processes?: Record<string, ExecutableInput>;
@@ -110,6 +112,7 @@ export type NormalizedExecutable = {
 	root: string;
 	runtime: string;
 	command?: NormalizedCommand;
+	provider?: { provider: string; options?: unknown };
 	dependencies: readonly { id: string; condition: DependencyCondition }[];
 	healthcheck?: HealthcheckInput;
 	restart: RestartPolicyInput;
@@ -198,6 +201,9 @@ export function normalizeSystemDefinition(
 			root: path.resolve(root, value.root ?? "."),
 			runtime: value.runtime ?? "node",
 			command: command(value.command),
+			provider:
+				value.provider ??
+				(value.adapter ? { provider: value.adapter } : undefined),
 			dependencies: dependencies(value.dependsOn),
 			healthcheck: value.healthcheck,
 			restart: value.restart ?? { policy: "never" },
@@ -374,7 +380,11 @@ export function compileSystemGraph(
 			id: item.id,
 			name: item.name,
 			kind: item.kind,
-			metadata: { root: item.root, runtime: item.runtime },
+			metadata: {
+				root: item.root,
+				runtime: item.runtime,
+				provider: item.provider?.provider,
+			},
 		});
 		const owner = item.id.includes("/process:")
 			? item.id.slice(0, item.id.indexOf("/process:"))

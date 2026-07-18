@@ -30,6 +30,7 @@
 	"dependencies": {
 		"@wsrt/control-plane": "workspace:*",
 		"@wsrt/plugins": "workspace:*",
+		"@wsrt/workspace": "workspace:*",
 		"@wsrt/commandline": "workspace:*",
 		"@wsrt/console": "workspace:*"
 

@@ -13,6 +13,7 @@ export async function executeContribution(
 	id: string | undefined,
 	options: Record<string, unknown>,
 	listOnly: boolean,
+	args: readonly string[] = [],
 ): Promise<unknown> {
 	const plugins = await resolveWorkspacePlugins(
 		controlPlane.definition().plugins,
@@ -46,6 +47,7 @@ export async function executeContribution(
 				{
 					controlPlane,
 					signal: controller.signal,
+					arguments: Object.freeze([...args]),
 					logger: {
 						info: logger.info.bind(logger),
 						warn: logger.warn.bind(logger),
@@ -81,6 +83,19 @@ export async function executeContribution(
 	} finally {
 		await session.dispose();
 	}
+}
+
+/** Return all arguments after the tool id. A leading `--` is only a separator. */
+export function forwardedArguments(
+	argv: readonly string[],
+	id: string | undefined,
+): string[] {
+	if (!id) return [];
+	const exec = argv.indexOf("exec");
+	const tool = argv.indexOf(id, exec + 1);
+	if (tool < 0) return [];
+	const result = argv.slice(tool + 1);
+	return result[0] === "--" ? result.slice(1) : result;
 }
 
 function isHandle(value: unknown): value is ExecutableHandle {

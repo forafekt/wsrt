@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type {
+	ExecutionAdapter,
 	ProcessHandle,
 	RuntimeInstance,
 	RuntimeProvider,
@@ -19,6 +20,7 @@ import {
 	type LifecycleEvent,
 	type LifecycleState,
 } from "@wsrt/lifecycle";
+import { PluginSession, resolveWorkspacePlugins } from "@wsrt/plugins";
 import { NodeRuntimeProvider } from "@wsrt/runtime-node";
 import { RustRuntimeProvider } from "@wsrt/runtime-rust";
 
@@ -167,6 +169,8 @@ export class WsrtControlPlane {
 	#engine?: LifecycleEngine;
 	#diagnostics: SystemDiagnostic[] = [];
 	#providerIds: string[] = [];
+	#pluginSession?: PluginSession;
+	readonly #adapters = new Map<string, ExecutionAdapter>();
 	constructor(readonly options: ControlPlaneOptions = {}) {}
 	async load(): Promise<NormalizedSystemDefinition> {
 		const loaded = await loadSystemDefinition(
@@ -178,6 +182,15 @@ export class WsrtControlPlane {
 			throw new Error(this.#diagnostics.map((d) => d.message).join("\n"));
 		this.#definition = loaded.definition;
 		this.#graph = compileSystemGraph(loaded.definition);
+		this.#pluginSession = new PluginSession(
+			await resolveWorkspacePlugins(
+				loaded.definition.plugins,
+				loaded.definition.root,
+			),
+		);
+		for (const plugin of this.#pluginSession.list())
+			for (const adapter of plugin.contributions?.adapters ?? [])
+				this.#adapters.set(adapter.id, adapter);
 		for (const issue of this.#graph.validate())
 			this.#diagnostics.push({
 				code: `graph.${issue.code}`,
@@ -188,7 +201,10 @@ export class WsrtControlPlane {
 					path: issue.path.join("."),
 				},
 			});
-		const providers = this.options.providers ?? [new NodeRuntimeProvider(), new RustRuntimeProvider()];
+		const providers = this.options.providers ?? [
+			new NodeRuntimeProvider(),
+			new RustRuntimeProvider(),
+		];
 		this.#providerIds = providers.map((provider) => provider.id).sort();
 		for (const runtime of Object.values(loaded.definition.runtimes)) {
 			if (this.#runtimes.has(runtime.provider)) continue;
@@ -431,6 +447,7 @@ export class WsrtControlPlane {
 		);
 		this.#runtimes.clear();
 		this.#subscribers.clear();
+		await this.#pluginSession?.dispose();
 	}
 	#handler(item: NormalizedExecutable) {
 		const runtime = () =>
@@ -440,13 +457,33 @@ export class WsrtControlPlane {
 			);
 		return {
 			start: async ({ signal }: { signal: AbortSignal }) => {
-				if (!item.command) return;
+				let command = item.command;
+				if (item.provider) {
+					const adapter = this.#adapters.get(item.provider.provider);
+					if (!adapter)
+						throw new Error(
+							`Execution adapter not registered: ${item.provider.provider}`,
+						);
+					const validation = adapter.validate(item.provider.options ?? {});
+					if (!validation.options || validation.diagnostics.length)
+						throw new Error(
+							validation.diagnostics.join("\n") ||
+								`Invalid adapter options: ${item.provider.provider}`,
+						);
+					const prepared = adapter.prepare(validation.options);
+					command = {
+						command: prepared.command,
+						args: prepared.args,
+						shell: prepared.shell ?? false,
+					};
+				}
+				if (!command) return;
 				const handle = runtime().capabilities.require("spawn").spawn({
-					command: item.command.command,
-					args: item.command.args,
+					command: command.command,
+					args: command.args,
 					cwd: item.root,
 					environment: item.environment,
-					shell: item.command.shell,
+					shell: command.shell,
 					signal,
 				});
 				this.#handles.set(item.id, handle);
