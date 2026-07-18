@@ -17,10 +17,11 @@ tokio = { version = "1", features = [
   "io-std",
   "io-util",
   "macros",
+  "net",
   "process",
   "rt-multi-thread",
   "signal",
   "sync",
   "time",
 ] }
-uuid = { version = "1", features = ["v4"] }
+libc = "0.2"

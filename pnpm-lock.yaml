@@ -139,6 +139,9 @@ importers:
       '@wsrt/runtime-node':
         specifier: workspace:*
         version: link:../../runtimes/node
+      '@wsrt/runtime-rust':
+        specifier: workspace:*
+        version: link:../../runtimes/rust
 
   packages/diagnostics: {}
 
@@ -182,6 +185,12 @@ importers:
         version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(yaml@2.9.0)
 
   runtimes/node:
+    dependencies:
+      '@wsrt/capabilities':
+        specifier: workspace:*
+        version: link:../../packages/capabilities
+
+  runtimes/rust:
     dependencies:
       '@wsrt/capabilities':
         specifier: workspace:*

@@ -32,7 +32,7 @@ Unknown core properties and missing runtime, dependency, producer, or consumer r
 
 `@wsrt/config` normalizes definitions and compiles `@wsrt/graph`. The graph owns stable nodes, containment, dependencies, traversal, cycle detection, and deterministic startup/shutdown plans. `@wsrt/lifecycle` executes those plans with explicit transitions, parallel safe stages, retries, cancellation, readiness, and structured events.
 
-Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` implements filesystem, environment, process, spawn, HTTP, timers, and logging. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI and MCP depend only on core contracts. Optional plugins depend inward on those contracts; core packages never import concrete plugins.
+Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` and `@wsrt/runtime-rust` implement the same filesystem, environment, process, spawn, HTTP, networking, timers, and logging capabilities. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI and MCP depend only on core contracts. Optional plugins depend inward on those contracts; core packages never import concrete plugins.
 
 Vite is an explicit plugin contribution, not a runtime. It translates Vite options into command and readiness configuration. Composite applications expand into application and child process graph nodes; the control plane owns their execution.
 
@@ -58,7 +58,7 @@ Runtime providers implement focused capability contracts. Plugins declare determ
 
 ## Current limitations
 
-The implemented runtime is Node. Readiness supports processes and HTTP; TCP is modeled but awaits a networking capability. State is in memory. Continuous post-readiness health monitoring, deployments, non-Node runtimes, distributed operation, and durable state are deferred.
+Node is the default runtime; Rust is an explicitly registered alternative with process-tree supervision and TCP support. State is in memory. Deployments, distributed operation, and durable state are deferred. See [`runtimes/rust/README.md`](./runtimes/rust/README.md) for Rust build, selection, platform, protocol, and parity details.
 
 ## Development
 

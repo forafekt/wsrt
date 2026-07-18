@@ -20,6 +20,8 @@ import {
 	type LifecycleState,
 } from "@wsrt/lifecycle";
 import { NodeRuntimeProvider } from "@wsrt/runtime-node";
+import { RustRuntimeProvider } from "@wsrt/runtime-rust";
+
 export type WorkspaceEvent =
 	| LifecycleEvent
 	| {
@@ -186,9 +188,10 @@ export class WsrtControlPlane {
 					path: issue.path.join("."),
 				},
 			});
-		const providers = this.options.providers ?? [new NodeRuntimeProvider()];
+		const providers = this.options.providers ?? [new NodeRuntimeProvider(), new RustRuntimeProvider()];
 		this.#providerIds = providers.map((provider) => provider.id).sort();
 		for (const runtime of Object.values(loaded.definition.runtimes)) {
+			if (this.#runtimes.has(runtime.provider)) continue;
 			const provider = providers.find((item) => item.id === runtime.provider);
 			if (!provider)
 				throw new Error(`Runtime provider not registered: ${runtime.provider}`);

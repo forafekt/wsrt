@@ -68,22 +68,34 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 						shell: request.shell ?? false,
 						stdio: process.env.WSRT_JSON_OUTPUT === "1" ? "ignore" : "inherit",
 						signal: request.signal,
+						detached: process.platform !== "win32",
 					});
 					let running = true;
+					let settled = false;
 					const handle: ProcessHandle = {
 						pid: child.pid ?? -1,
 						get running() {
 							return running;
 						},
-						exit: new Promise((resolve) =>
-							child.once("exit", (code, signal) => {
+						exit: new Promise((resolve) => {
+							const finish = (code: number | null, signal: string | null) => {
+								if (settled) return;
+								settled = true;
 								running = false;
 								children.delete(handle);
 								resolve({ code, signal });
-							}),
-						),
-						terminate: (signal = "SIGTERM") =>
-							child.kill(signal as NodeJS.Signals),
+							};
+							child.once("exit", finish);
+							child.once("error", () => finish(null, "SPAWN_ERROR"));
+						}),
+						terminate: (signal = "SIGTERM") => {
+							if (!running || !child.pid) return;
+							if (process.platform !== "win32") {
+								try {
+									process.kill(-child.pid, signal as NodeJS.Signals);
+								} catch {}
+							} else child.kill(signal as NodeJS.Signals);
+						},
 					};
 					children.add(handle);
 					return handle;

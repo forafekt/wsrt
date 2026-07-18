@@ -1,32 +1,23 @@
-// crates/runtime_rust/src/protocol.rs
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub const PROTOCOL_VERSION: u32 = 1;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "method", rename_all = "camelCase")]
 pub enum RequestBody {
     Ping,
-
-    Spawn {
-        params: SpawnParams,
-    },
-
-    Terminate {
-        params: TerminateParams,
-    },
-
-    IsRunning {
-        params: ProcessReference,
-    },
-
+    Spawn { params: SpawnParams },
+    Terminate { params: TerminateParams },
+    Connect { params: ConnectParams },
     Shutdown,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Request {
+    pub protocol_version: u32,
     pub id: String,
-
     #[serde(flatten)]
     pub body: RequestBody,
 }
@@ -36,27 +27,27 @@ pub struct Request {
 pub struct SpawnParams {
     pub id: String,
     pub command: String,
-
     #[serde(default)]
     pub args: Vec<String>,
-
-    pub cwd: Option<String>,
-
+    pub cwd: String,
     #[serde(default)]
-    pub env: HashMap<String, String>,
+    pub environment: HashMap<String, String>,
+    #[serde(default)]
+    pub shell: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TerminateParams {
+    pub id: String,
+    pub signal: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TerminateParams {
-    pub id: String,
-    // pub signal: Option<String>,
-    // pub timeout_ms: Option<u64>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ProcessReference {
-    pub id: String,
+pub struct ConnectParams {
+    pub host: String,
+    pub port: u16,
+    pub timeout_ms: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,12 +57,10 @@ pub enum OutgoingMessage {
         id: String,
         result: serde_json::Value,
     },
-
     Error {
         id: String,
         error: ProtocolError,
     },
-
     Event {
         event: String,
         payload: serde_json::Value,
@@ -85,34 +74,22 @@ pub struct ProtocolError {
 }
 
 impl OutgoingMessage {
-    pub fn response<T>(id: impl Into<String>, result: T) -> anyhow::Result<Self>
-    where
-        T: Serialize,
-    {
+    pub fn response<T: Serialize>(id: String, result: T) -> anyhow::Result<Self> {
         Ok(Self::Response {
-            id: id.into(),
+            id,
             result: serde_json::to_value(result)?,
         })
     }
-
-    pub fn error(
-        id: impl Into<String>,
-        code: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn error(id: String, code: &str, message: impl ToString) -> Self {
         Self::Error {
-            id: id.into(),
+            id,
             error: ProtocolError {
                 code: code.into(),
-                message: message.into(),
+                message: message.to_string(),
             },
         }
     }
-
-    pub fn event<T>(event: impl Into<String>, payload: T) -> anyhow::Result<Self>
-    where
-        T: Serialize,
-    {
+    pub fn event<T: Serialize>(event: &str, payload: T) -> anyhow::Result<Self> {
         Ok(Self::Event {
             event: event.into(),
             payload: serde_json::to_value(payload)?,
@@ -121,38 +98,31 @@ impl OutgoingMessage {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PingResult {
-    pub version: String,
+    pub protocol_version: u32,
+    pub version: &'static str,
 }
-
 #[derive(Debug, Serialize)]
 pub struct SpawnResult {
-    pub id: String,
     pub pid: u32,
 }
-
 #[derive(Debug, Serialize)]
 pub struct TerminateResult {
-    pub terminated: bool,
+    pub accepted: bool,
 }
-
-#[derive(Debug, Serialize)]
-pub struct RunningResult {
-    pub running: bool,
-}
-
 #[derive(Debug, Serialize)]
 pub struct ShutdownResult {
     pub stopped: bool,
 }
-
 #[derive(Debug, Serialize)]
-pub struct LogEvent {
+pub struct EmptyResult {}
+#[derive(Debug, Serialize)]
+pub struct OutputEvent {
     pub id: String,
-    pub stream: String,
-    pub message: String,
+    pub stream: &'static str,
+    pub data: String,
 }
-
 #[derive(Debug, Serialize)]
 pub struct ExitEvent {
     pub id: String,

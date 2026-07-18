@@ -4,6 +4,10 @@ export default defineSystem({
 	schemaVersion: "1",
 	name: "wsrt",
 	workspace: { packageManager: "pnpm" },
+	runtimes: {
+		node: { provider: "node", version: "latest" },
+		rust: { provider: "rust", version: "latest" },
+	},
 	plugins: [
 		{
 			provider: "@wsrt/plugin-dashboard",
@@ -50,6 +54,10 @@ export default defineSystem({
 		demo: {
 			command: { command: "echo", args: ["Hello World"] },
 		},
+		rustDemo: {
+			runtime: "rust",
+			command: { command: "echo", args: ["Hello World"] },
+		}
 	},
 	artifacts: {
 		build: {
