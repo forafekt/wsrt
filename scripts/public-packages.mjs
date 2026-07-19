@@ -10,6 +10,7 @@ export const publicPackages = Object.freeze([
 	"@wsrt/config",
 	"@wsrt/console",
 	"@wsrt/control-plane",
+	"@wsrt/di",
 	"@wsrt/event-targets",
 	"@wsrt/graph",
 	"@wsrt/lifecycle",
