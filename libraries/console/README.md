@@ -1,6 +1,6 @@
 # @wsrt/decouple
 
-A lightweight and flexible configuration management library for Deno, inspired by layered environment systems. `@wsrt/decouple` allows you to define multiple configuration sources, access values in various types, and inspect how values are resolved across layers.  
+A lightweight and flexible configuration management library, inspired by layered environment systems. `@wsrt/decouple` allows you to define multiple configuration sources, access values in various types, and inspect how values are resolved across layers.  
 
 Think of it as a **layered config system**: values from higher-priority sources override lower-priority ones, and you can freeze configurations to prevent accidental modification.
 
@@ -19,14 +19,8 @@ Think of it as a **layered config system**: values from higher-priority sources 
 ## Installation
 
 ```bash
-deno add jsr:@wsrt/decouple
+pnpm add @wsrt/decouple
 ````
-
-Or import directly in your Deno project:
-
-```ts
-import { decouple } from "@wsrt/decouple/mod.ts";
-```
 
 ---
 

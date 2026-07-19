@@ -1,4 +1,5 @@
 import process from "node:process";
+import { createRequire } from "node:module";
 import {
 	CommandLineError,
 	type CompletionShell,
@@ -15,7 +16,11 @@ import {
 } from "@wsrt/plugins";
 import { logger } from "./logger.js";
 
-export const version = "0.1.0-alpha.0";
+const packageMetadata = createRequire(import.meta.url)("../package.json") as {
+	readonly name: string;
+	readonly version: string;
+};
+export const version = packageMetadata.version;
 
 interface GlobalOptions {
 	root?: string;
@@ -41,6 +46,7 @@ const workspaceOptions = [
 export function createWsrtCli(
 	pluginCommands: readonly CliContribution[] = [],
 	pluginSession?: PluginSession,
+	cliVersion = version,
 ) {
 	const execute =
 		(
@@ -73,7 +79,7 @@ export function createWsrtCli(
 
 	const cli = createCli({
 		name: "wsrt",
-		version,
+		version: cliVersion,
 		description: "Runtime-first workspace orchestration for local software systems.",
 		options: workspaceOptions,
 		examples: [
@@ -359,12 +365,12 @@ async function workspaceCommand(root: string, command: "inspect" | "resolve" | "
 	};
 }
 
-export async function run(argv = process.argv): Promise<void> {
+export async function run(argv = process.argv, cliVersion = version): Promise<void> {
 	let session: PluginSession | undefined;
 	try {
 		const resolved = await discoverPluginCommands(argv);
 		session = resolved.session;
-		await createWsrtCli(resolved.commands, session).parseAsync(argv);
+		await createWsrtCli(resolved.commands, session, cliVersion).parseAsync(argv);
 	} catch (cause) {
 		process.exitCode = 1;
 		const message = cause instanceof Error ? cause.message : String(cause);

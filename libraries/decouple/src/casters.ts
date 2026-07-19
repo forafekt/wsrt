@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any
+
 import { DecoupleError } from "./errors.ts";
 
 export interface CastFn<T> {

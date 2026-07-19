@@ -1,6 +1,6 @@
 # Publication strategy
 
-WSRT's first release is a fixed-version `0.1.0-alpha.0` prerelease. The public `wsrt` distribution and every public `@wsrt/*` package move together so consumers cannot accidentally combine incompatible control-plane, plugin, runtime, and telemetry contracts. SemVer applies to the package set; before 1.0, a minor release may contain breaking public API changes and a patch release must remain compatible. Deprecations should be documented for at least one minor release when practical. Plugin and telemetry protocol changes are versioned with the package set and must reject unsupported versions explicitly.
+WSRT's first release uses the prerelease version declared by the root `package.json`. The public `wsrt` distribution and every public `@wsrt/*` package move together so consumers cannot accidentally combine incompatible control-plane, plugin, runtime, and telemetry contracts. The build and pack workflows synchronize every WSRT package manifest from that root version. SemVer applies to the package set; before 1.0, a minor release may contain breaking public API changes and a patch release must remain compatible. Deprecations should be documented for at least one minor release when practical. Plugin and telemetry protocol changes are versioned with the package set and must reject unsupported versions explicitly.
 
 ## Publication matrix
 

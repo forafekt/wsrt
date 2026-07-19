@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any
+
 // commandline.ts
 import ap from "@wsrt/argparse";
 import { EventEmitter } from "@wsrt/event-targets";

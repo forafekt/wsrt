@@ -46,7 +46,7 @@ This container provides:
 
 ## 📦 Installation
 ```bash
-deno add jsr:@wsrt/di
+pnpm add @wsrt/di
 ```
 
 ### Deno

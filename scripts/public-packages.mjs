@@ -1,4 +1,4 @@
-export const releaseVersion = "0.1.0-alpha.0";
+export { releaseVersion } from "./package-metadata.mjs";
 
 export const publicPackages = Object.freeze([
 	"wsrt",

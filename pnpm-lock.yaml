@@ -83,6 +83,8 @@ importers:
         specifier: workspace:*
         version: link:../ansi-tools
 
+  libraries/di: {}
+
   libraries/event-targets: {}
 
   libraries/worker-pool:

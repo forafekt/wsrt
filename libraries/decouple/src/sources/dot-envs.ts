@@ -3,7 +3,7 @@ import { fromDotEnv } from "./dot-env.ts";
 export function unstable_fromDotEnvs(
 	mode: string,
 	envDir: string | false,
-	prefixes: string | string[] = "BOOTLANE_",
+	prefixes: string | string[] = "wsrt_",
 ) {
 	let cache: Record<string, string> | null = null;
 
@@ -43,7 +43,7 @@ function getEnvFilesForMode(mode: string, envDir: string | false): string[] {
 }
 
 function _resolveEnvPrefix({
-	envPrefix = "BOOTLANE_",
+	envPrefix = "wsrt_",
 }: {
 	envPrefix?: string | string[];
 }): string[] {
@@ -56,7 +56,7 @@ function _resolveEnvPrefix({
 	if (envPrefix.some((prefix) => /\s/.test(prefix))) {
 		// eslint-disable-next-line no-console
 		console.warn(
-			`[bootlane] Warning: envPrefix option contains values with whitespace, which does not work in practice.`,
+			`[wsrt] Warning: envPrefix option contains values with whitespace, which does not work in practice.`,
 		);
 	}
 	return envPrefix;

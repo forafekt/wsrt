@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any
+
 // utils.ts
 import type Option from "./option.js";
 

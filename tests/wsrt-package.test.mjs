@@ -3,8 +3,10 @@ import fs from "node:fs";
 import test from "node:test";
 
 import { NodeRuntimeProvider, WsrtControlPlane, createControlPlane, defineSystem } from "wsrt";
+import { version as cliVersion } from "../packages/cli/dist/cli.js";
 
 const manifest = JSON.parse(fs.readFileSync("packages/wsrt/package.json", "utf8"));
+const cliManifest = JSON.parse(fs.readFileSync("packages/cli/package.json", "utf8"));
 
 test("wsrt exposes the deliberate public distribution API", () => {
 	assert.equal(typeof defineSystem, "function");
@@ -13,6 +15,8 @@ test("wsrt exposes the deliberate public distribution API", () => {
 	assert.equal(new NodeRuntimeProvider().id, "node");
 	assert.equal(manifest.exports["."].import, "./dist/index.js");
 	assert.equal(manifest.exports["."].types, "./dist/index.d.ts");
+	assert.equal(cliVersion, cliManifest.version);
+	assert.equal(cliVersion, manifest.version);
 });
 
 test("wsrt binary delegates to the official CLI package", () => {

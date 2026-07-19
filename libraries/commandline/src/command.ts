@@ -1,4 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
 // command.ts
 import type CommandLine from "./commandline.js";
 import Option, { type OptionConfig } from "./option.js";

@@ -6,6 +6,10 @@ import { publicPackages } from "./public-packages.mjs";
 import { readTarball } from "./tarball.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+execFileSync(process.execPath, [path.join(root, "scripts", "sync-package-versions.mjs")], {
+	cwd: root,
+	stdio: "inherit",
+});
 const output = path.join(root, ".release", "tarballs");
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(output, { recursive: true });

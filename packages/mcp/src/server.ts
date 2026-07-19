@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { WsrtControlPlane } from "@wsrt/control-plane";
@@ -24,6 +25,10 @@ const builtInTools = [
 	"workspace.state",
 	"workspace.stop",
 ] as const;
+const packageMetadata = createRequire(import.meta.url)("../package.json") as {
+	readonly name: string;
+	readonly version: string;
+};
 
 export type WsrtMcpServerOptions = { readonly allowMutations?: boolean };
 
@@ -35,7 +40,10 @@ export class WsrtMcpServer {
 		readonly controlPlane: WsrtControlPlane,
 		readonly options: WsrtMcpServerOptions = {},
 	) {
-		this.server = new McpServer({ name: "wsrt", version: "0.1.0" });
+		this.server = new McpServer({
+			name: "wsrt",
+			version: packageMetadata.version,
+		});
 		this.#register();
 	}
 	async connect(transport: Transport): Promise<void> {

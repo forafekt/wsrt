@@ -38,7 +38,18 @@ const run = (...args) =>
 		env: { ...process.env, NO_COLOR: "1" },
 	});
 run("--help");
-run("--version");
+const installedWsrtManifest = JSON.parse(
+	fs.readFileSync(path.join(consumer, "node_modules", "wsrt", "package.json"), "utf8"),
+);
+const reportedVersion = execFileSync(wsrt, ["--version"], {
+	cwd: consumer,
+	encoding: "utf8",
+	env: { ...process.env, NO_COLOR: "1" },
+}).trim();
+if (reportedVersion !== installedWsrtManifest.version)
+	throw new Error(
+		`Packed CLI reported ${reportedVersion}, expected ${installedWsrtManifest.version}`,
+	);
 run("validate", "--json");
 run("inspect", "--json");
 run("workspace", "inspect", "--json");

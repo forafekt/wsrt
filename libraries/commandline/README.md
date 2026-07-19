@@ -25,14 +25,13 @@ A **runtime-portable, composable command-line framework** for building modern CL
 * 🧩 Extensible help sections
 * 📡 EventEmitter-based command hooks
 * 🚫 Unknown option detection (configurable)
-* 🦕 Pure Deno, no Node dependencies
 
 ---
 
 ## Installation
 
 ```bash
-deno add jsr:@wsrt/commandline
+pnpm add @wsrt/commandline
 ```
 
 ```ts
@@ -381,7 +380,7 @@ console.log(generateCompletions(cli, "zsh")); // bash, fish, or zsh
 * **Commands are data**
 * **Help output is first-class**
 * **No Node compatibility hacks**
-* **Composable with other bootlane packages**
+* **Composable with other wsrt packages**
 
 This package is intended to be a foundational building block for larger tooling ecosystems, not just one-off scripts.
 

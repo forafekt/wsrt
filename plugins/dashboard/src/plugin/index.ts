@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import type { WsrtControlPlane } from "@wsrt/control-plane";
 import { definePlugin, type ExecutableContribution, type WsrtPlugin } from "@wsrt/plugins";
 
@@ -44,7 +45,11 @@ export function normalizeDashboardOptions(
 
 export function dashboardPlugin(options: DashboardOptions = {}): WsrtPlugin {
 	const normalized = normalizeDashboardOptions(options);
-	const owner = { id: "@wsrt/plugin-dashboard", version: "0.1.0" } as const;
+	const packageMetadata = createRequire(import.meta.url)("../../package.json") as {
+		readonly name: string;
+		readonly version: string;
+	};
+	const owner = { id: packageMetadata.name, version: packageMetadata.version } as const;
 	const executable: ExecutableContribution<DashboardOptions> = {
 		id: "dashboard",
 		description: "Start the WSRT dashboard",

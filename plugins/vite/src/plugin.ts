@@ -13,7 +13,11 @@ import {
 } from "./telemetry.js";
 import type { ViteAdapterOptions, VitePluginOptions } from "./types.js";
 
-const owner = { id: "@wsrt/plugin-vite", version: "0.1.0-alpha.0" } as const;
+const packageMetadata = createRequire(import.meta.url)("../package.json") as {
+	readonly name: string;
+	readonly version: string;
+};
+const owner = { id: packageMetadata.name, version: packageMetadata.version } as const;
 export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 	const readiness: ReadinessProvider<ViteAdapterOptions> = {
 		id: "vite",

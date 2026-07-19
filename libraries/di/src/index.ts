@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-explicit-any
+
 
 /**
  * @wsrt/di
@@ -379,7 +379,7 @@ export default class DIContainer<Entries extends Record<string, unknown> = Recor
 		}
 	}
 
-	// TODO: Enhance this for a more readable output, potentially in a future BootLane DevTools tool
+	// TODO: Enhance this for a more readable output, potentially in a future WSRT DevTools tool
 	_visualizeContainers(): void {
 		console.log("Container:", this);
 		if (this.parent) {
