@@ -60,6 +60,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      wsrt:
+        specifier: workspace:*
+        version: link:packages/wsrt
 
   libraries/ansi-tools: {}
 
@@ -193,6 +196,21 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/wsrt:
+    dependencies:
+      '@wsrt/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@wsrt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@wsrt/runtime-node':
+        specifier: workspace:*
+        version: link:../../runtimes/node
 
   plugins/dashboard:
     dependencies:

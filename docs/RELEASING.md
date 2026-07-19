@@ -3,7 +3,7 @@
 ## Preconditions
 
 - Confirm the project license and add a root `LICENSE` matching every manifest. This is intentionally unresolved and blocks publication.
-- Confirm ownership of the `@wsrt` npm scope and configure npm trusted publishing for `.github/workflows/release.yml`.
+- Confirm ownership of both the unscoped `wsrt` npm name and the `@wsrt` npm scope, and configure npm trusted publishing for `.github/workflows/release.yml`.
 - Protect release tags and require review of the exact revision.
 - Ensure the version does not already exist on npm.
 
@@ -19,7 +19,7 @@ pnpm external-consumer:test
 git diff --check
 ```
 
-Tarballs are reproducibly staged under ignored `.release/tarballs`. Inspect them before publishing. The external fixture installs every WSRT package via those exact tarballs, with no workspace links.
+Tarballs are reproducibly staged under ignored `.release/tarballs`. Inspect them before publishing. The external fixture installs the `wsrt` distribution and every modular WSRT package via those exact tarballs, with no workspace links.
 
 ## First prerelease
 

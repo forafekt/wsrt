@@ -50,7 +50,7 @@ execFileSync(
 	[
 		"--input-type=module",
 		"-e",
-		"await import('@wsrt/plugin-vite'); await import('@wsrt/plugin-vite/vite'); await import('@wsrt/mcp'); await import('@wsrt/plugins');",
+		"const api = await import('wsrt'); if (typeof api.defineSystem !== 'function' || typeof api.createControlPlane !== 'function' || new api.NodeRuntimeProvider().id !== 'node') throw new Error('Invalid wsrt public API'); await import('@wsrt/plugin-vite'); await import('@wsrt/plugin-vite/vite'); await import('@wsrt/mcp'); await import('@wsrt/plugins');",
 	],
 	{ cwd: consumer, stdio: "inherit" },
 );

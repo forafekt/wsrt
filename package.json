@@ -44,6 +44,7 @@
 		"@wsrt/plugin-dashboard": "workspace:*",
 		"@wsrt/plugin-vite": "workspace:*",
 		"@wsrt/plugins": "workspace:*",
+		"wsrt": "workspace:*",
 		"rimraf": "^6.1.3",
 		"typescript": "^5.9.3"
 	},

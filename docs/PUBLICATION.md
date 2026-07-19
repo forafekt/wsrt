@@ -1,12 +1,13 @@
 # Publication strategy
 
-WSRT's first release is a fixed-version `0.1.0-alpha.0` prerelease. Every public `@wsrt/*` package moves together so consumers cannot accidentally combine incompatible control-plane, plugin, runtime, and telemetry contracts. SemVer applies to the package set; before 1.0, a minor release may contain breaking public API changes and a patch release must remain compatible. Deprecations should be documented for at least one minor release when practical. Plugin and telemetry protocol changes are versioned with the package set and must reject unsupported versions explicitly.
+WSRT's first release is a fixed-version `0.1.0-alpha.0` prerelease. The public `wsrt` distribution and every public `@wsrt/*` package move together so consumers cannot accidentally combine incompatible control-plane, plugin, runtime, and telemetry contracts. SemVer applies to the package set; before 1.0, a minor release may contain breaking public API changes and a patch release must remain compatible. Deprecations should be documented for at least one minor release when practical. Plugin and telemetry protocol changes are versioned with the package set and must reject unsupported versions explicitly.
 
 ## Publication matrix
 
 | Package | Publish? | Audience | Stability | Entry points | Dependencies | Notes |
 | --- | ---: | --- | --- | --- | --- | --- |
-| `@wsrt/cli` | Yes | User-facing | Alpha | `.`, `wsrt` bin | commandline, config, console, control-plane, plugins, workspace | Primary install |
+| `wsrt` | Yes | Most users | Alpha | `.`, `wsrt` bin | cli, config, control-plane, runtime-node | Batteries-included Node.js distribution; no optional plugins |
+| `@wsrt/cli` | Yes | Advanced/user-facing | Alpha | `.`, `wsrt` bin | commandline, config, console, control-plane, plugins, workspace | Official CLI implementation |
 | `@wsrt/config` | Yes | User-facing | Alpha | `.` | graph, esbuild, yaml | Typed config and loader |
 | `@wsrt/control-plane` | Yes | Advanced | Alpha | `.` | capabilities, config, graph, lifecycle, plugins, runtime-node | Programmatic orchestration |
 | `@wsrt/capabilities` | Yes | Advanced | Provisional | `.` | none | Provider contracts |
@@ -32,7 +33,7 @@ WSRT's first release is a fixed-version `0.1.0-alpha.0` prerelease. Every public
 | decouple, DI, prompts | No package | Repository libraries | Independent | none | n/a | Development/source libraries, outside this release |
 | adapters/apps/testing helpers | No package | Development-only | n/a | none | n/a | No publishable implementation exists |
 
-There is no `@wsrt/runtime-rust` npm release until CI can build, sign, package, and test platform binaries without requiring consumers to install Rust. A platform-specific optional-package design is the likely future direction. There is currently no standalone workspace umbrella package, runtime-rust platform package, or testing helper package.
+There is no `@wsrt/runtime-rust` npm release until CI can build, sign, package, and test platform binaries without requiring consumers to install Rust. A platform-specific optional-package design is the likely future direction. There is currently no runtime-rust platform package or testing helper package.
 
 ## Compatibility
 

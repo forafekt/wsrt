@@ -1,6 +1,7 @@
 export const releaseVersion = "0.1.0-alpha.0";
 
 export const publicPackages = Object.freeze([
+	"wsrt",
 	"@wsrt/ansi-tools",
 	"@wsrt/argparse",
 	"@wsrt/capabilities",

@@ -17,13 +17,28 @@ It differs from a task runner such as Turborepo or Nx by owning long-running pro
 
 ## Alpha quick start
 
-The initial npm release is being prepared and has not been published. After publication, install the `next` prerelease:
+The initial npm release is being prepared and has not been published. After publication, most users should install the batteries-included `next` prerelease:
 
 ```bash
-pnpm add -D @wsrt/cli@next @wsrt/config@next @wsrt/plugin-vite@next
+pnpm add -D wsrt@next
+pnpm exec wsrt --help
 ```
 
-Create a typed definition with `defineSystem`, then run `pnpm wsrt validate`, `pnpm wsrt workspace inspect`, and a finite task before adopting services. See [first use](./docs/FIRST_USE.md), the [package publication matrix](./docs/PUBLICATION.md). The CLI, Node runtime, config, workspace inspection, Vite integration, plugin contracts, dashboard, and MCP are alpha. Low-level graph/lifecycle/CLI dependencies are provisional. Rust npm distribution, durable state, deployment, and distributed operation are not supported.
+Create a typed definition with the distribution's existing configuration API:
+
+```ts
+import { defineSystem } from "wsrt";
+
+export default defineSystem({ schemaVersion: "1", name: "example", tasks: {} });
+```
+
+Then run `pnpm exec wsrt validate`, `pnpm exec wsrt workspace inspect`, and a finite task before adopting services. Advanced consumers and integration authors can instead install only the modular building blocks they need:
+
+```bash
+pnpm add @wsrt/control-plane @wsrt/capabilities
+```
+
+The `wsrt` package is a thin Node.js distribution over those independently publishable `@wsrt/*` packages. Optional plugins remain separate and must be installed and configured explicitly. See [first use](./docs/FIRST_USE.md) and the [package publication matrix](./docs/PUBLICATION.md). The CLI, Node runtime, config, workspace inspection, Vite integration, plugin contracts, dashboard, and MCP are alpha. Low-level graph/lifecycle/CLI dependencies are provisional. Rust npm distribution, durable state, deployment, and distributed operation are not supported.
 
 ## System definition
 
@@ -51,7 +66,7 @@ Unknown core properties and missing runtime, dependency, producer, or consumer r
 
 ## Architecture
 
-`@wsrt/config` normalizes definitions and compiles `@wsrt/graph`. The graph owns stable nodes, containment, dependencies, traversal, cycle detection, and deterministic startup/shutdown plans. `@wsrt/lifecycle` executes those plans with explicit transitions, parallel safe stages, retries, cancellation, readiness, and structured events.
+`wsrt` composes the standard Node.js experience without taking ownership away from the modular packages. `@wsrt/config` normalizes definitions and compiles `@wsrt/graph`. The graph owns stable nodes, containment, dependencies, traversal, cycle detection, and deterministic startup/shutdown plans. `@wsrt/lifecycle` executes those plans with explicit transitions, parallel safe stages, retries, cancellation, readiness, and structured events.
 
 Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` implements filesystem, environment, process, spawn, HTTP, networking, timers, and logging capabilities. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI and MCP depend only on core contracts. Optional plugins depend inward on those contracts; core packages never import concrete plugins. The Rust provider remains source-only and is not part of the initial npm release.
 

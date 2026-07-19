@@ -13,7 +13,7 @@ function visit(directory) {
 		if (entry.isDirectory()) visit(target);
 		else if (entry.name === "package.json") {
 			const value = JSON.parse(fs.readFileSync(target, "utf8"));
-			if (value.name?.startsWith("@wsrt/"))
+			if (value.name === "wsrt" || value.name?.startsWith("@wsrt/"))
 				manifests.push({
 					directory: path.dirname(target),
 					file: target,
