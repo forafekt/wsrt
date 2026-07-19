@@ -1,5 +1,8 @@
 # @wsrt/argparse
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 A tiny, dependency-free argument parser.
 
 `@wsrt/argparse` is a fast, minimal CLI argument parser inspired by the classic Unix style. It supports aliases, booleans, strings, defaults, strict/unknown handling, and `--no-*` flags — without pulling in half the ecosystem.

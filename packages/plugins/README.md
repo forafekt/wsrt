@@ -1,5 +1,8 @@
 # WSRT plugin platform
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 `@wsrt/plugins` is the runtime-independent extension platform for WSRT. Core
 loads only configured plugins and generic contribution contracts; integrations
 such as Vite and Dashboard remain independently installable packages.

@@ -1,5 +1,8 @@
 # @wsrt/mcp
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 `WsrtMcpServer` exposes the control-plane tools and configured plugin tools,
 resources, and prompts through the official MCP SDK transport interface.
 

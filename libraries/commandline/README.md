@@ -1,5 +1,8 @@
 # @wsrt/commandline
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 A **runtime-portable, composable command-line framework** for building modern CLIs with subcommands, typed options, nested flags, events, and rich help output.
 
 `@wsrt/commandline` is designed to feel familiar if you’ve used tools like `commander`, but with a few strong opinions:

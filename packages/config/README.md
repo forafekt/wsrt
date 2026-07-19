@@ -1,5 +1,8 @@
 # `@wsrt/config`
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 Loads and normalizes WSRT TypeScript, JavaScript, JSON, JSONC, and YAML system definitions. Install it when authoring a typed `wsrt.config.ts`.
 
 ```bash

@@ -1,4 +1,3 @@
-
 // utils.ts
 import type Option from "./option.js";
 

@@ -1,5 +1,8 @@
 # @wsrt/plugin-vite
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 This package provides four cooperating integrations. `@wsrt/workspace` owns
 Vite-independent discovery, package relationships, source aliases, TypeScript
 paths, and manifest projections. This plugin contributes a Vite execution

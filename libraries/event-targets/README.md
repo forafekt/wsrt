@@ -1,5 +1,8 @@
 # `@wsrt/event-targets`
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 Typed event-target primitives used internally by the WSRT command-line stack. It is published only because it is in the CLI runtime dependency closure; direct use is advanced and provisional.
 
 ```ts

@@ -1,5 +1,8 @@
 # @wsrt/cli
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 The official WSRT command line is the reference application for
 `@wsrt/commandline`. Its command tree is declarative, actions are awaited, and
 the control plane is created lazily only after parsing and validation.

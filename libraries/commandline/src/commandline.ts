@@ -1,4 +1,3 @@
-
 // commandline.ts
 import ap from "@wsrt/argparse";
 import { EventEmitter } from "@wsrt/event-targets";

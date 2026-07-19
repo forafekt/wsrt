@@ -42,11 +42,7 @@ function getEnvFilesForMode(mode: string, envDir: string | false): string[] {
 	return [];
 }
 
-function _resolveEnvPrefix({
-	envPrefix = "wsrt_",
-}: {
-	envPrefix?: string | string[];
-}): string[] {
+function _resolveEnvPrefix({ envPrefix = "wsrt_" }: { envPrefix?: string | string[] }): string[] {
 	envPrefix = typeof envPrefix === "string" ? envPrefix.split(",") : envPrefix;
 	if (envPrefix.includes("")) {
 		throw new Error(

@@ -1,17 +1,13 @@
-# @wsrt/decouple
+# @wsrt/console
 
-A lightweight and flexible configuration management library, inspired by layered environment systems. `@wsrt/decouple` allows you to define multiple configuration sources, access values in various types, and inspect how values are resolved across layers.  
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
 
-Think of it as a **layered config system**: values from higher-priority sources override lower-priority ones, and you can freeze configurations to prevent accidental modification.
+Structured console output and transport primitives used by the WSRT command-line stack.
 
 ---
 
-## Features
-
-- Layered configuration with priority ordering  
-- Supports multiple types: `string`, `number`, `boolean`, `json`, and `list`  
-- `require` to enforce mandatory configuration keys  
-- Extend and freeze configuration layers  
+Direct use is advanced and provisional. Node 22+ and ESM are required.
 - Introspection with `explain` and `explainAll` for debugging  
 
 ---

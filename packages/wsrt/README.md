@@ -1,6 +1,7 @@
 # wsrt
 
-> WSRT is experimental pre-alpha software. APIs and package boundaries may change without notice; do not use it in production.
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
 
 `wsrt` is the batteries-included distribution for most users. It supplies the official CLI, public configuration and control-plane APIs, and the default Node.js runtime through the existing modular `@wsrt/*` packages.
 

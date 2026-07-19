@@ -1,4 +1,3 @@
-
 // option.ts
 import { camelcaseOptionName, removeBrackets } from "./utils.js";
 

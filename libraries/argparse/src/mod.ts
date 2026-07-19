@@ -1,4 +1,3 @@
-
 export type Argv<T extends Record<string, any> = Record<string, any>> = {
 	_: unknown[];
 } & T;

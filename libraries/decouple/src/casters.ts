@@ -1,4 +1,3 @@
-
 import { DecoupleError } from "./errors.ts";
 
 export interface CastFn<T> {

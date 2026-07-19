@@ -1,5 +1,8 @@
 # `@wsrt/lifecycle`
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 Advanced lifecycle state and execution planning used by the WSRT control plane. Application users normally do not install this package directly.
 
 ```bash

@@ -1,5 +1,8 @@
 # `@wsrt/control-plane`
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 The advanced programmatic API that loads a WSRT definition and owns lifecycle, execution, diagnostics, events, and plugin sessions. CLI users do not need to install it directly.
 
 ```bash

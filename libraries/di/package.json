@@ -20,7 +20,7 @@
 		"build": "tsc -p tsconfig.json",
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
-	"description": "Internal-facing typed event target primitives used by the WSRT CLI.",
+	"description": "Internal-facing dependency injection primitives used by the WSRT CLI.",
 	"license": "ISC",
 	"repository": {
 		"type": "git",

@@ -11,7 +11,11 @@
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm validate
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm architecture:check
 pnpm build
 pnpm release:check
 pnpm release:pack
@@ -19,7 +23,9 @@ pnpm external-consumer:test
 git diff --check
 ```
 
-Tarballs are reproducibly staged under ignored `.release/tarballs`. Inspect them before publishing. The external fixture installs the `wsrt` distribution and every modular WSRT package via those exact tarballs, with no workspace links.
+Tarballs are reproducibly staged under ignored `.release/tarballs`. The packer generates each package's `LICENSE` from the canonical root file, validates README/license/entry-point contents, and restores the source tree. Inspect tarballs before publishing. The external fixture installs the `wsrt` distribution and every modular WSRT package via those exact tarballs, with no workspace links.
+
+`Repository validation` runs read-only checks for pushes and pull requests with no publication credentials. `Release npm packages` runs the same validation, package inspection, external consumer smoke tests, and Rust tests; only its protected tag publication job receives OIDC permission. Prerelease versions use `next`; stable versions use `latest` only from an explicitly reviewed stable version tag and protected `npm` environment.
 
 ## First prerelease
 
