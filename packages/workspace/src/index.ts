@@ -50,9 +50,7 @@ export type ResolvedWorkspace = {
 	diagnostics: readonly WorkspaceDiagnostic[];
 };
 export type ProjectionOptions = {
-	tsconfig?:
-		| { files?: WorkspaceFilter; dependencies?: WorkspaceFilter }
-		| false;
+	tsconfig?: { files?: WorkspaceFilter; dependencies?: WorkspaceFilter } | false;
 	manifests?:
 		| {
 				files?: WorkspaceFilter;
@@ -72,12 +70,7 @@ export type WorkspaceProjection = {
 	diagnostics: readonly WorkspaceDiagnostic[];
 };
 
-const defaultSources = [
-	"src/index.ts",
-	"src/index.tsx",
-	"src/index.js",
-	"src/index.jsx",
-];
+const defaultSources = ["src/index.ts", "src/index.tsx", "src/index.js", "src/index.jsx"];
 const dependencySections = [
 	"dependencies",
 	"devDependencies",
@@ -91,12 +84,7 @@ export async function resolveWorkspace(
 	const root = path.resolve(options.root);
 	const diagnostics: WorkspaceDiagnostic[] = [];
 	const patterns = await workspacePatterns(root, diagnostics);
-	const files = await packageFiles(
-		root,
-		patterns,
-		options.include,
-		options.exclude,
-	);
+	const files = await packageFiles(root, patterns, options.include, options.exclude);
 	const entries: WorkspacePackage[] = [];
 	const names = new Map<string, WorkspacePackage>();
 	for (const manifestFile of files) {
@@ -172,25 +160,17 @@ export async function resolveWorkspace(
 		const declared = Object.keys(item.declaredDependencies)
 			.filter((name) => names.has(name))
 			.sort();
-		const inferred =
-			options.dependencies === false
-				? []
-				: await inferDependencies(item, names);
+		const inferred = options.dependencies === false ? [] : await inferDependencies(item, names);
 		item.internalDependencies = Object.freeze(declared);
-		item.inferredDependencies = Object.freeze(
-			inferred.filter((name) => !declared.includes(name)),
-		);
-		for (const to of declared)
-			edges.push({ from: item.name, to, type: "declared" });
+		item.inferredDependencies = Object.freeze(inferred.filter((name) => !declared.includes(name)));
+		for (const to of declared) edges.push({ from: item.name, to, type: "declared" });
 		for (const to of item.inferredDependencies)
 			edges.push({ from: item.name, to, type: "inferred" });
 	}
 	return Object.freeze({
 		root,
 		patterns: Object.freeze(patterns),
-		packages: Object.freeze(
-			entries.sort((a, b) => a.name.localeCompare(b.name)),
-		),
+		packages: Object.freeze(entries.sort((a, b) => a.name.localeCompare(b.name))),
 		aliases: Object.freeze(Object.fromEntries(Object.entries(aliases).sort())),
 		edges: Object.freeze(edges.sort(edgeSort)),
 		diagnostics: Object.freeze(diagnostics),
@@ -246,24 +226,15 @@ export async function projectWorkspace(
 			const section = options.manifests?.section ?? "dependencies";
 			const existing = record(json[section]);
 			const generated: Record<string, string> = {};
-			for (const name of [
-				...target.internalDependencies,
-				...target.inferredDependencies,
-			].sort()) {
+			for (const name of [...target.internalDependencies, ...target.inferredDependencies].sort()) {
 				const dependency = model.packages.find((item) => item.name === name);
-				if (
-					dependency &&
-					matches(dependency, options.manifests?.dependencies, target)
-				)
+				if (dependency && matches(dependency, options.manifests?.dependencies, target))
 					generated[name] = options.manifests?.version ?? "workspace:*";
 			}
 			const merged = { ...existing, ...generated };
 			if (options.manifests?.removeStale)
 				for (const name of Object.keys(merged))
-					if (
-						model.packages.some((item) => item.name === name) &&
-						!generated[name]
-					)
+					if (model.packages.some((item) => item.name === name) && !generated[name])
 						delete merged[name];
 			const next = {
 				...json,
@@ -275,12 +246,7 @@ export async function projectWorkspace(
 					"manifest",
 					current,
 					stableJson(next),
-					generatedDiagnostics(
-						target.manifestFile,
-						existing,
-						generated,
-						"dependency",
-					),
+					generatedDiagnostics(target.manifestFile, existing, generated, "dependency"),
 				),
 			);
 		}
@@ -292,8 +258,7 @@ export async function syncWorkspace(
 	mode: "write" | "check" = "write",
 ): Promise<{ changed: readonly WorkspaceProjection[]; ok: boolean }> {
 	const changed = projections.filter((item) => item.changed);
-	if (mode === "write")
-		for (const item of changed) await fs.writeFile(item.file, item.next);
+	if (mode === "write") for (const item of changed) await fs.writeFile(item.file, item.next);
 	return {
 		changed: Object.freeze(changed),
 		ok: changed.length === 0 || mode === "write",
@@ -310,9 +275,7 @@ async function workspacePatterns(
 			packages?: unknown;
 		};
 		if (Array.isArray(value?.packages))
-			return value.packages.filter(
-				(item): item is string => typeof item === "string",
-			);
+			return value.packages.filter((item): item is string => typeof item === "string");
 	} catch (cause) {
 		if ((cause as NodeJS.ErrnoException).code !== "ENOENT")
 			diagnostics.push({
@@ -323,16 +286,12 @@ async function workspacePatterns(
 			});
 	}
 	try {
-		const manifest = JSON.parse(
-			await fs.readFile(path.join(root, "package.json"), "utf8"),
-		);
+		const manifest = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 		const workspaces = Array.isArray(manifest.workspaces)
 			? manifest.workspaces
 			: manifest.workspaces?.packages;
 		if (Array.isArray(workspaces))
-			return workspaces.filter(
-				(item: unknown): item is string => typeof item === "string",
-			);
+			return workspaces.filter((item: unknown): item is string => typeof item === "string");
 	} catch {}
 	return ["packages/*", "apps/*", "plugins/*", "libraries/*", "runtimes/*"];
 }
@@ -345,8 +304,7 @@ async function packageFiles(
 ): Promise<string[]> {
 	const all: string[] = [];
 	await walk(root, async (file) => {
-		if (path.basename(file) === "package.json" && path.dirname(file) !== root)
-			all.push(file);
+		if (path.basename(file) === "package.json" && path.dirname(file) !== root) all.push(file);
 	});
 	return all
 		.filter((file) => {
@@ -359,10 +317,7 @@ async function packageFiles(
 		})
 		.sort();
 }
-async function walk(
-	dir: string,
-	visit: (file: string) => Promise<void>,
-): Promise<void> {
+async function walk(dir: string, visit: (file: string) => Promise<void>): Promise<void> {
 	for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
 		if (["node_modules", ".git", "dist"].includes(entry.name)) continue;
 		const file = path.join(dir, entry.name);
@@ -390,32 +345,20 @@ async function sourceEntry(
 		} catch {}
 	}
 }
-function exportSource(
-	value: unknown,
-	development: boolean,
-): string | undefined {
+function exportSource(value: unknown, development: boolean): string | undefined {
 	const entry = record(value)["."];
 	if (typeof entry === "string") return development ? undefined : entry;
 	const map = record(entry);
-	const candidates = development
-		? [map.source, map.development]
-		: [map.import, map.default];
+	const candidates = development ? [map.source, map.development] : [map.import, map.default];
 	return candidates.find((item): item is string => typeof item === "string");
 }
-function packageAliases(
-	name: string,
-	manifest: Record<string, unknown>,
-): string[] {
+function packageAliases(name: string, manifest: Record<string, unknown>): string[] {
 	const aliases = Array.isArray(manifest.wsrtAliases)
-		? manifest.wsrtAliases.filter(
-				(item): item is string => typeof item === "string",
-			)
+		? manifest.wsrtAliases.filter((item): item is string => typeof item === "string")
 		: [];
 	return [...new Set([name, ...aliases])].sort();
 }
-function dependencies(
-	manifest: Record<string, unknown>,
-): Record<string, string> {
+function dependencies(manifest: Record<string, unknown>): Record<string, string> {
 	const result: Record<string, string> = {};
 	for (const section of dependencySections)
 		for (const [name, value] of Object.entries(record(manifest[section])))
@@ -450,12 +393,8 @@ function matches(
 	const relativeRoot = slash(value.root);
 	return (
 		(!filter.include?.length ||
-			filter.include.some(
-				(pattern) => glob(relativeRoot, pattern) || glob(value.name, pattern),
-			)) &&
-		!filter.exclude?.some(
-			(pattern) => glob(relativeRoot, pattern) || glob(value.name, pattern),
-		) &&
+			filter.include.some((pattern) => glob(relativeRoot, pattern) || glob(value.name, pattern))) &&
+		!filter.exclude?.some((pattern) => glob(relativeRoot, pattern) || glob(value.name, pattern)) &&
 		(filter.test?.(value, target) ?? true)
 	);
 }
@@ -491,9 +430,7 @@ function generatedDiagnostics(
 	label: string,
 ): WorkspaceDiagnostic[] {
 	return Object.entries(generated)
-		.filter(
-			([key, value]) => JSON.stringify(current[key]) !== JSON.stringify(value),
-		)
+		.filter(([key, value]) => JSON.stringify(current[key]) !== JSON.stringify(value))
 		.map(([key, value]) => ({
 			code: `workspace.${label}_missing`,
 			severity: "warning",
@@ -537,9 +474,7 @@ function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function edgeSort(a: WorkspaceEdge, b: WorkspaceEdge): number {
-	return `${a.from}:${a.to}:${a.type}`.localeCompare(
-		`${b.from}:${b.to}:${b.type}`,
-	);
+	return `${a.from}:${a.to}:${a.type}`.localeCompare(`${b.from}:${b.to}:${b.type}`);
 }
 async function readOptional(file: string): Promise<string | undefined> {
 	try {

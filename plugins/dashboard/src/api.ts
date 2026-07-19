@@ -17,13 +17,9 @@ export async function dashboardOperation(
 	if (operation === "start") return plane.start(ids);
 	if (operation === "stop") return plane.stop(ids);
 	if (operation === "restart") return plane.restart(ids);
-	if (ids.length !== 1)
-		throw new Error("Task operation requires exactly one task");
+	if (ids.length !== 1) throw new Error("Task operation requires exactly one task");
 	return plane.runTask(ids[0]);
 }
-export function dashboardCancelOperation(
-	plane: WsrtControlPlane,
-	operationId: string,
-) {
+export function dashboardCancelOperation(plane: WsrtControlPlane, operationId: string) {
 	return { operationId, cancelled: plane.cancelOperation(operationId) };
 }

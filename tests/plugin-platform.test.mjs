@@ -44,9 +44,7 @@ test("duplicates, missing dependencies, cycles, versions, and incompatibilities 
 				{ id: "a", version: "1.0.0" },
 				{ id: "a", version: "1.0.1" },
 			]),
-		(error) =>
-			error instanceof PluginResolutionError &&
-			error.code === "plugin.duplicate",
+		(error) => error instanceof PluginResolutionError && error.code === "plugin.duplicate",
 	);
 	assert.throws(
 		() => orderPlugins([{ id: "a", version: "1.0.0", requires: ["missing"] }]),
@@ -90,22 +88,13 @@ test("lifecycle follows dependency order and disposes in reverse order", async (
 			version: "1.0.0",
 			requires,
 			lifecycle: Object.fromEntries(
-				[
-					"discover",
-					"configure",
-					"workspace",
-					"graph",
-					"providers",
-					"runtime",
-					"shutdown",
-				].map((stage) => [stage, () => calls.push(`${stage}:${id}`)]),
+				["discover", "configure", "workspace", "graph", "providers", "runtime", "shutdown"].map(
+					(stage) => [stage, () => calls.push(`${stage}:${id}`)],
+				),
 			),
 			dispose: () => calls.push(`dispose:${id}`),
 		});
-	const session = new PluginSession([
-		plugin("feature", ["core"]),
-		plugin("core"),
-	]);
+	const session = new PluginSession([plugin("feature", ["core"]), plugin("core")]);
 	await session.initialize(context());
 	await session.dispose(context());
 	assert.deepEqual(calls.slice(0, 2), ["discover:core", "discover:feature"]);
@@ -137,10 +126,7 @@ test("lifecycle failures are attributed and reflected in snapshots", async () =>
 			error.stage === "configure",
 	);
 	assert.equal(session.snapshots()[0].state, "failed");
-	assert.equal(
-		session.snapshots()[0].diagnostics[0].code,
-		"plugin.lifecycle_failed",
-	);
+	assert.equal(session.snapshots()[0].diagnostics[0].code, "plugin.lifecycle_failed");
 });
 
 test("typed registries expose contributions and snapshots without implementations", () => {
@@ -166,11 +152,7 @@ test("typed registries expose contributions and snapshots without implementation
 		}),
 	]);
 	assert.equal(session.contributions("cli")[0].path, "hello");
-	assert.deepEqual(session.snapshots()[0].capabilities, [
-		"cli",
-		"configuration",
-		"dashboard",
-	]);
+	assert.deepEqual(session.snapshots()[0].capabilities, ["cli", "configuration", "dashboard"]);
 	assert.deepEqual(session.snapshots()[0].registrations.dashboard, ["home"]);
 });
 

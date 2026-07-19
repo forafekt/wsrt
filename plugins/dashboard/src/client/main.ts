@@ -66,31 +66,26 @@ export function mountDashboard(root: HTMLElement) {
 	let theme = setting("theme", "system") as Theme,
 		collapsed = setting("sidebar", "expanded") === "collapsed";
 	const base =
-		document.querySelector<HTMLMetaElement>('meta[name="wsrt-base-path"]')
-			?.content ?? "";
+		document.querySelector<HTMLMetaElement>('meta[name="wsrt-base-path"]')?.content ?? "";
 	const mutable =
-		document.querySelector<HTMLMetaElement>('meta[name="wsrt-mutations"]')
-			?.content === "true";
+		document.querySelector<HTMLMetaElement>('meta[name="wsrt-mutations"]')?.content === "true";
 	const applyTheme = () => {
 		document.documentElement.dataset.theme = theme;
 		document.documentElement.classList.toggle(
 			"dark",
 			theme === "dark" ||
-				(theme === "system" &&
-					matchMedia("(prefers-color-scheme: dark)").matches),
+				(theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches),
 		);
 	};
 	applyTheme();
 	const render = () => {
 		const snapshot = store.state.snapshot?.controlPlane;
 		const active =
-			snapshot?.operations.filter(
-				(o) => o.status === "running" || o.status === "pending",
-			).length ?? 0;
+			snapshot?.operations.filter((o) => o.status === "running" || o.status === "pending").length ??
+			0;
 		const unhealthy =
-			snapshot?.nodes.filter(
-				(n) => n.health === "unhealthy" || n.health === "degraded",
-			).length ?? 0;
+			snapshot?.nodes.filter((n) => n.health === "unhealthy" || n.health === "degraded").length ??
+			0;
 		const extensionLinks = store.state.contributions
 			.filter((item) => item.kind === "page")
 			.map(
@@ -99,14 +94,11 @@ export function mountDashboard(root: HTMLElement) {
 			)
 			.join("");
 		const pageTitle = route.startsWith("ext:")
-			? store.state.contributions.find((item) => item.id === route.slice(4))
-					?.title
+			? store.state.contributions.find((item) => item.id === route.slice(4))?.title
 			: groups.flatMap((g) => g[1]).find(([id]) => id === route)?.[1];
 		root.innerHTML = `<div class="app-shell ${collapsed ? "sidebar-collapsed" : ""} ${drawer ? "drawer-open" : ""}"><a class="skip-link" href="#main">Skip to content</a><div class="scrim" data-action="close-drawer"></div><aside class="sidebar" aria-label="Primary navigation"><div class="brand"><span class="brand-mark">W</span><span class="brand-copy"><b>WSRT</b><small>Control center</small></span><button class="icon-button collapse" data-action="collapse" aria-label="${collapsed ? "Expand" : "Collapse"} sidebar">‹</button></div><nav>${groups.map(([label, items]) => `<section><h2>${label}</h2>${items.map(([id, text, icon]) => `<a href="${base}/${id === "overview" ? "" : id}" data-route="${id}" ${route === id ? 'aria-current="page"' : ""} title="${text}"><span class="nav-icon">${icon}</span><span class="nav-label">${text}</span></a>`).join("")}</section>`).join("")}${extensionLinks ? `<section><h2>Extensions</h2>${extensionLinks}</section>` : ""}</nav><div class="sidebar-foot"><span class="connection ${store.state.connected ? "online" : "offline"}"><i></i><span>${store.state.connected ? `Live · revision ${snapshot?.revision ?? "—"}` : "Reconnecting…"}</span></span></div></aside><div class="workspace"><header class="topbar"><button class="icon-button menu" data-action="open-drawer" aria-label="Open navigation">☰</button><div class="title"><span class="breadcrumb">${escapeHtml(snapshot?.workspace.name ?? "Workspace")} /</span><b>${escapeHtml(pageTitle ?? "Overview")}</b></div><button class="command-trigger" data-action="palette"><span>Search workspace or run a command</span><kbd>⌘ K</kbd></button><div class="top-status"><span class="status-pill ${unhealthy ? "warning" : "success"}">${unhealthy ? `${unhealthy} attention` : "Healthy"}</span>${active ? `<span class="status-pill info">${active} active</span>` : ""}<button class="icon-button" data-action="theme" aria-label="Theme: ${theme}" title="Theme: ${theme}">${theme === "light" ? "☀" : theme === "dark" ? "☾" : "◐"}</button></div></header><main id="main" tabindex="-1">${!store.state.connected && snapshot ? `<div class="connection-banner" role="status">Connection lost. Showing snapshot revision ${snapshot.revision}; reconnecting automatically.</div>` : ""}${!mutable ? `<div class="readonly-note">Read-only mode — lifecycle controls are unavailable.</div>` : ""}${renderPage(route, store.state)}</main><footer class="statusbar"><span class="${store.state.connected ? "success" : "danger"}">● ${store.state.connected ? "Connected" : "Offline"}</span><span>${snapshot?.nodes.filter((node) => node.state === "running").length ?? 0}/${snapshot?.nodes.length ?? 0} running</span><span>${active} operations</span><span>${snapshot?.diagnostics.length ?? 0} diagnostics</span><span class="status-spacer"></span><span>${store.state.selectedNode ? `Node: ${escapeHtml(store.state.selectedNode)}` : escapeHtml(snapshot?.workspace.name ?? "No workspace")}</span></footer></div>${palette ? renderPalette(snapshot, store.state.contributions) : ""}<div class="toasts" aria-live="polite"></div><dialog id="confirm-dialog"><form method="dialog"><span class="eyebrow">Confirm operation</span><h2 id="confirm-title">Continue?</h2><p id="confirm-detail"></p><div class="dialog-actions"><button value="cancel">Cancel</button><button value="confirm" class="danger-button">Confirm</button></div></form></dialog></div>`;
 		if (!mutable)
-			for (const button of root.querySelectorAll<HTMLButtonElement>(
-				"[data-mutate]",
-			)) {
+			for (const button of root.querySelectorAll<HTMLButtonElement>("[data-mutate]")) {
 				button.disabled = true;
 				button.title = "Mutations are disabled for this dashboard";
 			}
@@ -143,9 +135,7 @@ export function mountDashboard(root: HTMLElement) {
 		if (action === "palette") {
 			palette = !palette;
 			render();
-			setTimeout(() =>
-				root.querySelector<HTMLInputElement>("#palette-search")?.focus(),
-			);
+			setTimeout(() => root.querySelector<HTMLInputElement>("#palette-search")?.focus());
 		}
 		if (action === "collapse") {
 			collapsed = !collapsed;
@@ -161,18 +151,14 @@ export function mountDashboard(root: HTMLElement) {
 			render();
 		}
 		if (action === "theme") {
-			theme =
-				theme === "system" ? "light" : theme === "light" ? "dark" : "system";
+			theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
 			save("theme", theme);
 			applyTheme();
 			render();
 		}
 		if (action === "refresh")
-			void transport
-				.refresh()
-				.catch((e) => store.dispatch({ type: "error", value: String(e) }));
-		if (action === "clear-selection")
-			store.dispatch({ type: "select-node", id: undefined });
+			void transport.refresh().catch((e) => store.dispatch({ type: "error", value: String(e) }));
+		if (action === "clear-selection") store.dispatch({ type: "select-node", id: undefined });
 		if (action === "toggle-events")
 			store.dispatch({
 				type: "pause-events",
@@ -185,28 +171,19 @@ export function mountDashboard(root: HTMLElement) {
 			scale =
 				graph === "fit" || graph === "reset"
 					? 1
-					: Math.min(
-							2.5,
-							Math.max(0.4, scale + (graph === "in" ? 0.15 : -0.15)),
-						);
+					: Math.min(2.5, Math.max(0.4, scale + (graph === "in" ? 0.15 : -0.15)));
 			const viewport = root.querySelector<SVGGElement>("#graph-viewport");
 			if (viewport) viewport.style.transform = `scale(${scale})`;
 		}
 		const copy = target.closest<HTMLElement>("[data-copy]")?.dataset.copy;
-		if (copy)
-			void navigator.clipboard
-				?.writeText(copy)
-				.then(() => toast("Copied to clipboard"));
+		if (copy) void navigator.clipboard?.writeText(copy).then(() => toast("Copied to clipboard"));
 		const mutation = target.closest<HTMLButtonElement>("[data-mutate]");
 		if (mutation) {
 			if (!mutable) return toast("Dashboard is read-only", "warning");
 			const operation = mutation.dataset.mutate,
 				id = mutation.dataset.id;
 			if (!operation || !id) return;
-			if (
-				["stop", "restart"].includes(operation) &&
-				!(await confirmOperation(root, operation, id))
-			)
+			if (["stop", "restart"].includes(operation) && !(await confirmOperation(root, operation, id)))
 				return;
 			mutation.disabled = true;
 			mutation.textContent = "Starting…";
@@ -217,8 +194,7 @@ export function mountDashboard(root: HTMLElement) {
 					{ method: "POST" },
 				);
 				const body = await response.json();
-				if (!response.ok)
-					throw new Error(body.error?.message ?? `HTTP ${response.status}`);
+				if (!response.ok) throw new Error(body.error?.message ?? `HTTP ${response.status}`);
 				toast(
 					`${operation === "run" ? "Task" : "Operation"} started${body.operationId ? ` · ${body.operationId}` : ""}`,
 				);
@@ -228,9 +204,7 @@ export function mountDashboard(root: HTMLElement) {
 				mutation.disabled = false;
 			}
 		}
-		const contributed = target.closest<HTMLButtonElement>(
-			"[data-contribution]",
-		);
+		const contributed = target.closest<HTMLButtonElement>("[data-contribution]");
 		if (contributed?.dataset.contribution) {
 			if (!mutable) return toast("Dashboard is read-only", "warning");
 			try {
@@ -239,8 +213,7 @@ export function mountDashboard(root: HTMLElement) {
 					{ method: "POST" },
 				);
 				const body = await response.json();
-				if (!response.ok)
-					throw new Error(body.error?.message ?? `HTTP ${response.status}`);
+				if (!response.ok) throw new Error(body.error?.message ?? `HTTP ${response.status}`);
 				palette = false;
 				toast("Plugin action completed");
 				render();
@@ -253,16 +226,12 @@ export function mountDashboard(root: HTMLElement) {
 		const target = event.target as HTMLInputElement;
 		if (target.id === "event-filter")
 			store.dispatch({ type: "filter-events", value: target.value });
-		if (target.dataset.filter === "global")
-			store.dispatch({ type: "search", value: target.value });
+		if (target.dataset.filter === "global") store.dispatch({ type: "search", value: target.value });
 		if (target.id === "palette-search") filterPalette(root, target.value);
 	});
 	root.addEventListener("keydown", (event) => {
 		const target = event.target as HTMLElement;
-		if (
-			(event.key === "Enter" || event.key === " ") &&
-			target.matches(".graph-node[data-node]")
-		) {
+		if ((event.key === "Enter" || event.key === " ") && target.matches(".graph-node[data-node]")) {
 			event.preventDefault();
 			store.dispatch({ type: "select-node", id: target.dataset.node });
 		}
@@ -272,9 +241,7 @@ export function mountDashboard(root: HTMLElement) {
 			event.preventDefault();
 			palette = true;
 			render();
-			setTimeout(() =>
-				root.querySelector<HTMLInputElement>("#palette-search")?.focus(),
-			);
+			setTimeout(() => root.querySelector<HTMLInputElement>("#palette-search")?.focus());
 		}
 		if (event.key === "Escape" && palette) {
 			palette = false;
@@ -338,11 +305,7 @@ function renderPalette(
 		...(snapshot?.operations ?? [])
 			.slice(-20)
 			.map((item) => [item.id, `Operation · ${item.type}`, "operations"]),
-		...(snapshot?.artifacts ?? []).map((item) => [
-			item.id,
-			"Artifact",
-			"artifacts",
-		]),
+		...(snapshot?.artifacts ?? []).map((item) => [item.id, "Artifact", "artifacts"]),
 		...(snapshot?.plugins ?? []).map((item) => [item.id, "Plugin", "plugins"]),
 		...contributions
 			.filter((item) => item.kind === "page")
@@ -366,11 +329,7 @@ function filterPalette(root: HTMLElement, value: string) {
 	for (const item of root.querySelectorAll<HTMLElement>("[data-search]"))
 		item.hidden = !item.dataset.search?.includes(value.toLowerCase());
 }
-async function confirmOperation(
-	root: HTMLElement,
-	operation: string,
-	id: string,
-) {
+async function confirmOperation(root: HTMLElement, operation: string, id: string) {
 	const dialog = root.querySelector<HTMLDialogElement>("#confirm-dialog"),
 		title = dialog?.querySelector("#confirm-title"),
 		detail = dialog?.querySelector("#confirm-detail");
@@ -382,11 +341,9 @@ async function confirmOperation(
 			: "The node will be stopped and started again.";
 	dialog.showModal();
 	return new Promise<boolean>((resolve) =>
-		dialog.addEventListener(
-			"close",
-			() => resolve(dialog.returnValue === "confirm"),
-			{ once: true },
-		),
+		dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), {
+			once: true,
+		}),
 	);
 }
 

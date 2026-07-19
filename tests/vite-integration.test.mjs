@@ -7,10 +7,7 @@ import { wsrt } from "../plugins/vite/dist/vite.js";
 
 test("Vite CLI arguments are forwarded losslessly with or without separator", () => {
 	assert.deepEqual(
-		forwardedArguments(
-			["node", "wsrt", "exec", "vite", "dev", "--host", "0.0.0.0"],
-			"vite",
-		),
+		forwardedArguments(["node", "wsrt", "exec", "vite", "dev", "--host", "0.0.0.0"], "vite"),
 		["dev", "--host", "0.0.0.0"],
 	);
 	assert.deepEqual(

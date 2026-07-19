@@ -1,9 +1,5 @@
 import type { WsrtControlPlane } from "@wsrt/control-plane";
-import {
-	definePlugin,
-	type ExecutableContribution,
-	type WsrtPlugin,
-} from "@wsrt/plugins";
+import { definePlugin, type ExecutableContribution, type WsrtPlugin } from "@wsrt/plugins";
 
 export type DashboardOptions = {
 	enabled?: boolean;
@@ -33,11 +29,7 @@ export function normalizeDashboardOptions(
 	const options = { ...DEFAULT_DASHBOARD_OPTIONS, ...input };
 	if (!options.host || /[\s/]/.test(options.host))
 		throw new Error(`Invalid dashboard host: ${options.host}`);
-	if (
-		!Number.isInteger(options.port) ||
-		options.port < 0 ||
-		options.port > 65535
-	)
+	if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)
 		throw new Error(`Invalid dashboard port: ${options.port}`);
 	if (
 		!options.basePath.startsWith("/") ||
@@ -46,8 +38,7 @@ export function normalizeDashboardOptions(
 		options.basePath.includes("..")
 	)
 		throw new Error(`Invalid dashboard base path: ${options.basePath}`);
-	options.basePath =
-		options.basePath === "/" ? "" : options.basePath.replace(/\/+$/, "");
+	options.basePath = options.basePath === "/" ? "" : options.basePath.replace(/\/+$/, "");
 	return options;
 }
 

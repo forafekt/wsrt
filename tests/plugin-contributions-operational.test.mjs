@@ -37,23 +37,12 @@ test("contribution invocations are attributed and reflected in snapshots", async
 		["alpha"],
 	);
 	const snapshot = session.snapshots()[0];
-	assert.equal(
-		snapshot.contributions.find((item) => item.id === "values").status,
-		"operational",
-	);
-	assert.ok(
-		snapshot.contributions.find((item) => item.id === "values").lastInvokedAt,
-	);
-	assert.equal(
-		snapshot.contributions.find((item) => item.id === "notice").status,
-		"declarative",
-	);
+	assert.equal(snapshot.contributions.find((item) => item.id === "values").status, "operational");
+	assert.ok(snapshot.contributions.find((item) => item.id === "values").lastInvokedAt);
+	assert.equal(snapshot.contributions.find((item) => item.id === "notice").status, "declarative");
 	await session.dispose();
 	await session.dispose();
-	await assert.rejects(
-		() => session.invoke("completion", "values", context, () => []),
-		/disposed/,
-	);
+	await assert.rejects(() => session.invoke("completion", "values", context, () => []), /disposed/);
 });
 
 test("plugin MCP tools, resources and prompts use namespaced scoped invocations", async () => {
@@ -77,17 +66,13 @@ test("plugin MCP tools, resources and prompts use namespaced scoped invocations"
 		}),
 		invokePluginContribution: async (_kind, _id, run) => run(context),
 	};
-	assert.deepEqual(
-		await runMcpTool(plane, { tool: "fixture/echo", input: { value: 1 } }),
-		{ value: 1 },
-	);
+	assert.deepEqual(await runMcpTool(plane, { tool: "fixture/echo", input: { value: 1 } }), {
+		value: 1,
+	});
 	assert.deepEqual(await readMcpResource(plane, "fixture/readme"), {
 		text: "hello",
 	});
-	assert.deepEqual(
-		await getMcpPrompt(plane, "fixture/review", { topic: "code" }),
-		{
-			messages: [{ topic: "code" }],
-		},
-	);
+	assert.deepEqual(await getMcpPrompt(plane, "fixture/review", { topic: "code" }), {
+		messages: [{ topic: "code" }],
+	});
 });

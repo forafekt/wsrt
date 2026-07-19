@@ -116,10 +116,7 @@ export type CapabilityMap = {
 };
 export class CapabilityRegistry {
 	readonly #values = new Map<keyof CapabilityMap, unknown>();
-	provide<K extends keyof CapabilityMap>(
-		key: K,
-		value: CapabilityMap[K],
-	): this {
+	provide<K extends keyof CapabilityMap>(key: K, value: CapabilityMap[K]): this {
 		this.#values.set(key, value);
 		return this;
 	}
@@ -183,17 +180,9 @@ export interface HealthProvider<Options = unknown> {
 }
 export interface ArtifactProvider<Input = unknown> {
 	readonly id: string;
-	collect(
-		input: Input,
-		context: ProviderInvocationContext,
-	): Promise<readonly ArtifactCandidate[]>;
+	collect(input: Input, context: ProviderInvocationContext): Promise<readonly ArtifactCandidate[]>;
 }
-export type ProviderKind =
-	| "runtime"
-	| "execution"
-	| "readiness"
-	| "health"
-	| "artifact";
+export type ProviderKind = "runtime" | "execution" | "readiness" | "health" | "artifact";
 export type ProviderRegistration = {
 	kind: ProviderKind;
 	id: string;
@@ -217,10 +206,7 @@ export class ProviderRegistry {
 		this.#providers.set(key, Object.freeze({ ...registration }));
 		return this;
 	}
-	get<Provider extends ProviderRegistration["provider"]>(
-		kind: ProviderKind,
-		id: string,
-	): Provider {
+	get<Provider extends ProviderRegistration["provider"]>(kind: ProviderKind, id: string): Provider {
 		const registration = this.#providers.get(`${kind}:${id}`);
 		if (!registration) throw new Error(`Provider not found: ${kind}:${id}`);
 		return registration.provider as Provider;

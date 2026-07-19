@@ -27,16 +27,14 @@ export class SnapshotTransport {
 	}
 	#url(path: string) {
 		const base =
-			document.querySelector<HTMLMetaElement>('meta[name="wsrt-base-path"]')
-				?.content ?? "";
+			document.querySelector<HTMLMetaElement>('meta[name="wsrt-base-path"]')?.content ?? "";
 		return `${base}${path}`;
 	}
 	async refresh() {
 		const response = await (this.options.fetcher ?? fetch)(
 			this.options.snapshotUrl ?? this.#url("/api/snapshot"),
 		);
-		if (!response.ok)
-			throw new Error(`Snapshot request failed: HTTP ${response.status}`);
+		if (!response.ok) throw new Error(`Snapshot request failed: HTTP ${response.status}`);
 		this.#apply((await response.json()) as DashboardSnapshot);
 	}
 	close() {
@@ -48,12 +46,9 @@ export class SnapshotTransport {
 	#connect() {
 		if (this.#closed) return;
 		const Source = this.options.eventSource ?? EventSource;
-		this.#source = new Source(
-			this.options.eventsUrl ?? this.#url("/api/stream"),
-		);
+		this.#source = new Source(this.options.eventsUrl ?? this.#url("/api/stream"));
 		this.#source.onopen = () => this.onConnection(true);
-		this.#source.onmessage = (event) =>
-			this.#apply(JSON.parse(event.data) as DashboardSnapshot);
+		this.#source.onmessage = (event) => this.#apply(JSON.parse(event.data) as DashboardSnapshot);
 		this.#source.onerror = () => {
 			this.onConnection(false);
 			this.#source?.close();

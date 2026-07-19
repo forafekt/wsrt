@@ -3,9 +3,7 @@ import type { ExecutionAdapter, ExecutionTelemetryEvent } from "./index.js";
 export type ExecutionAdapterContractOptions<Options> = {
 	readonly validOptions: Options;
 	readonly invalidOptions?: unknown;
-	executionId?(
-		metadata: Readonly<Record<string, unknown>> | undefined,
-	): string | undefined;
+	executionId?(metadata: Readonly<Record<string, unknown>> | undefined): string | undefined;
 };
 
 export type ExecutionAdapterContractResult = {
@@ -31,24 +29,18 @@ export async function exerciseExecutionAdapterContract<Options>(
 	if (options.invalidOptions !== undefined) {
 		const invalid = adapter.validate(options.invalidOptions);
 		if (invalid.options && !invalid.diagnostics.length)
-			throw contractFailure(
-				"invalid options were accepted without diagnostics",
-			);
+			throw contractFailure("invalid options were accepted without diagnostics");
 	}
 	const first = adapter.prepare(validated.options);
 	const second = adapter.prepare(validated.options);
 	try {
 		if (!first.command || !Array.isArray(first.args))
-			throw contractFailure(
-				"prepare did not return a command and argument list",
-			);
+			throw contractFailure("prepare did not return a command and argument list");
 		if (
 			first.command !== second.command ||
 			JSON.stringify(first.args) !== JSON.stringify(second.args)
 		)
-			throw contractFailure(
-				"normalized command or arguments are nondeterministic",
-			);
+			throw contractFailure("normalized command or arguments are nondeterministic");
 		const left = options.executionId?.(first.metadata);
 		const right = options.executionId?.(second.metadata);
 		if (left !== undefined && (!right || left === right))
@@ -59,10 +51,7 @@ export async function exerciseExecutionAdapterContract<Options>(
 			arguments: Object.freeze([...first.args]),
 			...(left && right
 				? {
-						concurrentExecutionIds: Object.freeze([left, right]) as readonly [
-							string,
-							string,
-						],
+						concurrentExecutionIds: Object.freeze([left, right]) as readonly [string, string],
 					}
 				: {}),
 		});
@@ -82,9 +71,7 @@ export type ExecutionProviderProbe = {
 };
 
 export async function exerciseExecutionProviderLifecycle(
-	start: (
-		signal: AbortSignal,
-	) => ExecutionProviderProbe | Promise<ExecutionProviderProbe>,
+	start: (signal: AbortSignal) => ExecutionProviderProbe | Promise<ExecutionProviderProbe>,
 ): Promise<void> {
 	const controller = new AbortController();
 	const probe = await start(controller.signal);
@@ -93,8 +80,7 @@ export async function exerciseExecutionProviderLifecycle(
 	probe.cancel();
 	await probe.close();
 	await probe.close();
-	if (!probe.closed)
-		throw contractFailure("cleanup is not idempotently closed");
+	if (!probe.closed) throw contractFailure("cleanup is not idempotently closed");
 }
 
 function contractFailure(message: string): Error {

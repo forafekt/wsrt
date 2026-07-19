@@ -10,9 +10,7 @@ import {
 } from "@wsrt/capabilities";
 import { RustRuntimeClient, type RustRuntimeClientOptions } from "./client.js";
 
-export type RustRuntimeProviderOptions = Partial<
-	Pick<RustRuntimeClientOptions, "binary">
-> &
+export type RustRuntimeProviderOptions = Partial<Pick<RustRuntimeClientOptions, "binary">> &
 	Omit<RustRuntimeClientOptions, "binary">;
 
 export class RustRuntimeProvider implements RuntimeProvider {
@@ -48,12 +46,8 @@ export class RustRuntimeProvider implements RuntimeProvider {
 		>();
 		client.addEventListener("output", (event) => {
 			if (process.env.WSRT_JSON_OUTPUT === "1") return;
-			const output = (
-				event as CustomEvent<{ stream: "stdout" | "stderr"; data: string }>
-			).detail;
-			(output.stream === "stdout" ? process.stdout : process.stderr).write(
-				output.data,
-			);
+			const output = (event as CustomEvent<{ stream: "stdout" | "stderr"; data: string }>).detail;
+			(output.stream === "stdout" ? process.stdout : process.stderr).write(output.data);
 		});
 		client.addEventListener("exit", (event) => {
 			const value = (
@@ -108,19 +102,13 @@ export class RustRuntimeProvider implements RuntimeProvider {
 			.provide("timers", { delay: (ms, signal) => delay(ms, signal) })
 			.provide("logger", {
 				log: (level, message, attributes) =>
-					console[level === "warning" ? "warn" : level](
-						message,
-						attributes ?? "",
-					),
+					console[level === "warning" ? "warn" : level](message, attributes ?? ""),
 			})
 			.provide("spawn", {
 				spawn: (request) => {
 					const id = randomUUID();
 					let running = true;
-					let resolve!: (value: {
-						code: number | null;
-						signal: string | null;
-					}) => void;
+					let resolve!: (value: { code: number | null; signal: string | null }) => void;
 					const exit = new Promise<{
 						code: number | null;
 						signal: string | null;
@@ -167,8 +155,7 @@ export class RustRuntimeProvider implements RuntimeProvider {
 					if (request.signal) {
 						const cancel = () => handle.terminate("SIGTERM");
 						if (request.signal.aborted) cancel();
-						else
-							request.signal.addEventListener("abort", cancel, { once: true });
+						else request.signal.addEventListener("abort", cancel, { once: true });
 					}
 					return handle;
 				},
@@ -184,10 +171,8 @@ export class RustRuntimeProvider implements RuntimeProvider {
 }
 
 export function resolveRustRuntimeBinary(root = process.cwd()): string {
-	if (process.env.WSRT_RUST_RUNTIME_BINARY)
-		return process.env.WSRT_RUST_RUNTIME_BINARY;
-	const name =
-		process.platform === "win32" ? "wsrt-runtime.exe" : "wsrt-runtime";
+	if (process.env.WSRT_RUST_RUNTIME_BINARY) return process.env.WSRT_RUST_RUNTIME_BINARY;
+	const name = process.platform === "win32" ? "wsrt-runtime.exe" : "wsrt-runtime";
 	return path.resolve(
 		root,
 		"target",
@@ -217,8 +202,6 @@ function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 	return new Promise((resolve, reject) => {
 		const abort = () => reject(signal.reason);
 		signal.addEventListener("abort", abort, { once: true });
-		promise
-			.then(resolve, reject)
-			.finally(() => signal.removeEventListener("abort", abort));
+		promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
 	});
 }

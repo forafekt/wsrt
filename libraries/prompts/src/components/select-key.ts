@@ -1,82 +1,82 @@
-import { colors, wrapTextWithPrefix } from '@wsrt/ansi-tools'
-import { SelectKeyController } from '../core/mod.ts'
-import { type CommonOptions, S_BAR, S_BAR_END, symbol } from './common.ts'
-import type { Option } from './select.ts'
+import { colors, wrapTextWithPrefix } from "@wsrt/ansi-tools";
+import { SelectKeyController } from "../core/mod.ts";
+import { type CommonOptions, S_BAR, S_BAR_END, symbol } from "./common.ts";
+import type { Option } from "./select.ts";
 
 export interface SelectKeyOptions<Value extends string> extends CommonOptions {
-  message: string
-  options: Option<Value>[]
-  initialValue?: Value
-  caseSensitive?: boolean
+	message: string;
+	options: Option<Value>[];
+	initialValue?: Value;
+	caseSensitive?: boolean;
 }
 
 export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) => {
-  const opt = (
-    option: Option<Value>,
-    state: 'inactive' | 'active' | 'selected' | 'cancelled' = 'inactive',
-  ) => {
-    const label = option.label ?? String(option.value)
-    if (state === 'selected') {
-      return `${colors.dim(label)}`
-    }
-    if (state === 'cancelled') {
-      return `${colors.strikethrough(colors.dim(label))}`
-    }
-    if (state === 'active') {
-      return `${colors.bgCyan(colors.gray(` ${option.value} `))} ${label}${
-        option.hint ? ` ${colors.dim(`(${option.hint})`)}` : ''
-      }`
-    }
-    return `${colors.gray(
-      colors.bgWhite(colors.inverse(` ${option.value} `)),
-    )} ${label}${option.hint ? ` ${colors.dim(`(${option.hint})`)}` : ''}`
-  }
+	const opt = (
+		option: Option<Value>,
+		state: "inactive" | "active" | "selected" | "cancelled" = "inactive",
+	) => {
+		const label = option.label ?? String(option.value);
+		if (state === "selected") {
+			return `${colors.dim(label)}`;
+		}
+		if (state === "cancelled") {
+			return `${colors.strikethrough(colors.dim(label))}`;
+		}
+		if (state === "active") {
+			return `${colors.bgCyan(colors.gray(` ${option.value} `))} ${label}${
+				option.hint ? ` ${colors.dim(`(${option.hint})`)}` : ""
+			}`;
+		}
+		return `${colors.gray(
+			colors.bgWhite(colors.inverse(` ${option.value} `)),
+		)} ${label}${option.hint ? ` ${colors.dim(`(${option.hint})`)}` : ""}`;
+	};
 
-  return new SelectKeyController({
-    options: opts.options,
-    signal: opts.signal,
-    input: opts.input,
-    output: opts.output,
-    initialValue: opts.initialValue,
-    caseSensitive: opts.caseSensitive,
-    render() {
-      const title = `${colors.gray(S_BAR)}\n${symbol(this.state)}  ${opts.message}\n`
+	return new SelectKeyController({
+		options: opts.options,
+		signal: opts.signal,
+		input: opts.input,
+		output: opts.output,
+		initialValue: opts.initialValue,
+		caseSensitive: opts.caseSensitive,
+		render() {
+			const title = `${colors.gray(S_BAR)}\n${symbol(this.state)}  ${opts.message}\n`;
 
-      switch (this.state) {
-        case 'submit': {
-          const submitPrefix = `${colors.gray(S_BAR)}  `
-          const selectedOption =
-            this.options.find((opt) => opt.value === this.value) ?? opts.options[0]
-          const wrapped = wrapTextWithPrefix(
-            opts.output,
-            opt(selectedOption, 'selected'),
-            submitPrefix,
-          )
-          return `${title}${wrapped}`
-        }
-        case 'cancel': {
-          const cancelPrefix = `${colors.gray(S_BAR)}  `
-          const wrapped = wrapTextWithPrefix(
-            opts.output,
-            opt(this.options[0], 'cancelled'),
-            cancelPrefix,
-          )
-          return `${title}${wrapped}\n${colors.gray(S_BAR)}`
-        }
-        default: {
-          const defaultPrefix = `${colors.cyan(S_BAR)}  `
-          const wrapped = this.options
-            .map((option, i) =>
-              wrapTextWithPrefix(
-                opts.output,
-                opt(option, i === this.cursor ? 'active' : 'inactive'),
-                defaultPrefix,
-              ),
-            )
-            .join('\n')
-          return `${title}${wrapped}\n${colors.cyan(S_BAR_END)}\n`
-        }
-      }
-    },
-  }).prompt() as Promise<Value | symbol>
-}
+			switch (this.state) {
+				case "submit": {
+					const submitPrefix = `${colors.gray(S_BAR)}  `;
+					const selectedOption =
+						this.options.find((opt) => opt.value === this.value) ?? opts.options[0];
+					const wrapped = wrapTextWithPrefix(
+						opts.output,
+						opt(selectedOption, "selected"),
+						submitPrefix,
+					);
+					return `${title}${wrapped}`;
+				}
+				case "cancel": {
+					const cancelPrefix = `${colors.gray(S_BAR)}  `;
+					const wrapped = wrapTextWithPrefix(
+						opts.output,
+						opt(this.options[0], "cancelled"),
+						cancelPrefix,
+					);
+					return `${title}${wrapped}\n${colors.gray(S_BAR)}`;
+				}
+				default: {
+					const defaultPrefix = `${colors.cyan(S_BAR)}  `;
+					const wrapped = this.options
+						.map((option, i) =>
+							wrapTextWithPrefix(
+								opts.output,
+								opt(option, i === this.cursor ? "active" : "inactive"),
+								defaultPrefix,
+							),
+						)
+						.join("\n");
+					return `${title}${wrapped}\n${colors.cyan(S_BAR_END)}\n`;
+				}
+			}
+		},
+	}).prompt() as Promise<Value | symbol>;
+};

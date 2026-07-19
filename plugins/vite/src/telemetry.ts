@@ -62,16 +62,11 @@ export function createOwnedExecutionState(): OwnedExecutionState {
 	return Object.freeze({ executionId, directory, telemetryFile, manifestFile });
 }
 
-export async function removeOwnedExecutionState(
-	state: OwnedExecutionState,
-): Promise<void> {
+export async function removeOwnedExecutionState(state: OwnedExecutionState): Promise<void> {
 	if (!isWithinTemporaryRoot(state.directory)) return;
 	try {
 		const manifest = JSON.parse(await fsp.readFile(state.manifestFile, "utf8"));
-		if (
-			manifest.protocol !== telemetryProtocol ||
-			manifest.executionId !== state.executionId
-		)
+		if (manifest.protocol !== telemetryProtocol || manifest.executionId !== state.executionId)
 			return;
 		await fsp.rm(state.directory, { recursive: true, force: true });
 	} catch (cause) {
@@ -87,9 +82,7 @@ export function cleanupStaleExecutionState(
 	const minimumAgeMs = options.minimumAgeMs ?? 24 * 60 * 60 * 1000;
 	let entries: fs.Dirent[];
 	try {
-		entries = fs
-			.readdirSync(temporaryRoot, { withFileTypes: true })
-			.slice(0, 100);
+		entries = fs.readdirSync(temporaryRoot, { withFileTypes: true }).slice(0, 100);
 	} catch {
 		return removed;
 	}
@@ -97,9 +90,7 @@ export function cleanupStaleExecutionState(
 		if (!entry.isDirectory()) continue;
 		const directory = path.join(temporaryRoot, entry.name);
 		try {
-			const manifest = JSON.parse(
-				fs.readFileSync(path.join(directory, "owner.json"), "utf8"),
-			);
+			const manifest = JSON.parse(fs.readFileSync(path.join(directory, "owner.json"), "utf8"));
 			const createdAt = Date.parse(manifest.createdAt);
 			if (
 				manifest.protocol !== telemetryProtocol ||
@@ -111,8 +102,7 @@ export function cleanupStaleExecutionState(
 			)
 				continue;
 			removed.push(directory);
-			if (!options.dryRun)
-				fs.rmSync(directory, { recursive: true, force: true });
+			if (!options.dryRun) fs.rmSync(directory, { recursive: true, force: true });
 		} catch {}
 	}
 	return Object.freeze(removed);
@@ -136,8 +126,7 @@ export class ExecutionTelemetryReader {
 		records: readonly ExecutionTelemetryEnvelope[];
 		issues: readonly TelemetryIssue[];
 	}> {
-		if (this.#state === "closing" || this.#state === "closed")
-			return { records: [], issues: [] };
+		if (this.#state === "closing" || this.#state === "closed") return { records: [], issues: [] };
 		this.#state = "active";
 		let bytes: Buffer;
 		try {
@@ -157,8 +146,7 @@ export class ExecutionTelemetryReader {
 				await handle.close();
 			}
 		} catch (cause) {
-			if ((cause as NodeJS.ErrnoException).code === "ENOENT")
-				return { records: [], issues: [] };
+			if ((cause as NodeJS.ErrnoException).code === "ENOENT") return { records: [], issues: [] };
 			throw cause;
 		}
 		const lines = `${this.#remainder}${bytes.toString("utf8")}`.split("\n");
@@ -185,9 +173,7 @@ export class ExecutionTelemetryReader {
 		}
 		return { records: Object.freeze(records), issues: Object.freeze(issues) };
 	}
-	async close(
-		options: { drain?: boolean } = {},
-	): Promise<readonly ExecutionTelemetryEnvelope[]> {
+	async close(options: { drain?: boolean } = {}): Promise<readonly ExecutionTelemetryEnvelope[]> {
 		if (this.#state === "closed") return [];
 		this.#state = "closing";
 		if (!options.drain) {
@@ -206,13 +192,8 @@ export class ExecutionTelemetryReader {
 		this.#pushIssue(issues, code, message);
 		return { records: [], issues };
 	}
-	#pushIssue(
-		issues: TelemetryIssue[],
-		code: TelemetryIssue["code"],
-		message: string,
-	) {
-		if (this.#malformed++ < this.maximumDiagnostics)
-			issues.push({ code, message });
+	#pushIssue(issues: TelemetryIssue[], code: TelemetryIssue["code"], message: string) {
+		if (this.#malformed++ < this.maximumDiagnostics) issues.push({ code, message });
 	}
 }
 
@@ -242,10 +223,7 @@ function validateEnvelope(
 	try {
 		value = JSON.parse(line);
 	} catch {
-		return issue(
-			"WSRT_TELEMETRY_MALFORMED_RECORD",
-			"Telemetry record is not valid JSON",
-		);
+		return issue("WSRT_TELEMETRY_MALFORMED_RECORD", "Telemetry record is not valid JSON");
 	}
 	if (
 		!isRecord(value) ||
@@ -257,14 +235,8 @@ function validateEnvelope(
 			"Telemetry protocol or version is unsupported",
 		);
 	if (value.executionId !== executionId)
-		return issue(
-			"WSRT_TELEMETRY_EXECUTION_MISMATCH",
-			"Telemetry belongs to another execution",
-		);
-	if (
-		!Number.isSafeInteger(value.sequence) ||
-		Number(value.sequence) <= lastSequence
-	)
+		return issue("WSRT_TELEMETRY_EXECUTION_MISMATCH", "Telemetry belongs to another execution");
+	if (!Number.isSafeInteger(value.sequence) || Number(value.sequence) <= lastSequence)
 		return issue(
 			"WSRT_TELEMETRY_SEQUENCE_INVALID",
 			"Telemetry sequence is duplicate or out of order",
@@ -274,10 +246,7 @@ function validateEnvelope(
 		!Number.isFinite(Date.parse(value.timestamp)) ||
 		!isEvent(value.event)
 	)
-		return issue(
-			"WSRT_TELEMETRY_MALFORMED_RECORD",
-			"Telemetry envelope fields are invalid",
-		);
+		return issue("WSRT_TELEMETRY_MALFORMED_RECORD", "Telemetry envelope fields are invalid");
 	return { value: value as ExecutionTelemetryEnvelope };
 }
 
@@ -292,8 +261,7 @@ function isEvent(value: unknown): value is ExecutionTelemetryEvent {
 			Number(value.port) >= 0 &&
 			Number(value.port) <= 65535 &&
 			(value.urls === undefined ||
-				(Array.isArray(value.urls) &&
-					value.urls.every((url) => typeof url === "string")))
+				(Array.isArray(value.urls) && value.urls.every((url) => typeof url === "string")))
 		);
 	if (value.type === "readiness.available")
 		return value.details === undefined || isRecord(value.details);
@@ -309,15 +277,11 @@ function isEvent(value: unknown): value is ExecutionTelemetryEvent {
 		return (
 			isRecord(value.diagnostic) &&
 			typeof value.diagnostic.code === "string" &&
-			["info", "warning", "error"].includes(
-				String(value.diagnostic.severity),
-			) &&
+			["info", "warning", "error"].includes(String(value.diagnostic.severity)) &&
 			typeof value.diagnostic.message === "string"
 		);
 	if (value.type === "custom")
-		return (
-			typeof value.namespace === "string" && typeof value.name === "string"
-		);
+		return typeof value.namespace === "string" && typeof value.name === "string";
 	return false;
 }
 
@@ -329,9 +293,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 function isWithinTemporaryRoot(value: string): boolean {
 	const relative = path.relative(temporaryRoot, value);
-	return (
-		relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)
-	);
+	return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 function isProcessAlive(pid: unknown): boolean {
 	if (!Number.isSafeInteger(pid) || Number(pid) <= 0) return false;

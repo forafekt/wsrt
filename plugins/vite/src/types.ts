@@ -1,7 +1,4 @@
-import type {
-	ResolvedWorkspace,
-	WorkspaceResolveOptions,
-} from "@wsrt/workspace";
+import type { ResolvedWorkspace, WorkspaceResolveOptions } from "@wsrt/workspace";
 
 export type AliasPrecedence = "user" | "wsrt";
 export type VitePluginOptions = {

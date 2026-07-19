@@ -141,19 +141,14 @@ test("event journal is bounded, sequenced, immutable and queryable", () => {
 		[2, 3],
 	);
 	assert.equal(journal.query({ source: "two" }).length, 2);
-	assert.equal(
-		journal.query({ type: "health.failed", sinceSequence: 2 }).length,
-		1,
-	);
+	assert.equal(journal.query({ type: "health.failed", sinceSequence: 2 }).length, 1);
 	assert.equal(Object.isFrozen(journal.list()[0]), true);
 });
 
 test("control-plane snapshots are immutable, revisioned and operation-backed", async () => {
 	const plane = await createControlPlane({ root: "examples/system-lifecycle" });
 	const revisions = [];
-	const unsubscribe = plane.subscribeSnapshots((snapshot) =>
-		revisions.push(snapshot.revision),
-	);
+	const unsubscribe = plane.subscribeSnapshots((snapshot) => revisions.push(snapshot.revision));
 	try {
 		const before = plane.snapshot();
 		const result = await plane.runTask("contracts");

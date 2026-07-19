@@ -29,9 +29,7 @@ const visiting = new Set(),
 	stack = [];
 function visit(name) {
 	if (visiting.has(name))
-		throw new Error(
-			`Workspace dependency cycle: ${[...stack, name].join(" -> ")}`,
-		);
+		throw new Error(`Workspace dependency cycle: ${[...stack, name].join(" -> ")}`);
 	if (done.has(name)) return;
 	visiting.add(name);
 	stack.push(name);
@@ -42,8 +40,7 @@ function visit(name) {
 }
 for (const name of packages.keys()) visit(name);
 const files = [];
-for (const root of ["packages", "plugins", "runtimes", "tests", "examples"])
-	walk(root);
+for (const root of ["packages", "plugins", "runtimes", "tests", "examples"]) walk(root);
 const banned = ["@wsrt/types", "@wsrt/services", "@wsrt/reports", "@wsrt/core"];
 const violations = files.flatMap((file) =>
 	banned
@@ -58,22 +55,15 @@ for (const [name, { file, value }] of packages) {
 		...value.peerDependencies,
 	}))
 		if (dependency.startsWith("@wsrt/plugin-"))
-			violations.push(
-				`${file}: core package ${name} depends on concrete plugin ${dependency}`,
-			);
+			violations.push(`${file}: core package ${name} depends on concrete plugin ${dependency}`);
 }
-for (const file of files.filter((item) =>
-	item.startsWith(`packages${path.sep}`),
-)) {
+for (const file of files.filter((item) => item.startsWith(`packages${path.sep}`))) {
 	const source = fs.readFileSync(file, "utf8"),
 		matches = source.match(/@wsrt\/plugin-[a-z0-9-]+/g) ?? [];
 	for (const dependency of new Set(matches))
-		violations.push(
-			`${file}: core source references concrete plugin ${dependency}`,
-		);
+		violations.push(`${file}: core source references concrete plugin ${dependency}`);
 }
-if (violations.length)
-	throw new Error(`Architecture violations:\n${violations.join("\n")}`);
+if (violations.length) throw new Error(`Architecture violations:\n${violations.join("\n")}`);
 console.log(
 	`Architecture valid: ${packages.size} packages, ${edges.length} workspace edges, no cycles or obsolete imports`,
 );

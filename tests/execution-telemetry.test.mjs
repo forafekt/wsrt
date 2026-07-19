@@ -19,25 +19,12 @@ async function append(state, value, newline = true) {
 
 test("telemetry reader validates attribution, order, malformed records and partial writes", async () => {
 	const state = createOwnedExecutionState();
-	const reader = new ExecutionTelemetryReader(
-		state.telemetryFile,
-		state.executionId,
-		3,
-	);
+	const reader = new ExecutionTelemetryReader(state.telemetryFile, state.executionId, 3);
 	try {
-		await append(
-			state,
-			createEnvelope(state.executionId, 1, { type: "execution.started" }),
-		);
+		await append(state, createEnvelope(state.executionId, 1, { type: "execution.started" }));
 		await append(state, "{bad");
-		await append(
-			state,
-			createEnvelope("another", 2, { type: "readiness.available" }),
-		);
-		await append(
-			state,
-			createEnvelope(state.executionId, 1, { type: "readiness.available" }),
-		);
+		await append(state, createEnvelope("another", 2, { type: "readiness.available" }));
+		await append(state, createEnvelope(state.executionId, 1, { type: "readiness.available" }));
 		const second = createEnvelope(state.executionId, 2, {
 			type: "server.listening",
 			host: "127.0.0.1",
@@ -75,11 +62,7 @@ test("telemetry reader validates attribution, order, malformed records and parti
 
 test("telemetry rejects invalid payloads, versions, oversized records, and bounds floods", async () => {
 	const state = createOwnedExecutionState();
-	const reader = new ExecutionTelemetryReader(
-		state.telemetryFile,
-		state.executionId,
-		2,
-	);
+	const reader = new ExecutionTelemetryReader(state.telemetryFile, state.executionId, 2);
 	try {
 		await append(state, { version: 1, event: { type: "readiness.available" } });
 		await append(state, {
@@ -99,9 +82,7 @@ test("telemetry rejects invalid payloads, versions, oversized records, and bound
 		const result = await reader.read();
 		assert.equal(result.records.length, 0);
 		assert.equal(result.issues.length, 2);
-		assert.ok(
-			result.issues.every((item) => item.code.startsWith("WSRT_TELEMETRY_")),
-		);
+		assert.ok(result.issues.every((item) => item.code.startsWith("WSRT_TELEMETRY_")));
 	} finally {
 		await removeOwnedExecutionState(state);
 	}
@@ -110,13 +91,8 @@ test("telemetry rejects invalid payloads, versions, oversized records, and bound
 test("owned telemetry state is collision-resistant and cleanup is ownership checked", async () => {
 	const states = Array.from({ length: 20 }, () => createOwnedExecutionState());
 	try {
-		assert.equal(
-			new Set(states.map((item) => item.directory)).size,
-			states.length,
-		);
-		const modes = await Promise.all(
-			states.map((item) => fs.stat(item.telemetryFile)),
-		);
+		assert.equal(new Set(states.map((item) => item.directory)).size, states.length);
+		const modes = await Promise.all(states.map((item) => fs.stat(item.telemetryFile)));
 		assert.ok(modes.every((item) => (item.mode & 0o077) === 0));
 		const candidates = cleanupStaleExecutionState({
 			minimumAgeMs: 0,

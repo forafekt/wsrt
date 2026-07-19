@@ -20,11 +20,7 @@ import {
 	type SystemDiagnostic,
 } from "@wsrt/config";
 import type { ExecutionPlan, SystemGraph, SystemNode } from "@wsrt/graph";
-import {
-	LifecycleEngine,
-	type LifecycleEvent,
-	type LifecycleState,
-} from "@wsrt/lifecycle";
+import { LifecycleEngine, type LifecycleEvent, type LifecycleState } from "@wsrt/lifecycle";
 import {
 	type ContributionDiagnostic,
 	type PluginContext,
@@ -51,13 +47,7 @@ export type ArtifactRecord = {
 	producer?: string;
 	consumers: readonly string[];
 	location?: string;
-	status:
-		| "pending"
-		| "invalid"
-		| "generating"
-		| "ready"
-		| "unchanged"
-		| "failed";
+	status: "pending" | "invalid" | "generating" | "ready" | "unchanged" | "failed";
 	hash?: string;
 	size?: number;
 	createdAt?: string;
@@ -87,22 +77,11 @@ export type NodeOperationResult = {
 	changed: boolean;
 	diagnostics: readonly SystemDiagnostic[];
 };
-export type HealthState =
-	| "unknown"
-	| "checking"
-	| "healthy"
-	| "degraded"
-	| "unhealthy";
+export type HealthState = "unknown" | "checking" | "healthy" | "degraded" | "unhealthy";
 export type OperationSnapshot = {
 	id: string;
 	type: "start" | "stop" | "restart" | "task" | "dispose";
-	status:
-		| "pending"
-		| "running"
-		| "completed"
-		| "partially-completed"
-		| "failed"
-		| "cancelled";
+	status: "pending" | "running" | "completed" | "partially-completed" | "failed" | "cancelled";
 	requestedNodes: readonly string[];
 	affectedNodes: readonly string[];
 	startedAt?: string;
@@ -192,42 +171,26 @@ export class WsrtControlPlane {
 	readonly #telemetryIngestion = new Map<string, Promise<void>>();
 	constructor(readonly options: ControlPlaneOptions = {}) {}
 	async load(): Promise<NormalizedSystemDefinition> {
-		const loaded = await loadSystemDefinition(
-			this.options.root,
-			this.options.config,
-		);
+		const loaded = await loadSystemDefinition(this.options.root, this.options.config);
 		this.#diagnostics = [...loaded.diagnostics];
-		if (!loaded.definition)
-			throw new Error(this.#diagnostics.map((d) => d.message).join("\n"));
+		if (!loaded.definition) throw new Error(this.#diagnostics.map((d) => d.message).join("\n"));
 		this.#definition = loaded.definition;
 		const report = this.options.pluginSession
 			? { plugins: this.options.pluginSession.list(), diagnostics: [] }
-			: await resolveWorkspacePluginsReport(
-					loaded.definition.plugins,
-					loaded.definition.root,
-				);
+			: await resolveWorkspacePluginsReport(loaded.definition.plugins, loaded.definition.root);
 		for (const diagnostic of report.diagnostics)
 			this.#diagnostics.push(this.#pluginDiagnostic(diagnostic));
 		if (report.diagnostics.length)
-			throw new Error(
-				report.diagnostics.map((item) => item.message).join("\n"),
-			);
-		this.#pluginSession =
-			this.options.pluginSession ?? new PluginSession(report.plugins);
+			throw new Error(report.diagnostics.map((item) => item.message).join("\n"));
+		this.#pluginSession = this.options.pluginSession ?? new PluginSession(report.plugins);
 		await this.#pluginSession.runStage("discover", this.#pluginContext());
-		for (const contribution of this.#pluginSession.contributions(
-			"configuration",
-		)) {
+		for (const contribution of this.#pluginSession.contributions("configuration")) {
 			const reference = loaded.definition.plugins.find(
 				(item) =>
-					typeof item !== "string" &&
-					"provider" in item &&
-					item.provider === contribution.id,
+					typeof item !== "string" && "provider" in item && item.provider === contribution.id,
 			);
 			for (const diagnostic of contribution.validate(
-				typeof reference === "object" && "options" in reference
-					? reference.options
-					: undefined,
+				typeof reference === "object" && "options" in reference ? reference.options : undefined,
 			))
 				this.#diagnostics.push(this.#pluginDiagnostic(diagnostic));
 		}
@@ -267,8 +230,7 @@ export class WsrtControlPlane {
 		for (const runtime of Object.values(loaded.definition.runtimes)) {
 			if (this.#runtimes.has(runtime.provider)) continue;
 			const provider = providers.find((item) => item.id === runtime.provider);
-			if (!provider)
-				throw new Error(`Runtime provider not registered: ${runtime.provider}`);
+			if (!provider) throw new Error(`Runtime provider not registered: ${runtime.provider}`);
 			this.#runtimes.set(runtime.provider, await provider.create());
 		}
 		this.#engine = new LifecycleEngine(this.#graph, {
@@ -327,10 +289,7 @@ export class WsrtControlPlane {
 		return [...this.#artifacts.values()];
 	}
 	pluginContributions<Kind extends keyof PluginContributions>(kind: Kind) {
-		return required(
-			this.#pluginSession,
-			"Control plane is not loaded",
-		).contributions(kind);
+		return required(this.#pluginSession, "Control plane is not loaded").contributions(kind);
 	}
 	async invokePluginContribution<T>(
 		kind: keyof PluginContributions,
@@ -366,9 +325,7 @@ export class WsrtControlPlane {
 				))
 					values.add(value);
 			} catch {}
-		return Object.freeze(
-			[...values].filter((value) => value.startsWith(input)).sort(),
-		);
+		return Object.freeze([...values].filter((value) => value.startsWith(input)).sort());
 	}
 	snapshot(): ControlPlaneSnapshot {
 		const definition = this.definition();
@@ -432,15 +389,11 @@ export class WsrtControlPlane {
 			events: Object.freeze({ size: this.#events.length }),
 			plugins: this.#pluginSession?.snapshots() ?? [],
 			providers: Object.freeze(
-				this.#providerIds.map((id) =>
-					Object.freeze({ id, kind: "runtime" as const }),
-				),
+				this.#providerIds.map((id) => Object.freeze({ id, kind: "runtime" as const })),
 			),
 		});
 	}
-	subscribeSnapshots(
-		listener: (snapshot: ControlPlaneSnapshot) => void,
-	): () => void {
+	subscribeSnapshots(listener: (snapshot: ControlPlaneSnapshot) => void): () => void {
 		this.#subscribers.add(listener);
 		if (!this.#disposed) {
 			try {
@@ -464,20 +417,15 @@ export class WsrtControlPlane {
 	}
 	async start(ids?: readonly string[]): Promise<OperationResult> {
 		this.#assertMutable();
-		const targets =
-			ids?.map((id) => this.#resolve(id)) ?? this.#longRunningIds();
+		const targets = ids?.map((id) => this.#resolve(id)) ?? this.#longRunningIds();
 		const selected = this.#closure(targets);
 		return this.#operate("start", targets, selected, async (signal) =>
-			required(this.#engine, "Control plane is not loaded").start(
-				selected,
-				signal,
-			),
+			required(this.#engine, "Control plane is not loaded").start(selected, signal),
 		);
 	}
 	async stop(ids?: readonly string[]): Promise<OperationResult> {
 		this.#assertMutable();
-		const targets =
-			ids?.map((id) => this.#resolve(id)) ?? this.#executableIds();
+		const targets = ids?.map((id) => this.#resolve(id)) ?? this.#executableIds();
 		const selected = this.#dependants(targets);
 		for (const node of selected) {
 			this.#manualStops.add(node);
@@ -485,10 +433,7 @@ export class WsrtControlPlane {
 			this.#stopMonitor(node);
 		}
 		return this.#operate("stop", targets, selected, async (signal) =>
-			required(this.#engine, "Control plane is not loaded").stop(
-				selected,
-				signal,
-			),
+			required(this.#engine, "Control plane is not loaded").stop(selected, signal),
 		);
 	}
 	async restart(ids: readonly string[]): Promise<OperationResult> {
@@ -501,10 +446,7 @@ export class WsrtControlPlane {
 			this.#stopMonitor(node);
 		}
 		return this.#operate("restart", targets, selected, async (signal) => {
-			await required(this.#engine, "Control plane is not loaded").stop(
-				selected,
-				signal,
-			);
+			await required(this.#engine, "Control plane is not loaded").stop(selected, signal);
 			for (const node of selected) this.#manualStops.delete(node);
 			await required(this.#engine, "Control plane is not loaded").start(
 				this.#closure(targets),
@@ -515,37 +457,24 @@ export class WsrtControlPlane {
 	async runTask(id: string): Promise<OperationResult> {
 		const resolved = this.#resolve(id, "task");
 		if (this.getNodeState(resolved) === "ready")
-			await required(this.#engine, "Control plane is not loaded").stop([
-				resolved,
-			]);
-		return this.#operate(
-			"task",
-			[resolved],
-			this.#closure([resolved]),
-			async (signal) =>
-				required(this.#engine, "Control plane is not loaded").start(
-					this.#closure([resolved]),
-					signal,
-				),
+			await required(this.#engine, "Control plane is not loaded").stop([resolved]);
+		return this.#operate("task", [resolved], this.#closure([resolved]), async (signal) =>
+			required(this.#engine, "Control plane is not loaded").start(
+				this.#closure([resolved]),
+				signal,
+			),
 		);
 	}
 	async dispose(): Promise<void> {
 		this.#disposed = true;
 		for (const controller of this.#operationControllers.values())
-			controller.abort(
-				new DOMException("Control plane disposed", "AbortError"),
-			);
+			controller.abort(new DOMException("Control plane disposed", "AbortError"));
 		for (const controller of this.#monitors.values()) controller.abort();
 		for (const controller of this.#restartControllers.values())
-			controller.abort(
-				new DOMException("Control plane disposed", "AbortError"),
-			);
+			controller.abort(new DOMException("Control plane disposed", "AbortError"));
 		this.#monitors.clear();
-		if (this.#engine)
-			await this.#engine.stop(this.#executableIds()).catch(() => {});
-		await Promise.all(
-			[...this.#runtimes.values()].map((runtime) => runtime.dispose()),
-		);
+		if (this.#engine) await this.#engine.stop(this.#executableIds()).catch(() => {});
+		await Promise.all([...this.#runtimes.values()].map((runtime) => runtime.dispose()));
 		this.#runtimes.clear();
 		this.#subscribers.clear();
 		await this.#pluginSession?.dispose(this.#pluginContext());
@@ -555,16 +484,12 @@ export class WsrtControlPlane {
 			root: this.#definition?.root ?? path.resolve(this.options.root ?? "."),
 			configuration: this.#definition,
 			logger: {
-				info: (message) =>
-					this.#event("plugin.log.info", "plugin", "plugin", { message }),
-				warn: (message) =>
-					this.#event("plugin.log.warning", "plugin", "plugin", { message }),
-				error: (message) =>
-					this.#event("plugin.log.error", "plugin", "plugin", { message }),
+				info: (message) => this.#event("plugin.log.info", "plugin", "plugin", { message }),
+				warn: (message) => this.#event("plugin.log.warning", "plugin", "plugin", { message }),
+				error: (message) => this.#event("plugin.log.error", "plugin", "plugin", { message }),
 			},
 			diagnostics: {
-				add: (diagnostic) =>
-					this.#diagnostics.push(this.#pluginDiagnostic(diagnostic)),
+				add: (diagnostic) => this.#diagnostics.push(this.#pluginDiagnostic(diagnostic)),
 			},
 			events: {
 				emit: (type, payload) => this.#event(type, "plugin", "plugin", payload),
@@ -598,9 +523,7 @@ export class WsrtControlPlane {
 				if (item.provider) {
 					const adapter = this.#adapters.get(item.provider.provider);
 					if (!adapter)
-						throw new Error(
-							`Execution adapter not registered: ${item.provider.provider}`,
-						);
+						throw new Error(`Execution adapter not registered: ${item.provider.provider}`);
 					const validation = adapter.validate(item.provider.options ?? {});
 					if (!validation.options || validation.diagnostics.length)
 						throw new Error(
@@ -612,8 +535,7 @@ export class WsrtControlPlane {
 					this.#executionMetadata.set(item.id, {
 						...(prepared.metadata ?? {}),
 					});
-					if (prepared.dispose)
-						this.#executionCleanup.set(item.id, prepared.dispose);
+					if (prepared.dispose) this.#executionCleanup.set(item.id, prepared.dispose);
 					command = {
 						command: prepared.command,
 						args: prepared.args,
@@ -646,13 +568,8 @@ export class WsrtControlPlane {
 						await this.#invalidateOutputs(item);
 						const exit = await handle.exit;
 						if (exit.code !== 0) {
-							await this.#failOutputs(
-								item,
-								`Task ${item.name} exited with code ${exit.code}`,
-							);
-							throw new Error(
-								`Task ${item.name} exited with code ${exit.code}`,
-							);
+							await this.#failOutputs(item, `Task ${item.name} exited with code ${exit.code}`);
+							throw new Error(`Task ${item.name} exited with code ${exit.code}`);
 						}
 						await this.#telemetryIngestion.get(item.id);
 						await this.#collectArtifacts(item, signal);
@@ -682,10 +599,7 @@ export class WsrtControlPlane {
 					return;
 				}
 				handle.terminate();
-				await Promise.race([
-					handle.exit,
-					runtime().capabilities.require("timers").delay(3000),
-				]);
+				await Promise.race([handle.exit, runtime().capabilities.require("timers").delay(3000)]);
 				if (handle.running) handle.terminate("SIGKILL");
 				await handle.exit;
 				this.#handles.delete(item.id);
@@ -696,38 +610,25 @@ export class WsrtControlPlane {
 			ready: async ({ signal }: { signal: AbortSignal }) => {
 				if (item.kind === "task") return;
 				const providerId = item.provider?.provider;
-				const provider = providerId
-					? this.#readinessProviders.get(providerId)
-					: undefined;
+				const provider = providerId ? this.#readinessProviders.get(providerId) : undefined;
 				if (provider && providerId) {
 					const validation = provider.validate(item.provider?.options ?? {});
 					if (!validation.options || validation.diagnostics.length)
 						throw new Error(
-							validation.diagnostics.join("\n") ||
-								`Invalid readiness options: ${providerId}`,
+							validation.diagnostics.join("\n") || `Invalid readiness options: ${providerId}`,
 						);
-					await required(
-						this.#pluginSession,
-						"Plugin session unavailable",
-					).invoke("readiness", providerId, this.#pluginContext(), () =>
-						provider.wait(
-							validation.options,
-							this.#providerContext(item, providerId, signal),
-						),
+					await required(this.#pluginSession, "Plugin session unavailable").invoke(
+						"readiness",
+						providerId,
+						this.#pluginContext(),
+						() =>
+							provider.wait(validation.options, this.#providerContext(item, providerId, signal)),
 					);
 					if (signal.aborted || !this.#handles.get(item.id)?.running)
-						throw (
-							signal.reason ??
-							new Error(`Process ${item.name} exited before readiness`)
-						);
-					this.#event(
-						"node.readiness.succeeded",
-						item.id,
-						this.#operationId(item.id),
-						{
-							provider: providerId,
-						},
-					);
+						throw signal.reason ?? new Error(`Process ${item.name} exited before readiness`);
+					this.#event("node.readiness.succeeded", item.id, this.#operationId(item.id), {
+						provider: providerId,
+					});
 					this.#startMonitor(item);
 					return;
 				}
@@ -780,10 +681,7 @@ export class WsrtControlPlane {
 		this.#monitors.set(item.id, controller);
 		this.#setHealth(item.id, "checking");
 		void (async () => {
-			while (
-				!controller.signal.aborted &&
-				this.#handles.get(item.id)?.running
-			) {
+			while (!controller.signal.aborted && this.#handles.get(item.id)?.running) {
 				const started = new Date().toISOString();
 				this.#event("node.health.check.started", item.id, item.id, {});
 				let diagnostic: string | undefined;
@@ -833,9 +731,7 @@ export class WsrtControlPlane {
 					healthProviderId: item.healthcheck?.type,
 				});
 				this.#event(
-					diagnostic
-						? "node.health.check.failed"
-						: "node.health.check.succeeded",
+					diagnostic ? "node.health.check.failed" : "node.health.check.succeeded",
 					item.id,
 					item.id,
 					diagnostic ? { diagnostic } : {},
@@ -863,14 +759,10 @@ export class WsrtControlPlane {
 			}
 		})();
 	}
-	async #checkHealth(
-		item: NormalizedExecutable,
-		signal: AbortSignal,
-	): Promise<void> {
+	async #checkHealth(item: NormalizedExecutable, signal: AbortSignal): Promise<void> {
 		const health = item.healthcheck;
 		if (!health || health.type === "process") {
-			if (!this.#handles.get(item.id)?.running)
-				throw new Error("Process exited");
+			if (!this.#handles.get(item.id)?.running) throw new Error("Process exited");
 			return;
 		}
 		if (health.type === "tcp")
@@ -903,8 +795,7 @@ export class WsrtControlPlane {
 		if (old === health) return;
 		this.#health.set(id, health);
 		if (health === "degraded") this.#event("node.health.degraded", id, id, {});
-		if (health === "unhealthy")
-			this.#event("node.health.unhealthy", id, id, {});
+		if (health === "unhealthy") this.#event("node.health.unhealthy", id, id, {});
 		if (health === "healthy" && ["degraded", "unhealthy"].includes(old))
 			this.#event("node.health.recovered", id, id, {});
 		this.#changed();
@@ -956,11 +847,7 @@ export class WsrtControlPlane {
 			(policy.policy === "on-failure" && exit?.code === 0 && !exit.signal)
 		)
 			return;
-		if (
-			this.#restartControllers.has(item.id) ||
-			this.#disposed ||
-			this.#manualStops.has(item.id)
-		)
+		if (this.#restartControllers.has(item.id) || this.#disposed || this.#manualStops.has(item.id))
 			return;
 		const previous = this.#details(item.id),
 			attempt = previous.currentRestartAttempt + 1,
@@ -978,10 +865,7 @@ export class WsrtControlPlane {
 		const base = Math.max(0, policy.delayMs ?? 1000),
 			maximum = Math.max(base, policy.maximumDelayMs ?? 30_000),
 			exponential = base * 2 ** Math.min(attempt - 1, 30),
-			delay = Math.min(
-				policy.backoff === "exponential" ? exponential : base,
-				maximum,
-			);
+			delay = Math.min(policy.backoff === "exponential" ? exponential : base, maximum);
 		const controller = new AbortController();
 		this.#restartControllers.set(item.id, controller);
 		this.#healthDetails.set(item.id, {
@@ -997,18 +881,9 @@ export class WsrtControlPlane {
 		});
 		this.#changed();
 		try {
-			await this.#runtime(item)
-				.capabilities.require("timers")
-				.delay(delay, controller.signal);
-			if (
-				controller.signal.aborted ||
-				this.#disposed ||
-				this.#manualStops.has(item.id)
-			)
-				throw (
-					controller.signal.reason ??
-					new DOMException("Restart cancelled", "AbortError")
-				);
+			await this.#runtime(item).capabilities.require("timers").delay(delay, controller.signal);
+			if (controller.signal.aborted || this.#disposed || this.#manualStops.has(item.id))
+				throw controller.signal.reason ?? new DOMException("Restart cancelled", "AbortError");
 			this.#event("node.restart.started", item.id, item.id, { attempt });
 			this.#restartControllers.delete(item.id);
 			await this.start([item.id]);
@@ -1023,21 +898,17 @@ export class WsrtControlPlane {
 			this.#changed();
 		} catch (cause) {
 			const cancelled =
-				controller.signal.aborted ||
-				this.#disposed ||
-				this.#manualStops.has(item.id);
+				controller.signal.aborted || this.#disposed || this.#manualStops.has(item.id);
 			const current = this.#details(item.id);
 			this.#healthDetails.set(item.id, {
 				...current,
 				restartPending: false,
 				nextRestartAt: undefined,
 			});
-			this.#event(
-				cancelled ? "node.restart.cancelled" : "node.restart.failed",
-				item.id,
-				item.id,
-				{ attempt, error: String(cause) },
-			);
+			this.#event(cancelled ? "node.restart.cancelled" : "node.restart.failed", item.id, item.id, {
+				attempt,
+				error: String(cause),
+			});
 			this.#changed();
 		} finally {
 			if (this.#restartControllers.get(item.id) === controller)
@@ -1092,9 +963,7 @@ export class WsrtControlPlane {
 	): ProviderInvocationContext {
 		const pluginId =
 			required(this.#pluginSession, "Plugin session unavailable").owner(
-				this.#readinessProviders.has(contributionId)
-					? "readiness"
-					: "artifacts",
+				this.#readinessProviders.has(contributionId) ? "readiness" : "artifacts",
 				contributionId,
 			) ?? "unknown";
 		return Object.freeze({
@@ -1141,9 +1010,7 @@ export class WsrtControlPlane {
 				readiness: event.details ?? true,
 			});
 		} else if (event.type === "artifact.discovered") {
-			const pending = (
-				this.#telemetryIngestion.get(item.id) ?? Promise.resolve()
-			)
+			const pending = (this.#telemetryIngestion.get(item.id) ?? Promise.resolve())
 				.then(() => this.#ingestCandidate(item, event.artifact))
 				.catch((cause) => {
 					this.#diagnostics.push({
@@ -1160,37 +1027,28 @@ export class WsrtControlPlane {
 	}
 	async #collectArtifacts(item: NormalizedExecutable, signal: AbortSignal) {
 		const providerId = item.provider?.provider;
-		const provider = providerId
-			? this.#artifactProviders.get(providerId)
-			: undefined;
+		const provider = providerId ? this.#artifactProviders.get(providerId) : undefined;
 		if (!provider || !providerId || signal.aborted) return;
-		const candidates = await required(
-			this.#pluginSession,
-			"Plugin session unavailable",
-		).invoke("artifacts", providerId, this.#pluginContext(), () =>
-			provider.collect(
-				item.provider?.options ?? {},
-				this.#providerContext(item, providerId, signal),
-			),
+		const candidates = await required(this.#pluginSession, "Plugin session unavailable").invoke(
+			"artifacts",
+			providerId,
+			this.#pluginContext(),
+			() =>
+				provider.collect(
+					item.provider?.options ?? {},
+					this.#providerContext(item, providerId, signal),
+				),
 		);
 		if (signal.aborted) return;
 		const unique = new Map<string, ArtifactCandidate>();
 		for (const candidate of candidates)
 			unique.set(`${candidate.name ?? ""}:${candidate.path}`, candidate);
-		for (const candidate of [...unique.values()].sort((a, b) =>
-			a.path.localeCompare(b.path),
-		))
+		for (const candidate of [...unique.values()].sort((a, b) => a.path.localeCompare(b.path)))
 			await this.#ingestCandidate(item, candidate);
 	}
-	async #ingestCandidate(
-		item: NormalizedExecutable,
-		candidate: ArtifactCandidate,
-	) {
+	async #ingestCandidate(item: NormalizedExecutable, candidate: ArtifactCandidate) {
 		const file = path.resolve(item.root, candidate.path);
-		if (
-			!file.startsWith(`${this.definition().root}${path.sep}`) &&
-			file !== this.definition().root
-		)
+		if (!file.startsWith(`${this.definition().root}${path.sep}`) && file !== this.definition().root)
 			throw new Error(`WSRT_ARTIFACT_PATH_INVALID: ${file}`);
 		const name = candidate.name ?? path.basename(candidate.path);
 		const id = `artifact:${name}`;
@@ -1270,10 +1128,7 @@ export class WsrtControlPlane {
 			try {
 				bytes = await fs.readFile(file);
 			} catch {
-				await this.#failOutputs(
-					item,
-					`Declared output does not exist: ${file}`,
-				);
+				await this.#failOutputs(item, `Declared output does not exist: ${file}`);
 				throw new Error(`WSRT_ARTIFACT_OUTPUT_MISSING: ${file}`);
 			}
 			const hash = createHash("sha256").update(bytes).digest("hex"),
@@ -1289,21 +1144,14 @@ export class WsrtControlPlane {
 				updatedAt: now,
 				diagnostics: [],
 			});
-			this.#event(
-				unchanged ? "artifact.unchanged" : "artifact.generated",
-				id,
-				item.id,
-				{ hash, size: bytes.byteLength },
-			);
+			this.#event(unchanged ? "artifact.unchanged" : "artifact.generated", id, item.id, {
+				hash,
+				size: bytes.byteLength,
+			});
 		}
 		this.#changed();
 	}
-	#event(
-		type: string,
-		source: string,
-		correlationId: string,
-		payload: unknown,
-	) {
+	#event(type: string, source: string, correlationId: string, payload: unknown) {
 		this.#events.push({
 			id: crypto.randomUUID(),
 			type,
@@ -1327,9 +1175,7 @@ export class WsrtControlPlane {
 	}
 	#longRunningIds() {
 		return this.definition()
-			.executables.filter(
-				(item) => item.kind !== "task" && !item.id.includes("/process:"),
-			)
+			.executables.filter((item) => item.kind !== "task" && !item.id.includes("/process:"))
 			.map((item) => item.id);
 	}
 	#closure(ids: readonly string[]) {
@@ -1368,9 +1214,7 @@ export class WsrtControlPlane {
 		return {
 			operationId,
 			nodes: ids,
-			states: Object.fromEntries(
-				ids.map((id) => [id, this.getNodeState(id) ?? "resolved"]),
-			),
+			states: Object.fromEntries(ids.map((id) => [id, this.getNodeState(id) ?? "resolved"])),
 			status: "completed",
 			results: ids.map((nodeId) => ({
 				nodeId,
@@ -1386,13 +1230,8 @@ export class WsrtControlPlane {
 		affected: readonly string[],
 		run: (signal: AbortSignal) => Promise<void>,
 	): Promise<OperationResult> {
-		const conflict = affected
-			.map((node) => this.#nodeOperations.get(node))
-			.find(Boolean);
-		if (conflict)
-			throw new Error(
-				`WSRT_OPERATION_CONFLICT: operation ${conflict} is running`,
-			);
+		const conflict = affected.map((node) => this.#nodeOperations.get(node)).find(Boolean);
+		if (conflict) throw new Error(`WSRT_OPERATION_CONFLICT: operation ${conflict} is running`);
 		const id = crypto.randomUUID(),
 			correlationId = crypto.randomUUID(),
 			startedAt = new Date().toISOString();
@@ -1434,12 +1273,9 @@ export class WsrtControlPlane {
 			return { ...this.#result(id, affected), results };
 		} catch (cause) {
 			const cancelled =
-				controller.signal.aborted ||
-				(cause instanceof DOMException && cause.name === "AbortError");
+				controller.signal.aborted || (cause instanceof DOMException && cause.name === "AbortError");
 			const diagnostic: SystemDiagnostic = {
-				code: cancelled
-					? "WSRT_OPERATION_CANCELLED"
-					: "WSRT_OPERATION_PARTIAL_FAILURE",
+				code: cancelled ? "WSRT_OPERATION_CANCELLED" : "WSRT_OPERATION_PARTIAL_FAILURE",
 				severity: "error",
 				message: cause instanceof Error ? cause.message : String(cause),
 				source: { file: this.definition().sourceFile, path: "" },
@@ -1471,8 +1307,7 @@ export class WsrtControlPlane {
 			if (index >= 0) this.#operations[index] = operation;
 			this.#operationControllers.delete(id);
 			for (const node of affected)
-				if (this.#nodeOperations.get(node) === id)
-					this.#nodeOperations.delete(node);
+				if (this.#nodeOperations.get(node) === id) this.#nodeOperations.delete(node);
 			this.#changed();
 		}
 	}

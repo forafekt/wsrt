@@ -1,7 +1,7 @@
-import { defineWorkerTasks } from '../dist/worker.js'
+import { defineWorkerTasks } from "../dist/worker.js";
 
 defineWorkerTasks({
-  sumBuffer(buffer) {
-    return [...new Uint8Array(buffer)].reduce((total, value) => total + value, 0)
-  },
-})
+	sumBuffer(buffer) {
+		return [...new Uint8Array(buffer)].reduce((total, value) => total + value, 0);
+	},
+});

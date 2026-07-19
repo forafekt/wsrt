@@ -1,7 +1,7 @@
-import { defineWorkerTasks } from '../dist/worker.js'
+import { defineWorkerTasks } from "../dist/worker.js";
 
 defineWorkerTasks({
-  add(input) {
-    return input.a + input.b
-  },
-})
+	add(input) {
+		return input.a + input.b;
+	},
+});

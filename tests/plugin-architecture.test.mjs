@@ -6,9 +6,7 @@ import { PluginSession, resolveWorkspacePlugins } from "@wsrt/plugins";
 test("core packages do not depend on or import the dashboard plugin", () => {
 	for (const name of ["cli", "config", "control-plane", "plugins"]) {
 		const root = new URL(`../packages/${name}/`, import.meta.url),
-			manifest = JSON.parse(
-				fs.readFileSync(new URL("package.json", root), "utf8"),
-			);
+			manifest = JSON.parse(fs.readFileSync(new URL("package.json", root), "utf8"));
 		assert.equal(manifest.dependencies?.["@wsrt/plugin-dashboard"], undefined);
 		for (const file of fs.readdirSync(new URL("src", root)))
 			if (file.endsWith(".ts"))
@@ -25,10 +23,7 @@ test("configured plugins resolve from the workspace without implicit injection",
 		new URL("..", import.meta.url).pathname,
 	);
 	const session = new PluginSession(plugins);
-	assert.equal(
-		session.executable("dashboard")?.owner.id,
-		"@wsrt/plugin-dashboard",
-	);
+	assert.equal(session.executable("dashboard")?.owner.id, "@wsrt/plugin-dashboard");
 	assert.deepEqual(new PluginSession([]).executables(), []);
 });
 

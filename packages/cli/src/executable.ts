@@ -24,8 +24,7 @@ export async function executeContribution(
 			`WSRT_EXECUTABLE_NOT_FOUND: Executable "${id}" is not available.\n\nConfigured executable contributions:\n${executables.length ? executables.map((item) => `  ${item.id}`).join("\n") : "  none"}\n\nAdd and configure a plugin that provides it.`,
 		);
 	const validation = executable.validateOptions?.(options);
-	const validated =
-		validation && "value" in validation ? validation.value : options;
+	const validated = validation && "value" in validation ? validation.value : options;
 	if (validation && !("value" in validation))
 		throw new Error(
 			`WSRT_EXECUTABLE_INVALID_OPTIONS: ${validation.diagnostics.map((item) => item.message).join("\n")}`,
@@ -33,23 +32,20 @@ export async function executeContribution(
 	const controller = new AbortController();
 	let output: unknown;
 	try {
-		output = await controlPlane.invokePluginContribution(
-			"executables",
-			executable.id,
-			() =>
-				executable.execute(
-					{
-						controlPlane,
-						signal: controller.signal,
-						arguments: Object.freeze([...args]),
-						logger: {
-							info: logger.info.bind(logger),
-							warn: logger.warn.bind(logger),
-							error: logger.error.bind(logger),
-						},
+		output = await controlPlane.invokePluginContribution("executables", executable.id, () =>
+			executable.execute(
+				{
+					controlPlane,
+					signal: controller.signal,
+					arguments: Object.freeze([...args]),
+					logger: {
+						info: logger.info.bind(logger),
+						warn: logger.warn.bind(logger),
+						error: logger.error.bind(logger),
 					},
-					validated,
-				),
+				},
+				validated,
+			),
 		);
 	} catch (cause) {
 		throw new Error(
@@ -78,10 +74,7 @@ export async function executeContribution(
 }
 
 /** Return all arguments after the tool id. A leading `--` is only a separator. */
-export function forwardedArguments(
-	argv: readonly string[],
-	id: string | undefined,
-): string[] {
+export function forwardedArguments(argv: readonly string[], id: string | undefined): string[] {
 	if (!id) return [];
 	const exec = argv.indexOf("exec");
 	const tool = argv.indexOf(id, exec + 1);
@@ -92,25 +85,18 @@ export function forwardedArguments(
 
 function isHandle(value: unknown): value is ExecutableHandle {
 	return (
-		!!value &&
-		typeof value === "object" &&
-		"close" in value &&
-		typeof value.close === "function"
+		!!value && typeof value === "object" && "close" in value && typeof value.close === "function"
 	);
 }
 
-export function parseForwardedOptions(
-	args: readonly string[],
-): Record<string, unknown> {
+export function parseForwardedOptions(args: readonly string[]): Record<string, unknown> {
 	const result: Record<string, unknown> = {};
 	for (let index = 0; index < args.length; index++) {
 		const argument = args[index];
 		if (!argument.startsWith("--")) continue;
 		const negative = argument.startsWith("--no-");
 		const raw = argument.slice(negative ? 5 : 2);
-		const key = raw.replace(/-([a-z])/g, (_, letter: string) =>
-			letter.toUpperCase(),
-		);
+		const key = raw.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
 		if (negative) result[key] = false;
 		else if (args[index + 1] && !args[index + 1].startsWith("--")) {
 			const value = args[++index];

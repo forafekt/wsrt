@@ -37,12 +37,7 @@ export const edgeKinds = [
 	"activates",
 ] as const;
 export type SystemEdgeKind = (typeof edgeKinds)[number];
-export type DependencyCondition =
-	| "started"
-	| "ready"
-	| "healthy"
-	| "completed"
-	| "successful";
+export type DependencyCondition = "started" | "ready" | "healthy" | "completed" | "successful";
 export type SystemEdge = {
 	from: string;
 	to: string;
@@ -65,17 +60,13 @@ export class SystemGraph {
 	readonly #nodes = new Map<string, SystemNode>();
 	readonly #edges: SystemEdge[] = [];
 
-	constructor(
-		nodes: Iterable<SystemNode> = [],
-		edges: Iterable<SystemEdge> = [],
-	) {
+	constructor(nodes: Iterable<SystemNode> = [], edges: Iterable<SystemEdge> = []) {
 		for (const node of nodes) this.addNode(node);
 		for (const edge of edges) this.addEdge(edge);
 	}
 
 	addNode(node: SystemNode): this {
-		if (this.#nodes.has(node.id))
-			throw new Error(`Duplicate graph node: ${node.id}`);
+		if (this.#nodes.has(node.id)) throw new Error(`Duplicate graph node: ${node.id}`);
 		this.#nodes.set(node.id, Object.freeze({ ...node }));
 		return this;
 	}
@@ -88,9 +79,7 @@ export class SystemGraph {
 		return this.#nodes.get(id);
 	}
 	nodes(kind?: SystemNodeKind): readonly SystemNode[] {
-		return [...this.#nodes.values()].filter(
-			(node) => !kind || node.kind === kind,
-		);
+		return [...this.#nodes.values()].filter((node) => !kind || node.kind === kind);
 	}
 	edges(kind?: SystemEdgeKind): readonly SystemEdge[] {
 		return this.#edges.filter((edge) => !kind || edge.kind === kind);
@@ -142,16 +131,10 @@ export class SystemGraph {
 	plan(selection: Iterable<string> = this.#nodes.keys()): ExecutionPlan {
 		const selected = new Set(selection);
 		const executableEdges = this.#edges.filter(
-			(edge) =>
-				edge.kind === "depends-on" &&
-				selected.has(edge.from) &&
-				selected.has(edge.to),
+			(edge) => edge.kind === "depends-on" && selected.has(edge.from) && selected.has(edge.to),
 		);
 		const remaining = new Map(
-			[...selected].map((id) => [
-				id,
-				executableEdges.filter((edge) => edge.from === id).length,
-			]),
+			[...selected].map((id) => [id, executableEdges.filter((edge) => edge.from === id).length]),
 		);
 		const stages: string[][] = [];
 		while (remaining.size) {
@@ -174,9 +157,7 @@ export class SystemGraph {
 
 	shutdownPlan(selection?: Iterable<string>): ExecutionPlan {
 		const plan = this.plan(selection);
-		const stages = [...plan.stages]
-			.reverse()
-			.map((stage) => [...stage].reverse());
+		const stages = [...plan.stages].reverse().map((stage) => [...stage].reverse());
 		return { stages, order: stages.flat() };
 	}
 
@@ -209,9 +190,7 @@ export function buildWorkspaceGraph(
 				.map((dependency) => ({
 					from: item.name,
 					to: dependency,
-					type: names.has(dependency)
-						? ("workspace" as const)
-						: ("external" as const),
+					type: names.has(dependency) ? ("workspace" as const) : ("external" as const),
 				})),
 		),
 	};

@@ -13,9 +13,7 @@ export type {
 } from "./types.js";
 
 /** Compatibility helper for the pre-plugin-system configuration shape. */
-export function viteContribution(
-	options: import("./types.js").ViteAdapterOptions = {},
-) {
+export function viteContribution(options: import("./types.js").ViteAdapterOptions = {}) {
 	const prepared = viteAdapter.prepare(options);
 	return {
 		name: "vite" as const,
@@ -41,9 +39,7 @@ export function hasWsrtVitePlugin(plugins: unknown): boolean {
 		(plugin) =>
 			!!plugin &&
 			typeof plugin === "object" &&
-			(("name" in plugin &&
-				(plugin as { name?: unknown }).name === "wsrt:workspace") ||
-				("id" in plugin &&
-					(plugin as { id?: unknown }).id === "@wsrt/plugin-vite")),
+			(("name" in plugin && (plugin as { name?: unknown }).name === "wsrt:workspace") ||
+				("id" in plugin && (plugin as { id?: unknown }).id === "@wsrt/plugin-vite")),
 	);
 }

@@ -17,15 +17,12 @@ export type EventQuery = {
 	sinceSequence?: number;
 	since?: string;
 };
-export class EventJournal<
-	Event extends StructuredEvent = StructuredEvent,
-> extends EventTarget {
+export class EventJournal<Event extends StructuredEvent = StructuredEvent> extends EventTarget {
 	readonly #history: Event[] = [];
 	#sequence = 0;
 	constructor(readonly maximumSize = 1_000) {
 		super();
-		if (maximumSize < 1)
-			throw new Error("Event journal maximum size must be positive");
+		if (maximumSize < 1) throw new Error("Event journal maximum size must be positive");
 	}
 	publish(input: Event): Event {
 		const event = Object.freeze({
@@ -42,8 +39,7 @@ export class EventJournal<
 		type: Type,
 		listener: (event: Extract<Event, { type: Type }>) => void,
 	): () => void {
-		const handler = (event: globalThis.Event) =>
-			listener((event as CustomEvent).detail);
+		const handler = (event: globalThis.Event) => listener((event as CustomEvent).detail);
 		this.addEventListener(type, handler);
 		return () => this.removeEventListener(type, handler);
 	}

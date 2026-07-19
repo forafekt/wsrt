@@ -57,14 +57,14 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 			})
 			.provide("logger", {
 				log: (level, message, attributes) =>
-					console[
-						level === "warning" ? "warn" : level === "debug" ? "debug" : level
-					](message, attributes ?? ""),
+					console[level === "warning" ? "warn" : level === "debug" ? "debug" : level](
+						message,
+						attributes ?? "",
+					),
 			})
 			.provide("spawn", {
 				spawn: (request) => {
-					const command =
-						request.command === "node" ? process.execPath : request.command;
+					const command = request.command === "node" ? process.execPath : request.command;
 					const child = spawn(command, [...request.args], {
 						cwd: request.cwd,
 						env: { ...process.env, ...request.environment },
@@ -132,16 +132,10 @@ function connect(
 	return new Promise((resolve, reject) => {
 		const socket = net.createConnection({ host, port });
 		const timer = setTimeout(
-			() =>
-				finish(
-					new Error(
-						`TCP connection to ${host}:${port} timed out after ${timeoutMs}ms`,
-					),
-				),
+			() => finish(new Error(`TCP connection to ${host}:${port} timed out after ${timeoutMs}ms`)),
 			timeoutMs,
 		);
-		const abort = () =>
-			finish(signal?.reason ?? new Error("TCP connection cancelled"));
+		const abort = () => finish(signal?.reason ?? new Error("TCP connection cancelled"));
 		const finish = (error?: unknown) => {
 			clearTimeout(timer);
 			signal?.removeEventListener("abort", abort);

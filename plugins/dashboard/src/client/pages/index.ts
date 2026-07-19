@@ -5,17 +5,14 @@ export const escapeHtml = (value: unknown) =>
 	String(value ?? "").replace(
 		/[&<>"']/g,
 		(character) =>
-			({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-				character
-			] ?? character,
+			({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ??
+			character,
 	);
 const tone = (value: unknown) => {
 	const text = String(value ?? "unknown").toLowerCase();
-	if (/healthy|running|completed|ready|unchanged|success/.test(text))
-		return "success";
+	if (/healthy|running|completed|ready|unchanged|success/.test(text)) return "success";
 	if (/failed|unhealthy|invalid|error|cancelled/.test(text)) return "danger";
-	if (/degraded|warning|partial|stopping|pending|generating/.test(text))
-		return "warning";
+	if (/degraded|warning|partial|stopping|pending|generating/.test(text)) return "warning";
 	return "neutral";
 };
 const badge = (value: unknown) =>
@@ -45,10 +42,7 @@ const table = (
 const heading = (title: string, description: string, actions = "") =>
 	`<div class="page-heading"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div>${actions}</div>`;
 
-export function renderPage(
-	route: DashboardRoute,
-	state: DashboardState,
-): string {
+export function renderPage(route: DashboardRoute, state: DashboardState): string {
 	const data = state.snapshot;
 	const snapshot = data?.controlPlane;
 	if (state.error)
@@ -56,12 +50,10 @@ export function renderPage(
 	if (!snapshot)
 		return `<div class="skeleton-page" aria-label="Loading"><div></div><div></div><div></div></div>`;
 	if (route === "overview") {
-		const health = ["healthy", "degraded", "unhealthy", "unknown"].map(
-			(value) => [
-				value,
-				snapshot.nodes.filter((n) => n.health === value).length,
-			],
-		);
+		const health = ["healthy", "degraded", "unhealthy", "unknown"].map((value) => [
+			value,
+			snapshot.nodes.filter((n) => n.health === value).length,
+		]);
 		const active = snapshot.operations.filter(
 			(o) => o.status === "running" || o.status === "pending",
 		);
@@ -92,14 +84,11 @@ export function renderPage(
 		return `${heading("Workspace explorer", "Packages, runnable nodes, relationships, imports, and outputs in one searchable model.", `<label class="search"><span class="sr-only">Filter workspace</span><input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Filter workspace…"></label>`)}<div class="explorer-layout"><section class="explorer-tree"><div class="section-heading"><h2>${escapeHtml(snapshot.workspace.name)}</h2><span class="count">${graph.nodes?.length ?? 0}</span></div>${kinds
 			.map(
 				(kind) =>
-					`<details open><summary>${escapeHtml(kind)}</summary>${(
-						graph.nodes ?? []
-					)
+					`<details open><summary>${escapeHtml(kind)}</summary>${(graph.nodes ?? [])
 						.filter(
 							(node) =>
 								node.kind === kind &&
-								(!state.search ||
-									node.id.toLowerCase().includes(state.search.toLowerCase())),
+								(!state.search || node.id.toLowerCase().includes(state.search.toLowerCase())),
 						)
 						.map(
 							(node) =>
@@ -114,11 +103,7 @@ export function renderPage(
 			["From", "Relation", "To"],
 			(graph.edges ?? [])
 				.slice(0, 100)
-				.map((edge) => [
-					escapeHtml(edge.from),
-					badge(edge.kind),
-					escapeHtml(edge.to),
-				]),
+				.map((edge) => [escapeHtml(edge.from), badge(edge.kind), escapeHtml(edge.to)]),
 		)}</section></div>`;
 	}
 	if (route === "graph")
@@ -126,23 +111,12 @@ export function renderPage(
 	if (route === "nodes")
 		return `${heading("Nodes", "Processes, services, and tasks in the active system.", `<label class="search"><span class="sr-only">Search nodes</span><input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Search nodes…"></label>`)}${table(
 			"All nodes",
-			[
-				"Node",
-				"Kind",
-				"Lifecycle",
-				"Health",
-				"Runtime",
-				"PID",
-				"Restarts",
-				"Actions",
-			],
+			["Node", "Kind", "Lifecycle", "Health", "Runtime", "PID", "Restarts", "Actions"],
 			snapshot.nodes
 				.filter(
 					(n) =>
 						!state.search ||
-						`${n.id} ${n.kind} ${n.runtime}`
-							.toLowerCase()
-							.includes(state.search.toLowerCase()),
+						`${n.id} ${n.kind} ${n.runtime}`.toLowerCase().includes(state.search.toLowerCase()),
 				)
 				.map((n) => [
 					`<button class="link" data-node="${escapeHtml(n.id)}">${escapeHtml(n.id)}</button>`,
@@ -195,15 +169,7 @@ export function renderPage(
 	if (route === "artifacts")
 		return `${heading("Artifacts", "Produced outputs and their provenance.")}${table(
 			"Artifact browser",
-			[
-				"Artifact",
-				"Type",
-				"Status",
-				"Producer",
-				"Consumers",
-				"Location",
-				"Size",
-			],
+			["Artifact", "Type", "Status", "Producer", "Consumers", "Location", "Size"],
 			snapshot.artifacts.map((a) => [
 				`<b>${escapeHtml(a.id)}</b>`,
 				escapeHtml(a.type),
@@ -221,11 +187,7 @@ export function renderPage(
 		const filter = state.eventFilter.toLowerCase();
 		const events = data.events
 			.filter(
-				(e) =>
-					!filter ||
-					`${e.type} ${e.source} ${e.correlationId}`
-						.toLowerCase()
-						.includes(filter),
+				(e) => !filter || `${e.type} ${e.source} ${e.correlationId}`.toLowerCase().includes(filter),
 			)
 			.slice(-300)
 			.reverse();
@@ -238,18 +200,13 @@ export function renderPage(
 				escapeHtml(e.source),
 				`<code>${escapeHtml(e.correlationId)}</code>`,
 			]),
-			filter
-				? "No events match the active filter."
-				: "Events appear as the workspace changes.",
+			filter ? "No events match the active filter." : "Events appear as the workspace changes.",
 		)}`;
 	}
 	if (route === "logs") {
 		const filter = state.eventFilter.toLowerCase();
 		const logs = data.events
-			.filter(
-				(event) =>
-					!filter || JSON.stringify(event).toLowerCase().includes(filter),
-			)
+			.filter((event) => !filter || JSON.stringify(event).toLowerCase().includes(filter))
 			.slice(-500)
 			.reverse();
 		return `${heading("Logs", "Unified structured output from nodes, plugins, providers, and operations.", `<button data-action="toggle-events">${state.eventsPaused ? "Resume" : "Pause"}</button>`)}<div class="toolbar"><label class="search"><span class="sr-only">Search logs</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Search logs or /regex/…"></label>${badge(state.eventsPaused ? "Paused" : "Following")}</div><section class="log-viewer" aria-label="Log stream">${logs.length ? logs.map((event) => `<article><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><b>${escapeHtml(event.source)}</b><code>${escapeHtml(event.type)}</code><span>${escapeHtml(event.correlationId)}</span></article>`).join("") : `<p>No log-compatible events match this filter.</p>`}</section>`;
@@ -263,9 +220,7 @@ export function renderPage(
 				`<code>${escapeHtml(d.code)}</code>`,
 				escapeHtml(d.message),
 				escapeHtml(
-					d.source
-						? `${d.source.file ?? ""}${d.source.path ? ` · ${d.source.path}` : ""}`
-						: "—",
+					d.source ? `${d.source.file ?? ""}${d.source.path ? ` · ${d.source.path}` : ""}` : "—",
 				),
 			]),
 			"No diagnostics. The workspace has no reported findings.",
@@ -273,15 +228,7 @@ export function renderPage(
 	if (route === "health")
 		return `${heading("Health", "Authoritative node checks and restart signals.")}${table(
 			"Node health",
-			[
-				"Node",
-				"Health",
-				"Provider",
-				"Last check",
-				"Successes",
-				"Failures",
-				"Restart",
-			],
+			["Node", "Health", "Provider", "Last check", "Successes", "Failures", "Restart"],
 			snapshot.nodes.map((n) => [
 				`<button class="link" data-node="${escapeHtml(n.id)}">${escapeHtml(n.id)}</button>`,
 				badge(n.health),
@@ -321,16 +268,9 @@ export function renderPage(
 			"No providers are reported by this workspace.",
 		)}`;
 	if (route === "metrics") {
-		const running = snapshot.nodes.filter(
-			(node) => node.state === "running",
-		).length;
-		const restarts = snapshot.nodes.reduce(
-			(sum, node) => sum + node.restartCount,
-			0,
-		);
-		const failures = snapshot.diagnostics.filter(
-			(item) => item.severity === "error",
-		).length;
+		const running = snapshot.nodes.filter((node) => node.state === "running").length;
+		const restarts = snapshot.nodes.reduce((sum, node) => sum + node.restartCount, 0);
+		const failures = snapshot.diagnostics.filter((item) => item.severity === "error").length;
 		return `${heading("Metrics", "Lightweight realtime indicators derived from the current public snapshot.")}<div class="summary-grid"><article class="metric"><span>Node availability</span><strong>${snapshot.nodes.length ? Math.round((running / snapshot.nodes.length) * 100) : 100}%</strong><small>${running} currently running</small></article><article class="metric"><span>Restarts</span><strong>${restarts}</strong><small>Across all nodes</small></article><article class="metric"><span>Event throughput</span><strong>${data.events.length}</strong><small>Retained structured events</small></article><article class="metric"><span>Errors</span><strong>${failures}</strong><small>${snapshot.diagnostics.length} total diagnostics</small></article></div>${table(
 			"Operation duration",
 			["Operation", "Type", "Status", "Duration"],
@@ -353,9 +293,7 @@ export function renderPage(
 		return `${heading("Settings", "Dashboard preferences stay local to this browser.")}<div class="settings-list"><section><h2>Appearance</h2><p>Cycle system, light, and dark themes from the top bar. Reduced motion and high-contrast system preferences are respected.</p></section><section><h2>Navigation</h2><p>Collapse the desktop sidebar, use the responsive drawer, or press <kbd>Ctrl K</kbd> / <kbd>⌘ K</kbd> anywhere.</p></section><section><h2>Data & privacy</h2><p>The UI consumes immutable snapshots over SSE. Configuration is redacted by the dashboard server and no workspace data is persisted by the dashboard.</p></section></div>`;
 	if (route.startsWith("ext:")) {
 		const id = route.slice(4),
-			contribution = state.contributions.find(
-				(item) => item.id === id && item.kind === "page",
-			);
+			contribution = state.contributions.find((item) => item.id === id && item.kind === "page");
 		if (!contribution)
 			return empty(
 				"Plugin page unavailable",
@@ -368,16 +306,11 @@ export function renderPage(
 
 function renderViewModel(value: unknown): string {
 	if (value == null)
-		return empty(
-			"No contribution data",
-			"This plugin page returned an empty view model.",
-		);
+		return empty("No contribution data", "This plugin page returned an empty view model.");
 	if (Array.isArray(value))
 		return `<div class="view-grid">${value.map((item) => `<article>${renderViewModel(item)}</article>`).join("")}</div>`;
 	if (typeof value === "object")
-		return `<dl class="view-model">${Object.entries(
-			value as Record<string, unknown>,
-		)
+		return `<dl class="view-model">${Object.entries(value as Record<string, unknown>)
 			.map(
 				([key, item]) =>
 					`<div><dt>${escapeHtml(key)}</dt><dd>${typeof item === "object" ? renderViewModel(item) : escapeHtml(item)}</dd></div>`,

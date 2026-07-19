@@ -21,17 +21,12 @@ const names = [
 	"wsrt.yaml",
 	"wsrt.yml",
 ];
-export function discoverConfigFile(
-	root: string,
-	explicit?: string,
-): string | undefined {
+export function discoverConfigFile(root: string, explicit?: string): string | undefined {
 	if (explicit) {
 		const file = path.resolve(root, explicit);
 		return fs.existsSync(file) ? file : undefined;
 	}
-	return names
-		.map((name) => path.join(root, name))
-		.find((file) => fs.existsSync(file));
+	return names.map((name) => path.join(root, name)).find((file) => fs.existsSync(file));
 }
 export async function loadSystemDefinition(
 	root = process.cwd(),
@@ -77,9 +72,7 @@ async function read(file: string): Promise<WorkspaceDefinitionInput> {
 		return parseYaml(fs.readFileSync(file, "utf8")) as WorkspaceDefinitionInput;
 	if (file.endsWith(".json")) return JSON.parse(fs.readFileSync(file, "utf8"));
 	if (file.endsWith(".jsonc"))
-		return JSON.parse(
-			fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""),
-		);
+		return JSON.parse(fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""));
 	if (file.endsWith(".cjs")) return value(createRequire(import.meta.url)(file));
 	if (file.endsWith(".ts")) {
 		const output = await transform(fs.readFileSync(file, "utf8"), {
@@ -88,10 +81,7 @@ async function read(file: string): Promise<WorkspaceDefinitionInput> {
 			platform: "node",
 			target: "node20",
 		});
-		const temporary = path.join(
-			path.dirname(file),
-			`.wsrt-${process.pid}-${Date.now()}.mjs`,
-		);
+		const temporary = path.join(path.dirname(file), `.wsrt-${process.pid}-${Date.now()}.mjs`);
 		fs.writeFileSync(temporary, output.code);
 		try {
 			return value(await import(pathToFileURL(temporary).href));

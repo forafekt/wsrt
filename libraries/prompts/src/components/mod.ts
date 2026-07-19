@@ -1,8 +1,8 @@
 export {
-  type BootPromptSettings,
-  isCancel,
-  settings,
-  updateSettings,
+	type BootPromptSettings,
+	isCancel,
+	settings,
+	updateSettings,
 } from "../core/mod.ts";
 
 export * from "./autocomplete.ts";

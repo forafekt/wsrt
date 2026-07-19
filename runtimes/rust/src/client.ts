@@ -36,8 +36,7 @@ export class RustRuntimeClient extends EventTarget {
 	readonly #options: RustRuntimeClientOptions;
 	readonly #pending = new Map<string, PendingRequest>();
 	#process?: ChildProcessWithoutNullStreams;
-	#state: "created" | "starting" | "ready" | "stopping" | "stopped" | "failed" =
-		"created";
+	#state: "created" | "starting" | "ready" | "stopping" | "stopped" | "failed" = "created";
 	#exit?: Promise<void>;
 
 	constructor(options: RustRuntimeClientOptions) {
@@ -72,8 +71,7 @@ export class RustRuntimeClient extends EventTarget {
 		lines.on("line", (line) => this.#handleLine(line));
 		this.#exit = new Promise((resolve) => {
 			child.once("exit", (code, signal) => {
-				const expected =
-					this.#state === "stopping" || this.#state === "stopped";
+				const expected = this.#state === "stopping" || this.#state === "stopped";
 				this.#process = undefined;
 				this.#state = expected ? "stopped" : "failed";
 				const error = new Error(
@@ -81,9 +79,7 @@ export class RustRuntimeClient extends EventTarget {
 				);
 				this.#rejectAll(error);
 				if (!expected)
-					this.dispatchEvent(
-						new CustomEvent("runtimeExit", { detail: { code, signal } }),
-					);
+					this.dispatchEvent(new CustomEvent("runtimeExit", { detail: { code, signal } }));
 				resolve();
 			});
 		});
@@ -94,9 +90,7 @@ export class RustRuntimeClient extends EventTarget {
 		try {
 			const ping = await this.request("ping");
 			if (ping.protocolVersion !== RUST_RUNTIME_PROTOCOL_VERSION)
-				throw new Error(
-					`Unsupported Rust runtime protocol ${ping.protocolVersion}`,
-				);
+				throw new Error(`Unsupported Rust runtime protocol ${ping.protocolVersion}`);
 			this.#state = "ready";
 		} catch (error) {
 			child.kill();
@@ -128,20 +122,14 @@ export class RustRuntimeClient extends EventTarget {
 
 	request<K extends keyof RustRuntimeRequestMap>(
 		method: K,
-		...args: RustRuntimeRequestMap[K] extends undefined
-			? []
-			: [RustRuntimeRequestMap[K]]
+		...args: RustRuntimeRequestMap[K] extends undefined ? [] : [RustRuntimeRequestMap[K]]
 	): Promise<RustRuntimeResultMap[K]> {
 		const child = this.#process;
 		if (
 			!child ||
-			(this.#state !== "starting" &&
-				this.#state !== "ready" &&
-				this.#state !== "stopping")
+			(this.#state !== "starting" && this.#state !== "ready" && this.#state !== "stopping")
 		)
-			return Promise.reject(
-				new Error(`Rust runtime is not available (${this.#state})`),
-			);
+			return Promise.reject(new Error(`Rust runtime is not available (${this.#state})`));
 		const id = randomUUID();
 		const result = new Promise<unknown>((resolve, reject) =>
 			this.#pending.set(id, { resolve, reject }),

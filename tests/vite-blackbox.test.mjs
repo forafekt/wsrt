@@ -27,12 +27,8 @@ async function listenerAvailable(t) {
 
 async function fixture() {
 	const root = await fs.mkdtemp(path.join(os.tmpdir(), "wsrt-vite-blackbox-"));
-	const vitePlugin = pathToFileURL(
-		path.resolve("plugins/vite/dist/plugin.js"),
-	).href;
-	const nativePlugin = pathToFileURL(
-		path.resolve("plugins/vite/dist/vite.js"),
-	).href;
+	const vitePlugin = pathToFileURL(path.resolve("plugins/vite/dist/plugin.js")).href;
+	const nativePlugin = pathToFileURL(path.resolve("plugins/vite/dist/vite.js")).href;
 	await fs.writeFile(
 		path.join(root, "index.html"),
 		'<main id="app"></main><script type="module" src="/main.js"></script>',
@@ -78,15 +74,10 @@ test("real Vite service reports its selected ephemeral port and cleans telemetry
 	const plane = await createControlPlane({ root, config: "wsrt.json" });
 	try {
 		await plane.start(["web"]);
-		const event = plane
-			.listEvents()
-			.find((item) => item.type === "provider.server.listening");
+		const event = plane.listEvents().find((item) => item.type === "provider.server.listening");
 		assert.ok(event);
 		assert.equal(event.payload.port > 0, true);
-		assert.equal(
-			plane.snapshot().nodes.find((item) => item.id === "service:web").state,
-			"ready",
-		);
+		assert.equal(plane.snapshot().nodes.find((item) => item.id === "service:web").state, "ready");
 		await plane.stop(["web"]);
 		assert.equal(plane.getNodeState("service:web"), "stopped");
 	} finally {
@@ -108,9 +99,7 @@ test("Vite startup cancellation cannot later publish readiness or success", asyn
 		);
 		let operation;
 		for (let attempt = 0; attempt < 100; attempt++) {
-			operation = plane
-				.listOperations()
-				.find((item) => item.status === "running");
+			operation = plane.listOperations().find((item) => item.status === "running");
 			if (operation) break;
 			await new Promise((resolve) => setImmediate(resolve));
 		}
@@ -128,22 +117,16 @@ test("Vite startup cancellation cannot later publish readiness or success", asyn
 			plane
 				.listEvents()
 				.filter(
-					(item) =>
-						item.type === "node.readiness.succeeded" &&
-						item.correlationId === operation.id,
+					(item) => item.type === "node.readiness.succeeded" && item.correlationId === operation.id,
 				).length,
 			0,
 		);
 		const snapshot = plane.snapshot();
-		assert.equal(
-			JSON.parse(JSON.stringify(snapshot)).revision,
-			snapshot.revision,
-		);
+		assert.equal(JSON.parse(JSON.stringify(snapshot)).revision, snapshot.revision);
 	} catch (cause) {
-		throw new Error(
-			`Vite cancellation fixture failed during ${stage}: ${String(cause)}`,
-			{ cause },
-		);
+		throw new Error(`Vite cancellation fixture failed during ${stage}: ${String(cause)}`, {
+			cause,
+		});
 	} finally {
 		await plane.dispose().catch(() => {});
 		await fs.rm(root, { recursive: true, force: true });
@@ -159,9 +142,7 @@ test("real Vite builds publish hashed artifacts and detect unchanged output", as
 		assert.ok(first.length > 0);
 		assert.ok(first.every((item) => item.hash && item.status === "ready"));
 		await plane.runTask("build");
-		assert.ok(
-			plane.listArtifacts().every((item) => item.status === "unchanged"),
-		);
+		assert.ok(plane.listArtifacts().every((item) => item.status === "unchanged"));
 	} finally {
 		await plane.dispose();
 		await fs.rm(root, { recursive: true, force: true });
@@ -177,14 +158,8 @@ test("concurrent Vite preparations have isolated wrapper and telemetry ownership
 	);
 	try {
 		const states = prepared.map((item) => item.metadata.executionState);
-		assert.equal(
-			new Set(states.map((item) => item.executionId)).size,
-			states.length,
-		);
-		assert.equal(
-			new Set(states.map((item) => item.telemetryFile)).size,
-			states.length,
-		);
+		assert.equal(new Set(states.map((item) => item.executionId)).size, states.length);
+		assert.equal(new Set(states.map((item) => item.telemetryFile)).size, states.length);
 	} finally {
 		await Promise.all(prepared.map((item) => item.dispose()));
 	}

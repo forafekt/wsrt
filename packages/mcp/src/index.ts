@@ -19,15 +19,8 @@ export async function runMcpTool(
 		const diagnostics = contributed.validate?.(input) ?? [];
 		if (diagnostics.some((item) => item.severity === "error"))
 			throw new Error(diagnostics.map((item) => item.message).join("\n"));
-		return controlPlane.invokePluginContribution(
-			"mcp",
-			contributed.id,
-			(context) =>
-				contributed.run(
-					input,
-					context,
-					options.signal ?? new AbortController().signal,
-				),
+		return controlPlane.invokePluginContribution("mcp", contributed.id, (context) =>
+			contributed.run(input, context, options.signal ?? new AbortController().signal),
 		);
 	}
 	switch (request.tool) {
@@ -56,17 +49,13 @@ export async function runMcpTool(
 		case "workspace.diagnostics":
 			return controlPlane.validate();
 		case "workspace.state":
-			return controlPlane
-				.snapshot()
-				.nodes.find((node) => node.id === String(input.id ?? ""));
+			return controlPlane.snapshot().nodes.find((node) => node.id === String(input.id ?? ""));
 		case "workspace.events":
 			return controlPlane.listEvents();
 		case "workspace.artifacts":
 			return controlPlane.listArtifacts();
 		case "workspace.artifact":
-			return controlPlane
-				.listArtifacts()
-				.find((item) => item.id === String(input.id ?? ""));
+			return controlPlane.listArtifacts().find((item) => item.id === String(input.id ?? ""));
 		case "workspace.cancel":
 			mutation(options);
 			return {
@@ -94,13 +83,7 @@ export async function readMcpResource(
 	id: string,
 	options: { signal?: AbortSignal } = {},
 ): Promise<unknown> {
-	return runContribution(
-		controlPlane,
-		"resource",
-		id,
-		undefined,
-		options.signal,
-	);
+	return runContribution(controlPlane, "resource", id, undefined, options.signal);
 }
 export async function getMcpPrompt(
 	controlPlane: WsrtControlPlane,
@@ -122,8 +105,7 @@ async function runContribution(
 		.plugins.find((item) =>
 			item.contributions.some(
 				(contribution) =>
-					contribution.kind === "mcp" &&
-					contribution.id === id.slice(item.id.length + 1),
+					contribution.kind === "mcp" && contribution.id === id.slice(item.id.length + 1),
 			),
 		);
 	const contributionId = plugin ? id.slice(plugin.id.length + 1) : id;
@@ -131,18 +113,13 @@ async function runContribution(
 		.pluginContributions("mcp")
 		.find((item) => item.kind === kind && item.id === contributionId);
 	if (!contribution || !plugin) throw new Error(`Unknown MCP ${kind}: ${id}`);
-	return controlPlane.invokePluginContribution(
-		"mcp",
-		contribution.id,
-		(context) =>
-			contribution.run(input, context, signal ?? new AbortController().signal),
+	return controlPlane.invokePluginContribution("mcp", contribution.id, (context) =>
+		contribution.run(input, context, signal ?? new AbortController().signal),
 	);
 }
 function mutation(options: { allowMutations?: boolean }) {
 	if (!options.allowMutations)
-		throw new Error(
-			"WSRT_MCP_PERMISSION_DENIED: MCP mutating operations are disabled",
-		);
+		throw new Error("WSRT_MCP_PERMISSION_DENIED: MCP mutating operations are disabled");
 }
 function ids(input: Record<string, unknown>): string[] {
 	return Array.isArray(input.ids)

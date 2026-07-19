@@ -4,18 +4,12 @@ import path from "node:path";
 import type { Plugin } from "vite";
 import { mergeAliases } from "./aliases.js";
 import { createViteBridge } from "./bridge.js";
-import {
-	createEnvelope,
-	maximumTelemetryFileBytes,
-	telemetryProtocol,
-} from "./telemetry.js";
+import { createEnvelope, maximumTelemetryFileBytes, telemetryProtocol } from "./telemetry.js";
 import type { ViteBridge, VitePluginOptions } from "./types.js";
 
 const sequences = new Map<string, number>();
 
-export function wsrt(
-	options: VitePluginOptions & { bridge?: ViteBridge } = {},
-): Plugin {
+export function wsrt(options: VitePluginOptions & { bridge?: ViteBridge } = {}): Plugin {
 	let bridge = options.bridge;
 	return {
 		name: "wsrt:workspace",
@@ -23,26 +17,16 @@ export function wsrt(
 		async config(config) {
 			bridge ??= await createViteBridge({
 				...options,
-				workspaceRoot: await findWorkspaceRoot(
-					path.resolve(config.root ?? process.cwd()),
-				),
+				workspaceRoot: await findWorkspaceRoot(path.resolve(config.root ?? process.cwd())),
 				projectRoot: config.root,
 			});
 			return {
 				resolve: {
-					alias: mergeAliases(
-						config.resolve?.alias,
-						bridge.aliases,
-						options.aliasPrecedence,
-					),
+					alias: mergeAliases(config.resolve?.alias, bridge.aliases, options.aliasPrecedence),
 				},
 				define: {
-					"import.meta.env.WSRT_WORKSPACE_ROOT": JSON.stringify(
-						bridge.workspaceRoot,
-					),
-					"import.meta.env.WSRT_PROJECT_ROOT": JSON.stringify(
-						bridge.projectRoot,
-					),
+					"import.meta.env.WSRT_WORKSPACE_ROOT": JSON.stringify(bridge.workspaceRoot),
+					"import.meta.env.WSRT_PROJECT_ROOT": JSON.stringify(bridge.projectRoot),
 				},
 			};
 		},
@@ -97,13 +81,8 @@ function isOwnedTelemetryPath(file: string, executionId: string): boolean {
 	try {
 		const directory = path.dirname(file);
 		if (path.basename(file) !== "telemetry.jsonl") return false;
-		const manifest = JSON.parse(
-			readFileSync(path.join(directory, "owner.json"), "utf8"),
-		);
-		return (
-			manifest.protocol === telemetryProtocol &&
-			manifest.executionId === executionId
-		);
+		const manifest = JSON.parse(readFileSync(path.join(directory, "owner.json"), "utf8"));
+		return manifest.protocol === telemetryProtocol && manifest.executionId === executionId;
 	} catch {
 		return false;
 	}
@@ -113,9 +92,7 @@ async function findWorkspaceRoot(start: string): Promise<string> {
 	while (true) {
 		for (const file of ["pnpm-workspace.yaml", "wsrt.config.ts", "wsrt.yaml"])
 			try {
-				await import("node:fs/promises").then(({ access }) =>
-					access(path.join(current, file)),
-				);
+				await import("node:fs/promises").then(({ access }) => access(path.join(current, file)));
 				return current;
 			} catch {}
 		const parent = path.dirname(current);

@@ -29,9 +29,7 @@ function fixture() {
 			id: "review",
 			kind: "prompt",
 			run: (input) => ({
-				messages: [
-					{ role: "user", content: { type: "text", text: String(input) } },
-				],
+				messages: [{ role: "user", content: { type: "text", text: String(input) } }],
 			}),
 		},
 	];
@@ -56,8 +54,7 @@ function fixture() {
 async function connected(options) {
 	const server = new WsrtMcpServer(fixture(), options);
 	const client = new Client({ name: "test", version: "1" });
-	const [clientTransport, serverTransport] =
-		InMemoryTransport.createLinkedPair();
+	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 	await server.connect(serverTransport);
 	await client.connect(clientTransport);
 	return { server, client, clientTransport };
@@ -73,9 +70,7 @@ test("MCP transport discovers and invokes namespaced plugin contributions", asyn
 			tools.tools.map((item) => item.name),
 		);
 		const resources = await client.listResources();
-		const resource = resources.resources.find(
-			(item) => item.name === "fixture.readme",
-		);
+		const resource = resources.resources.find((item) => item.name === "fixture.readme");
 		assert.ok(resource);
 		const prompts = await client.listPrompts();
 		assert.ok(prompts.prompts.some((item) => item.name === "fixture.review"));
@@ -100,11 +95,9 @@ test("MCP transport discovers and invokes namespaced plugin contributions", asyn
 test("MCP transport cancellation and shutdown abort active plugin work", async () => {
 	const { server, client } = await connected();
 	const controller = new AbortController();
-	const pending = client.callTool(
-		{ name: "fixture.slow", arguments: {} },
-		undefined,
-		{ signal: controller.signal },
-	);
+	const pending = client.callTool({ name: "fixture.slow", arguments: {} }, undefined, {
+		signal: controller.signal,
+	});
 	controller.abort(new Error("test cancellation"));
 	await assert.rejects(pending, /cancel|abort/i);
 	await server.close();

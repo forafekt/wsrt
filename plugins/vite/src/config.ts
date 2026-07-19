@@ -30,11 +30,7 @@ export async function composeViteConfig(
 			? null
 			: await loadConfigFromFile(env, options.configFile, bridge.projectRoot);
 	const user = loaded?.config ?? {};
-	const aliases = mergeAliases(
-		user.resolve?.alias,
-		bridge.aliases,
-		options.aliasPrecedence,
-	);
+	const aliases = mergeAliases(user.resolve?.alias, bridge.aliases, options.aliasPrecedence);
 	const plugins = hasNativePlugin(user.plugins)
 		? user.plugins
 		: [...(user.plugins ?? []), wsrt({ ...options, bridge })];
@@ -51,11 +47,7 @@ export async function composeViteConfig(
 }
 function hasNativePlugin(plugins: UserConfig["plugins"]): boolean {
 	return flatten(plugins).some(
-		(item) =>
-			item &&
-			typeof item === "object" &&
-			"name" in item &&
-			item.name === "wsrt:workspace",
+		(item) => item && typeof item === "object" && "name" in item && item.name === "wsrt:workspace",
 	);
 }
 function flatten(value: unknown): unknown[] {

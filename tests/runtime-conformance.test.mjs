@@ -38,14 +38,8 @@ for (const [name, createProvider] of providers) {
 			await filesystem.writeText(file, "parity");
 			assert.equal(await filesystem.readText(file), "parity");
 			assert.equal(await filesystem.exists(file), true);
-			assert.equal(
-				runtime.capabilities.require("environment").get("PATH"),
-				process.env.PATH,
-			);
-			assert.equal(
-				runtime.capabilities.require("process").cwd(),
-				process.cwd(),
-			);
+			assert.equal(runtime.capabilities.require("environment").get("PATH"), process.env.PATH);
+			assert.equal(runtime.capabilities.require("process").cwd(), process.cwd());
 
 			const successful = runtime.capabilities.require("spawn").spawn({
 				command: process.execPath,
@@ -85,9 +79,7 @@ for (const [name, createProvider] of providers) {
 				}),
 			);
 			assert.deepEqual(
-				(await Promise.all(concurrent.map((handle) => handle.exit))).map(
-					(exit) => exit.code,
-				),
+				(await Promise.all(concurrent.map((handle) => handle.exit))).map((exit) => exit.code),
 				[0, 1, 2, 3],
 			);
 
@@ -108,9 +100,7 @@ for (const [name, createProvider] of providers) {
 			assert.equal(cancelledExit.code, null);
 
 			const controller = new AbortController();
-			const delayed = runtime.capabilities
-				.require("timers")
-				.delay(10_000, controller.signal);
+			const delayed = runtime.capabilities.require("timers").delay(10_000, controller.signal);
 			controller.abort(new Error("cancelled"));
 			await assert.rejects(delayed, /cancelled/);
 
@@ -121,9 +111,7 @@ for (const [name, createProvider] of providers) {
 				);
 			} catch (cause) {
 				if (["EPERM", "EACCES"].includes(cause.code)) {
-					t.skip(
-						`network capability unavailable: ${cause.code} ${cause.message}`,
-					);
+					t.skip(`network capability unavailable: ${cause.code} ${cause.message}`);
 					return;
 				}
 				throw cause;
@@ -149,16 +137,11 @@ test("Rust client rejects pending work when the native runtime crashes", async (
 		timeoutMs: 30_000,
 	});
 	assert.equal(client.forceStop(), true);
-	await assert.rejects(
-		pending,
-		/Rust runtime exited|ECONNREFUSED|operation failed/i,
-	);
+	await assert.rejects(pending, /Rust runtime exited|ECONNREFUSED|operation failed/i);
 });
 
 test("control plane runs a real ready and healthy graph through the Rust provider", async () => {
-	const directory = await fs.mkdtemp(
-		path.join(os.tmpdir(), "wsrt-rust-graph-"),
-	);
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "wsrt-rust-graph-"));
 	const server = path.join(directory, "server.mjs");
 	await fs.writeFile(
 		server,
@@ -187,11 +170,7 @@ test("control plane runs a real ready and healthy graph through the Rust provide
 	try {
 		const result = await plane.start(["native"]);
 		assert.equal(result.states["service:native"], "ready");
-		for (
-			let attempt = 0;
-			attempt < 20 && plane.snapshot().nodes[0].health !== "healthy";
-			attempt++
-		)
+		for (let attempt = 0; attempt < 20 && plane.snapshot().nodes[0].health !== "healthy"; attempt++)
 			await new Promise((resolve) => setTimeout(resolve, 25));
 		assert.equal(plane.snapshot().nodes[0].health, "healthy");
 		await plane.stop(["native"]);

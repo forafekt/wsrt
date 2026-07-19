@@ -51,13 +51,8 @@ test("workspace discovery resolves pnpm packages, sources, aliases, and inferred
 		model.packages.map((item) => item.name),
 		["@fixture/ui", "@fixture/web"],
 	);
-	assert.equal(
-		model.aliases["@fixture/ui"],
-		path.join(root, "packages/ui/src/index.ts"),
-	);
-	assert.deepEqual(model.edges, [
-		{ from: "@fixture/web", to: "@fixture/ui", type: "inferred" },
-	]);
+	assert.equal(model.aliases["@fixture/ui"], path.join(root, "packages/ui/src/index.ts"));
+	assert.deepEqual(model.edges, [{ from: "@fixture/web", to: "@fixture/ui", type: "inferred" }]);
 });
 test("projections preserve user paths and synchronize idempotently", async () => {
 	const root = await fixture();
@@ -74,9 +69,7 @@ test("projections preserve user paths and synchronize idempotently", async () =>
 		second.some((item) => item.changed),
 		false,
 	);
-	const tsconfig = JSON.parse(
-		await fs.readFile(path.join(root, "apps/web/tsconfig.json"), "utf8"),
-	);
+	const tsconfig = JSON.parse(await fs.readFile(path.join(root, "apps/web/tsconfig.json"), "utf8"));
 	assert.deepEqual(tsconfig.compilerOptions.paths["user/*"], ["owned/*"]);
 	assert.ok(tsconfig.compilerOptions.paths["@fixture/ui"]);
 });

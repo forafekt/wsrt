@@ -62,10 +62,7 @@ export function createWsrtCli(
 			try {
 				const result = await action(plane, options);
 				printResult(result, !!options.json);
-				if (
-					keepAlive &&
-					plane.definition().executables.some((item) => item.kind !== "task")
-				) {
+				if (keepAlive && plane.definition().executables.some((item) => item.kind !== "task")) {
 					retained = true;
 					await waitForSignal(() => plane.dispose());
 				}
@@ -77,8 +74,7 @@ export function createWsrtCli(
 	const cli = createCli({
 		name: "wsrt",
 		version,
-		description:
-			"Runtime-first workspace orchestration for local software systems.",
+		description: "Runtime-first workspace orchestration for local software systems.",
 		options: workspaceOptions,
 		examples: [
 			"  $ wsrt inspect",
@@ -97,10 +93,7 @@ export function createWsrtCli(
 				description: "Show the complete control-plane snapshot",
 				group: "Inspection",
 				aliases: ["info"],
-				examples: [
-					"  $ wsrt inspect --json",
-					"  $ wsrt inspect --root ../workspace",
-				],
+				examples: ["  $ wsrt inspect --json", "  $ wsrt inspect --root ../workspace"],
 				action: execute((plane) => plane.snapshot()),
 			},
 			{
@@ -252,11 +245,9 @@ export function createWsrtCli(
 					options: GlobalOptions & { list?: boolean },
 				) =>
 					execute(async (plane) => {
-						const {
-							executeContribution,
-							forwardedArguments,
-							parseForwardedOptions,
-						} = await import("./executable.js");
+						const { executeContribution, forwardedArguments, parseForwardedOptions } = await import(
+							"./executable.js"
+						);
 						const result = await executeContribution(
 							plane,
 							id,
@@ -281,33 +272,25 @@ export function createWsrtCli(
 				name: "workspace inspect",
 				description: "Inspect discovered packages, aliases, and relationships",
 				group: "Workspace",
-				action: execute(async (plane) =>
-					workspaceCommand(plane.definition().root, "inspect"),
-				),
+				action: execute(async (plane) => workspaceCommand(plane.definition().root, "inspect")),
 			},
 			{
 				name: "workspace resolve",
 				description: "Resolve the workspace model without writing files",
 				group: "Workspace",
-				action: execute(async (plane) =>
-					workspaceCommand(plane.definition().root, "resolve"),
-				),
+				action: execute(async (plane) => workspaceCommand(plane.definition().root, "resolve")),
 			},
 			{
 				name: "workspace sync",
 				description: "Synchronize TypeScript paths and manifest dependencies",
 				group: "Workspace",
-				action: execute(async (plane) =>
-					workspaceCommand(plane.definition().root, "sync"),
-				),
+				action: execute(async (plane) => workspaceCommand(plane.definition().root, "sync")),
 			},
 			{
 				name: "workspace check",
 				description: "Fail when workspace projections are stale (CI safe)",
 				group: "Workspace",
-				action: execute(async (plane) =>
-					workspaceCommand(plane.definition().root, "check"),
-				),
+				action: execute(async (plane) => workspaceCommand(plane.definition().root, "check")),
 			},
 			...pluginCommands.map((contribution) => ({
 				name: `${contribution.path} [...pluginArguments]`,
@@ -331,9 +314,7 @@ export function createWsrtCli(
 						pluginSession,
 					});
 					try {
-						process.stdout.write(
-							`${(await plane.complete(input ?? "")).join("\n")}\n`,
-						);
+						process.stdout.write(`${(await plane.complete(input ?? "")).join("\n")}\n`);
 					} finally {
 						await plane.dispose();
 					}
@@ -344,18 +325,13 @@ export function createWsrtCli(
 				description: "Generate shell completion setup (bash, fish, or zsh)",
 				group: "Utilities",
 				validate: (shell: unknown) => {
-					if (
-						shell !== undefined &&
-						!["bash", "fish", "zsh"].includes(String(shell))
-					)
+					if (shell !== undefined && !["bash", "fish", "zsh"].includes(String(shell)))
 						throw new CommandLineError(
 							`unsupported shell \`${shell}\`; expected bash, fish, or zsh`,
 						);
 				},
 				action: (shell: CompletionShell | undefined) => {
-					process.stdout.write(
-						`${generateCompletions(cli, shell ?? detectShell())}\n`,
-					);
+					process.stdout.write(`${generateCompletions(cli, shell ?? detectShell())}\n`);
 				},
 			},
 		],
@@ -363,20 +339,12 @@ export function createWsrtCli(
 	return cli;
 }
 
-async function workspaceCommand(
-	root: string,
-	command: "inspect" | "resolve" | "sync" | "check",
-) {
-	const { projectWorkspace, resolveWorkspace, syncWorkspace } = await import(
-		"@wsrt/workspace"
-	);
+async function workspaceCommand(root: string, command: "inspect" | "resolve" | "sync" | "check") {
+	const { projectWorkspace, resolveWorkspace, syncWorkspace } = await import("@wsrt/workspace");
 	const workspace = await resolveWorkspace({ root });
 	if (command === "inspect" || command === "resolve") return workspace;
 	const projections = await projectWorkspace(workspace);
-	const result = await syncWorkspace(
-		projections,
-		command === "sync" ? "write" : "check",
-	);
+	const result = await syncWorkspace(projections, command === "sync" ? "write" : "check");
 	if (!result.ok)
 		throw new Error(
 			`WSRT_WORKSPACE_DRIFT: ${result.changed.flatMap((item) => item.diagnostics.map((diagnostic) => diagnostic.message)).join("\n")}`,
@@ -401,17 +369,13 @@ export async function run(argv = process.argv): Promise<void> {
 		process.exitCode = 1;
 		const message = cause instanceof Error ? cause.message : String(cause);
 		if (argv.includes("--json"))
-			process.stderr.write(
-				`${JSON.stringify({ error: { code: errorCode(cause), message } })}\n`,
-			);
+			process.stderr.write(`${JSON.stringify({ error: { code: errorCode(cause), message } })}\n`);
 		else logger.error(`Error: ${message}`);
 	} finally {
 		await session
 			?.dispose()
 			.catch((cause) =>
-				logger.error(
-					`Error: ${cause instanceof Error ? cause.message : String(cause)}`,
-				),
+				logger.error(`Error: ${cause instanceof Error ? cause.message : String(cause)}`),
 			);
 	}
 }
@@ -419,24 +383,13 @@ export async function run(argv = process.argv): Promise<void> {
 async function discoverPluginCommands(
 	argv: readonly string[],
 ): Promise<{ commands: readonly CliContribution[]; session?: PluginSession }> {
-	const rootIndex = argv.findIndex(
-		(item) => item === "--root" || item === "-r",
-	);
-	const configIndex = argv.findIndex(
-		(item) => item === "--config" || item === "-c",
-	);
-	const root =
-		rootIndex >= 0 && argv[rootIndex + 1] ? argv[rootIndex + 1] : undefined;
-	const config =
-		configIndex >= 0 && argv[configIndex + 1]
-			? argv[configIndex + 1]
-			: undefined;
+	const rootIndex = argv.findIndex((item) => item === "--root" || item === "-r");
+	const configIndex = argv.findIndex((item) => item === "--config" || item === "-c");
+	const root = rootIndex >= 0 && argv[rootIndex + 1] ? argv[rootIndex + 1] : undefined;
+	const config = configIndex >= 0 && argv[configIndex + 1] ? argv[configIndex + 1] : undefined;
 	const loaded = await loadSystemDefinition(root, config);
 	if (!loaded.definition) return { commands: [] };
-	const plugins = await resolveWorkspacePlugins(
-		loaded.definition.plugins,
-		loaded.definition.root,
-	);
+	const plugins = await resolveWorkspacePlugins(loaded.definition.plugins, loaded.definition.root);
 	const session = new PluginSession(plugins);
 	const contributions = session.contributions("cli");
 	const paths = new Set<string>();
@@ -447,9 +400,7 @@ async function discoverPluginCommands(
 	}
 	return { commands: contributions, session };
 }
-function pluginContext(
-	plane: Awaited<ReturnType<typeof createControlPlane>>,
-): PluginContext {
+function pluginContext(plane: Awaited<ReturnType<typeof createControlPlane>>): PluginContext {
 	return Object.freeze({
 		root: plane.definition().root,
 		configuration: plane.definition(),
@@ -460,9 +411,9 @@ function pluginContext(
 		},
 		diagnostics: {
 			add: (diagnostic) =>
-				logger[
-					diagnostic.severity === "warning" ? "warn" : diagnostic.severity
-				](diagnostic.message),
+				logger[diagnostic.severity === "warning" ? "warn" : diagnostic.severity](
+					diagnostic.message,
+				),
 		},
 		events: {
 			emit: (type, payload) =>
@@ -476,10 +427,7 @@ function pluginContext(
 		services: Object.freeze({ controlPlane: plane, graph: plane.graph() }),
 	});
 }
-function argumentsAfterPath(
-	argv: readonly string[],
-	commandPath: string,
-): string[] {
+function argumentsAfterPath(argv: readonly string[], commandPath: string): string[] {
 	const parts = commandPath.split(/\s+/).filter(Boolean);
 	for (let index = 0; index <= argv.length - parts.length; index++)
 		if (parts.every((part, offset) => argv[index + offset] === part)) {
@@ -497,9 +445,7 @@ function printResult(result: unknown, json: boolean): void {
 		}
 		logger.log(
 			`wsrt ${process.argv.slice(2).join(" ")}`,
-			result && typeof result === "object"
-				? (result as Record<string, unknown>)
-				: { result },
+			result && typeof result === "object" ? (result as Record<string, unknown>) : { result },
 		);
 	}
 }

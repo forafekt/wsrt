@@ -1,7 +1,4 @@
-import type {
-	DashboardContributionView,
-	DashboardSnapshot,
-} from "../../shared/contracts.js";
+import type { DashboardContributionView, DashboardSnapshot } from "../../shared/contracts.js";
 
 export type DashboardState = Readonly<{
 	snapshot?: DashboardSnapshot;
@@ -30,16 +27,13 @@ export function reduceDashboardState(
 		return action.snapshot.revision <= (state.snapshot?.revision ?? -1)
 			? state
 			: Object.freeze({ ...state, snapshot: action.snapshot });
-	if (action.type === "select-node")
-		return Object.freeze({ ...state, selectedNode: action.id });
+	if (action.type === "select-node") return Object.freeze({ ...state, selectedNode: action.id });
 	if (action.type === "filter-events")
 		return Object.freeze({ ...state, eventFilter: action.value });
-	if (action.type === "search")
-		return Object.freeze({ ...state, search: action.value });
+	if (action.type === "search") return Object.freeze({ ...state, search: action.value });
 	if (action.type === "pause-events")
 		return Object.freeze({ ...state, eventsPaused: action.value });
-	if (action.type === "error")
-		return Object.freeze({ ...state, error: action.value });
+	if (action.type === "error") return Object.freeze({ ...state, error: action.value });
 	if (action.type === "contributions")
 		return Object.freeze({
 			...state,

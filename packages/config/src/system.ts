@@ -14,9 +14,7 @@ export type SystemDiagnostic = {
 	source: SourceReference;
 	suggestion?: string;
 };
-export type CommandInput =
-	| string
-	| { command: string; args?: string[]; shell?: boolean };
+export type CommandInput = string | { command: string; args?: string[]; shell?: boolean };
 export type HealthcheckInput =
 	| { type: "process"; unhealthyThreshold?: number; healthyThreshold?: number }
 	| {
@@ -94,18 +92,13 @@ export type WorkspaceDefinitionInput = {
 	schemaVersion?: "1";
 	name: string;
 	workspace?: { root?: string; packageManager?: string };
-	runtimes?: Record<
-		string,
-		{ provider: string; version?: string; options?: unknown }
-	>;
+	runtimes?: Record<string, { provider: string; version?: string; options?: unknown }>;
 	applications?: Record<string, ApplicationInput>;
 	services?: Record<string, ExecutableInput>;
 	tasks?: Record<string, TaskInput>;
 	artifacts?: Record<string, ArtifactInput>;
 	environments?: Record<string, EnvironmentInput>;
-	plugins?: Array<
-		string | { provider: string; options?: unknown } | PluginObjectInput
-	>;
+	plugins?: Array<string | { provider: string; options?: unknown } | PluginObjectInput>;
 };
 export type NormalizedCommand = {
 	command: string;
@@ -140,17 +133,11 @@ export type NormalizedSystemDefinition = {
 	name: string;
 	root: string;
 	workspace: { packageManager?: string };
-	runtimes: Readonly<
-		Record<string, { provider: string; version?: string; options?: unknown }>
-	>;
+	runtimes: Readonly<Record<string, { provider: string; version?: string; options?: unknown }>>;
 	executables: readonly NormalizedExecutable[];
 	artifacts: readonly NormalizedArtifact[];
 	environments: Readonly<Record<string, EnvironmentInput>>;
-	plugins: readonly (
-		| string
-		| { provider: string; options?: unknown }
-		| PluginObjectInput
-	)[];
+	plugins: readonly (string | { provider: string; options?: unknown } | PluginObjectInput)[];
 	sourceFile: string;
 };
 
@@ -166,9 +153,7 @@ const coreKeys = new Set([
 	"environments",
 	"plugins",
 ]);
-export function defineSystem(
-	input: WorkspaceDefinitionInput,
-): WorkspaceDefinitionInput {
+export function defineSystem(input: WorkspaceDefinitionInput): WorkspaceDefinitionInput {
 	return input;
 }
 export function normalizeSystemDefinition(
@@ -186,8 +171,7 @@ export function normalizeSystemDefinition(
 				severity: "error",
 				message: `Unknown core property "${key}"`,
 				source: { file: options.file, path: key },
-				suggestion:
-					"Remove it or put provider-specific data under provider options.",
+				suggestion: "Remove it or put provider-specific data under provider options.",
 			});
 	if (!input.name)
 		diagnostics.push({
@@ -212,16 +196,12 @@ export function normalizeSystemDefinition(
 			root: path.resolve(root, value.root ?? "."),
 			runtime: value.runtime ?? "node",
 			command: command(value.command),
-			provider:
-				value.provider ??
-				(value.adapter ? { provider: value.adapter } : undefined),
+			provider: value.provider ?? (value.adapter ? { provider: value.adapter } : undefined),
 			dependencies: dependencies(value.dependsOn),
 			healthcheck: value.healthcheck,
 			restart: value.restart ?? { policy: "never" },
 			critical: value.critical ?? true,
-			outputs: Object.freeze([
-				...(kind === "task" ? ((value as TaskInput).outputs ?? []) : []),
-			]),
+			outputs: Object.freeze([...(kind === "task" ? ((value as TaskInput).outputs ?? []) : [])]),
 			environment: Object.freeze({ ...value.environment }),
 			source: { file: options.file, path: `${kind}s.${name}` },
 		});
@@ -232,20 +212,18 @@ export function normalizeSystemDefinition(
 		for (const [child, item] of Object.entries(value.processes ?? {}))
 			add("process", child, item, `${app}/process`);
 	}
-	for (const [name, value] of Object.entries(input.services ?? {}))
-		add("service", name, value);
-	for (const [name, value] of Object.entries(input.tasks ?? {}))
-		add("task", name, value);
-	const artifacts: NormalizedArtifact[] = Object.entries(
-		input.artifacts ?? {},
-	).map(([name, value]) => ({
-		...value,
-		id: `artifact:${name}`,
-		name,
-		consumers: Object.freeze([...(value.consumers ?? [])]),
-		metadata: Object.freeze({ ...value.metadata }),
-		source: { file: options.file, path: `artifacts.${name}` },
-	}));
+	for (const [name, value] of Object.entries(input.services ?? {})) add("service", name, value);
+	for (const [name, value] of Object.entries(input.tasks ?? {})) add("task", name, value);
+	const artifacts: NormalizedArtifact[] = Object.entries(input.artifacts ?? {}).map(
+		([name, value]) => ({
+			...value,
+			id: `artifact:${name}`,
+			name,
+			consumers: Object.freeze([...(value.consumers ?? [])]),
+			metadata: Object.freeze({ ...value.metadata }),
+			source: { file: options.file, path: `artifacts.${name}` },
+		}),
+	);
 	const definition: NormalizedSystemDefinition = {
 		schemaVersion: input.schemaVersion ?? "1",
 		name: input.name,
@@ -265,8 +243,7 @@ export function normalizeSystemDefinition(
 }
 function command(value?: CommandInput): NormalizedCommand | undefined {
 	if (!value) return;
-	if (typeof value === "string")
-		return { command: value, args: [], shell: true };
+	if (typeof value === "string") return { command: value, args: [], shell: true };
 	return {
 		command: value.command,
 		args: Object.freeze([...(value.args ?? [])]),
@@ -277,24 +254,16 @@ function dependencies(
 	value?: ExecutableInput["dependsOn"],
 ): { id: string; condition: DependencyCondition }[] {
 	if (!value) return [];
-	if (Array.isArray(value))
-		return value.map((id) => ({ id, condition: "started" }));
+	if (Array.isArray(value)) return value.map((id) => ({ id, condition: "started" }));
 	return Object.entries(value).map(([id, item]) => ({
 		id,
 		condition: item.condition ?? "started",
 	}));
 }
-function references(
-	definition: NormalizedSystemDefinition,
-): SystemDiagnostic[] {
+function references(definition: NormalizedSystemDefinition): SystemDiagnostic[] {
 	const result: SystemDiagnostic[] = [],
 		names = new Set(definition.executables.map((e) => e.name));
-	const push = (
-		code: string,
-		message: string,
-		source: SourceReference,
-		path: string,
-	) =>
+	const push = (code: string, message: string, source: SourceReference, path: string) =>
 		result.push({
 			code,
 			severity: "error",
@@ -346,10 +315,7 @@ function references(
 					);
 				seen.add(output.artifact);
 				const resolved = path.resolve(item.root, output.path);
-				if (
-					resolved !== definition.root &&
-					!resolved.startsWith(`${definition.root}${path.sep}`)
-				)
+				if (resolved !== definition.root && !resolved.startsWith(`${definition.root}${path.sep}`))
 					push(
 						"WSRT_ARTIFACT_PATH_INVALID",
 						`Output path escapes workspace: ${output.path}`,
@@ -378,9 +344,7 @@ function references(
 	}
 	return result;
 }
-export function compileSystemGraph(
-	definition: NormalizedSystemDefinition,
-): SystemGraph {
+export function compileSystemGraph(definition: NormalizedSystemDefinition): SystemGraph {
 	const graph = new SystemGraph(),
 		workspace = `workspace:${definition.name}`,
 		ids = new Map<string, string>();

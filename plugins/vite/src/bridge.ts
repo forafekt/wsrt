@@ -23,10 +23,7 @@ export async function createViteBridge(
 	});
 	return Object.freeze({
 		workspaceRoot,
-		projectRoot: path.resolve(
-			workspaceRoot,
-			options.projectRoot ?? options.project ?? ".",
-		),
+		projectRoot: path.resolve(workspaceRoot, options.projectRoot ?? options.project ?? "."),
 		nodeId: options.nodeId,
 		aliases: workspace.aliases,
 		workspace,

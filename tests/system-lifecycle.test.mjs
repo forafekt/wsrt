@@ -9,10 +9,7 @@ import { dashboardSnapshot } from "@wsrt/plugin-dashboard";
 
 const root = path.resolve("examples/system-lifecycle");
 
-import wsrtVitePlugin, {
-	hasWsrtVitePlugin,
-	viteContribution,
-} from "@wsrt/plugin-vite";
+import wsrtVitePlugin, { hasWsrtVitePlugin, viteContribution } from "@wsrt/plugin-vite";
 
 test("TS and YAML normalize equivalently and compile deterministic graph", async () => {
 	const ts = await loadSystemDefinition(root, "wsrt.config.ts"),
@@ -22,10 +19,7 @@ test("TS and YAML normalize equivalently and compile deterministic graph", async
 	assert.deepEqual(structure(ts.definition), structure(yaml.definition));
 	const plane = await createControlPlane({ root });
 	try {
-		assert.deepEqual(plane.plan(["application:web"]).order, [
-			"service:api",
-			"application:web",
-		]);
+		assert.deepEqual(plane.plan(["application:web"]).order, ["service:api", "application:web"]);
 		assert.equal(plane.getDependencies("application:web")[0].id, "service:api");
 		assert.equal(plane.getConsumers("service:api")[0].id, "application:web");
 	} finally {
@@ -56,8 +50,7 @@ test("real API/web dependency reaches readiness and stops cleanly", async () => 
 		assert.equal(result.states["application:web"], "ready");
 		assert.ok(
 			["checking", "healthy"].includes(
-				plane.snapshot().nodes.find((item) => item.id === "application:web")
-					.health,
+				plane.snapshot().nodes.find((item) => item.id === "application:web").health,
 			),
 		);
 		await plane.stop(["api"]);
@@ -75,19 +68,10 @@ test("composite application expands, starts, restarts a child, and stops all chi
 		assert.equal(started.states["application:desktop/process:main"], "ready");
 		assert.equal(started.states["application:desktop/process:worker"], "ready");
 		await plane.restart(["application:desktop/process:main"]);
-		assert.equal(
-			plane.getNodeState("application:desktop/process:main"),
-			"ready",
-		);
+		assert.equal(plane.getNodeState("application:desktop/process:main"), "ready");
 		await plane.stop(["desktop"]);
-		assert.equal(
-			plane.getNodeState("application:desktop/process:main"),
-			"stopped",
-		);
-		assert.equal(
-			plane.getNodeState("application:desktop/process:worker"),
-			"stopped",
-		);
+		assert.equal(plane.getNodeState("application:desktop/process:main"), "stopped");
+		assert.equal(plane.getNodeState("application:desktop/process:worker"), "stopped");
 	} finally {
 		await plane.dispose();
 	}

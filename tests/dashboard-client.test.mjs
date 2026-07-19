@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-	matchDashboardRoute,
-	reduceDashboardState,
-	streamSnapshots,
-} from "@wsrt/plugin-dashboard";
+import { matchDashboardRoute, reduceDashboardState, streamSnapshots } from "@wsrt/plugin-dashboard";
 
 test("dashboard routes unknown paths to overview", () => {
 	assert.equal(matchDashboardRoute("/operations"), "operations");
@@ -76,10 +72,7 @@ test("dashboard reducer applies only monotonic snapshot revisions", () => {
 		{ eventFilter: "", connected: false },
 		{ type: "snapshot", snapshot: first },
 	);
-	assert.equal(
-		reduceDashboardState(state, { type: "snapshot", snapshot: stale }),
-		state,
-	);
+	assert.equal(reduceDashboardState(state, { type: "snapshot", snapshot: stale }), state);
 });
 
 test("SSE snapshots suppress duplicate revisions and clean up", () => {
@@ -112,10 +105,7 @@ test("SSE snapshots suppress duplicate revisions and clean up", () => {
 		end() {},
 	});
 	listener({ revision: 1 });
-	assert.equal(
-		chunks.filter((chunk) => chunk.includes("event: snapshot")).length,
-		1,
-	);
+	assert.equal(chunks.filter((chunk) => chunk.includes("event: snapshot")).length, 1);
 	close();
 	assert.equal(unsubscribed, true);
 });

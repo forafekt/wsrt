@@ -39,8 +39,7 @@ export class WsrtMcpServer {
 		this.#register();
 	}
 	async connect(transport: Transport): Promise<void> {
-		if (this.#closed)
-			throw coded("WSRT_MCP_SERVER_DISPOSED", "MCP server is disposed");
+		if (this.#closed) throw coded("WSRT_MCP_SERVER_DISPOSED", "MCP server is disposed");
 		await this.server.connect(transport);
 	}
 	async close(): Promise<void> {
@@ -138,12 +137,9 @@ export class WsrtMcpServer {
 					},
 					async ({ input }, extra) =>
 						this.#invoke(extra.signal, async (signal) => {
-							const result = await getMcpPrompt(
-								this.controlPlane,
-								contributionName,
-								input,
-								{ signal },
-							);
+							const result = await getMcpPrompt(this.controlPlane, contributionName, input, {
+								signal,
+							});
 							return promptResult(result);
 						}),
 				);
@@ -156,25 +152,19 @@ export class WsrtMcpServer {
 			.map((contribution) => ({
 				...contribution,
 				pluginId: plugins.find((plugin) =>
-					plugin.contributions.some(
-						(item) => item.kind === "mcp" && item.id === contribution.id,
-					),
+					plugin.contributions.some((item) => item.kind === "mcp" && item.id === contribution.id),
 				)?.id,
 			}))
 			.filter(
-				(value): value is typeof value & { pluginId: string } =>
-					typeof value.pluginId === "string",
+				(value): value is typeof value & { pluginId: string } => typeof value.pluginId === "string",
 			)
-			.sort((a, b) =>
-				`${a.pluginId}/${a.id}`.localeCompare(`${b.pluginId}/${b.id}`),
-			);
+			.sort((a, b) => `${a.pluginId}/${a.id}`.localeCompare(`${b.pluginId}/${b.id}`));
 	}
 	async #invoke<T>(
 		requestSignal: AbortSignal,
 		run: (signal: AbortSignal) => Promise<T>,
 	): Promise<T> {
-		if (this.#closed)
-			throw coded("WSRT_MCP_SERVER_DISPOSED", "MCP server is disposed");
+		if (this.#closed) throw coded("WSRT_MCP_SERVER_DISPOSED", "MCP server is disposed");
 		const controller = new AbortController();
 		const abort = () => controller.abort(requestSignal.reason);
 		requestSignal.addEventListener("abort", abort, { once: true });
@@ -182,10 +172,7 @@ export class WsrtMcpServer {
 		try {
 			const value = await run(controller.signal);
 			if (controller.signal.aborted)
-				throw (
-					controller.signal.reason ??
-					coded("WSRT_MCP_CANCELLED", "MCP invocation cancelled")
-				);
+				throw controller.signal.reason ?? coded("WSRT_MCP_CANCELLED", "MCP invocation cancelled");
 			return value;
 		} finally {
 			requestSignal.removeEventListener("abort", abort);

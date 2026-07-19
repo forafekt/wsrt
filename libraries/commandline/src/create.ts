@@ -38,8 +38,7 @@ export function createCli(config: CliConfig): CommandLine {
 		return config.help?.(sections) ?? sections;
 	});
 	if (config.version) cli.version(config.version);
-	for (const option of config.options ?? [])
-		cli.option(option.name, option.description, option);
+	for (const option of config.options ?? []) cli.option(option.name, option.description, option);
 	for (const example of config.examples ?? []) cli.example(example);
 
 	const register = (definition: CliCommand, parents: string[] = []) => {
@@ -55,8 +54,7 @@ export function createCli(config: CliConfig): CommandLine {
 		for (const example of definition.examples ?? []) command.example(example);
 		if (definition.validate) command.validate(definition.validate);
 		if (definition.action) command.action(definition.action);
-		for (const child of definition.commands ?? [])
-			register(child, [...parents, ownName]);
+		for (const child of definition.commands ?? []) register(child, [...parents, ownName]);
 	};
 	for (const command of config.commands ?? []) register(command);
 	return cli;
@@ -68,9 +66,14 @@ export function generateCompletions(cli: CommandLine, shell: CompletionShell): s
 	const commands = cli.commands.filter((command) => !command.config.hidden && command.name);
 	const names = commands.map((command) => command.name).join(" ");
 	if (shell === "fish")
-		return `${commands.map((command) =>
-			`complete -c ${cli.name} -f -a '${command.name}' -d '${command.description.replaceAll("'", "\\'")}'`
-		).join("\n")}\ncomplete -c ${cli.name} -f -a '(${cli.name} completion query (commandline -ct) 2>/dev/null)'`;
+		return `${commands
+			.map(
+				(command) =>
+					`complete -c ${cli.name} -f -a '${command.name}' -d '${command.description.replaceAll("'", "\\'")}'`,
+			)
+			.join(
+				"\n",
+			)}\ncomplete -c ${cli.name} -f -a '(${cli.name} completion query (commandline -ct) 2>/dev/null)'`;
 	if (shell === "zsh")
 		return `#compdef ${cli.name}\n_${cli.name}() { local -a values; values=(\${(f)"$(${cli.name} completion query "$words[CURRENT]" 2>/dev/null)"}); _describe 'value' values }\ncompdef _${cli.name} ${cli.name}`;
 	return `_${cli.name}_completion() {\n  local cur="\${COMP_WORDS[COMP_CWORD]}"\n  local dynamic="$(${cli.name} completion query "$cur" 2>/dev/null)"\n  COMPREPLY=( $(compgen -W '${names} '"$dynamic" -- "$cur") )\n}\ncomplete -F _${cli.name}_completion ${cli.name}`;

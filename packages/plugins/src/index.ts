@@ -102,10 +102,7 @@ export type CliContribution = {
 	readonly path: string;
 	readonly description: string;
 	readonly owner: PluginIdentity;
-	run(
-		context: PluginContext,
-		args: readonly string[],
-	): unknown | Promise<unknown>;
+	run(context: PluginContext, args: readonly string[]): unknown | Promise<unknown>;
 };
 export type WorkspaceContribution = {
 	readonly id: string;
@@ -125,15 +122,8 @@ export type DashboardContribution = {
 	readonly title?: string;
 	readonly refreshMs?: number;
 	readonly mutation?: boolean;
-	load?(
-		context: PluginContext,
-		signal: AbortSignal,
-	): unknown | Promise<unknown>;
-	run?(
-		input: unknown,
-		context: PluginContext,
-		signal: AbortSignal,
-	): unknown | Promise<unknown>;
+	load?(context: PluginContext, signal: AbortSignal): unknown | Promise<unknown>;
+	run?(input: unknown, context: PluginContext, signal: AbortSignal): unknown | Promise<unknown>;
 };
 export type McpContribution = {
 	readonly id: string;
@@ -141,18 +131,11 @@ export type McpContribution = {
 	readonly description?: string;
 	readonly mutation?: boolean;
 	validate?(input: unknown): readonly ContributionDiagnostic[];
-	run(
-		input: unknown,
-		context: PluginContext,
-		signal: AbortSignal,
-	): unknown | Promise<unknown>;
+	run(input: unknown, context: PluginContext, signal: AbortSignal): unknown | Promise<unknown>;
 };
 export type CompletionContribution = {
 	readonly id: string;
-	complete(
-		input: string,
-		context: PluginContext,
-	): readonly string[] | Promise<readonly string[]>;
+	complete(input: string, context: PluginContext): readonly string[] | Promise<readonly string[]>;
 };
 export type PluginContributions = {
 	runtimes?: readonly RuntimeProvider[];
@@ -174,15 +157,11 @@ export interface WsrtPlugin extends PluginMetadata {
 	readonly lifecycle?: PluginLifecycle;
 	dispose?(): void | Promise<void>;
 }
-export function definePlugin<const Plugin extends WsrtPlugin>(
-	plugin: Plugin,
-): Plugin {
+export function definePlugin<const Plugin extends WsrtPlugin>(plugin: Plugin): Plugin {
 	return Object.freeze(plugin);
 }
 
-const contributionCapability: Partial<
-	Record<keyof PluginContributions, PluginCapability>
-> = {
+const contributionCapability: Partial<Record<keyof PluginContributions, PluginCapability>> = {
 	runtimes: "runtime-provider",
 	adapters: "execution-provider",
 	readiness: "readiness-provider",
@@ -197,9 +176,7 @@ const contributionCapability: Partial<
 	completion: "completion",
 };
 
-export function orderPlugins(
-	plugins: readonly WsrtPlugin[],
-): readonly WsrtPlugin[] {
+export function orderPlugins(plugins: readonly WsrtPlugin[]): readonly WsrtPlugin[] {
 	validatePluginSet(plugins);
 	const result: WsrtPlugin[] = [];
 	const remaining = new Map(plugins.map((plugin) => [plugin.id, plugin]));
@@ -264,17 +241,14 @@ export class PluginSession {
 	constructor(plugins: readonly WsrtPlugin[]) {
 		this.#plugins = orderPlugins(plugins);
 		assertUniqueContributions(this.#plugins);
-		for (const plugin of this.#plugins)
-			this.#states.set(plugin.id, "discovered");
+		for (const plugin of this.#plugins) this.#states.set(plugin.id, "discovered");
 	}
 	list(): readonly WsrtPlugin[] {
 		return this.#plugins;
 	}
 	executables(): readonly ExecutableContribution[] {
 		return Object.freeze(
-			this.#plugins.flatMap((plugin) => [
-				...(plugin.contributions?.executables ?? []),
-			]),
+			this.#plugins.flatMap((plugin) => [...(plugin.contributions?.executables ?? [])]),
 		);
 	}
 	executable(id: string): ExecutableContribution | undefined {
@@ -293,9 +267,9 @@ export class PluginSession {
 	}
 	owner(kind: keyof PluginContributions, id: string): string | undefined {
 		return this.#plugins.find((plugin) =>
-			(
-				plugin.contributions?.[kind] as readonly { id?: string }[] | undefined
-			)?.some((item) => item.id === id),
+			(plugin.contributions?.[kind] as readonly { id?: string }[] | undefined)?.some(
+				(item) => item.id === id,
+			),
 		)?.id;
 	}
 	async invoke<T>(
@@ -305,9 +279,7 @@ export class PluginSession {
 		run: (context: PluginContext) => T | Promise<T>,
 	): Promise<T> {
 		if (this.#disposed)
-			throw new Error(
-				"WSRT_PLUGIN_INVOCATION_DISPOSED: Plugin session is disposed",
-			);
+			throw new Error("WSRT_PLUGIN_INVOCATION_DISPOSED: Plugin session is disposed");
 		const plugin = this.owner(kind, id);
 		if (!plugin) throw new Error(`Unknown ${kind} contribution: ${id}`);
 		const key = `${kind}:${id}`;
@@ -318,8 +290,7 @@ export class PluginSession {
 		try {
 			return await run(scopedContext(context, plugin, this.#diagnostics));
 		} catch (cause) {
-			state.lastFailure =
-				cause instanceof Error ? cause.message : String(cause);
+			state.lastFailure = cause instanceof Error ? cause.message : String(cause);
 			const diagnostic: ContributionDiagnostic = {
 				code: "plugin.contribution_failed",
 				severity: "error",
@@ -352,9 +323,7 @@ export class PluginSession {
 	): Promise<void> {
 		for (const plugin of this.#plugins) {
 			try {
-				await plugin.lifecycle?.[stage]?.(
-					scopedContext(context, plugin.id, this.#diagnostics),
-				);
+				await plugin.lifecycle?.[stage]?.(scopedContext(context, plugin.id, this.#diagnostics));
 				this.#states.set(plugin.id, stageState(stage));
 			} catch (cause) {
 				this.#states.set(plugin.id, "failed");
@@ -373,12 +342,8 @@ export class PluginSession {
 					capabilities: Object.freeze(inferredCapabilities(plugin)),
 					state: this.#states.get(plugin.id) ?? "discovered",
 					registrations: Object.freeze(registrations(plugin)),
-					diagnostics: Object.freeze(
-						this.#diagnostics.filter((item) => item.plugin === plugin.id),
-					),
-					contributions: Object.freeze(
-						contributionSnapshots(plugin, this.#invocations),
-					),
+					diagnostics: Object.freeze(this.#diagnostics.filter((item) => item.plugin === plugin.id)),
+					contributions: Object.freeze(contributionSnapshots(plugin, this.#invocations)),
 				}),
 			),
 		);
@@ -390,9 +355,7 @@ export class PluginSession {
 		for (const plugin of [...this.#plugins].reverse()) {
 			try {
 				if (context)
-					await plugin.lifecycle?.shutdown?.(
-						scopedContext(context, plugin.id, this.#diagnostics),
-					);
+					await plugin.lifecycle?.shutdown?.(scopedContext(context, plugin.id, this.#diagnostics));
 				await plugin.dispose?.();
 				this.#states.set(plugin.id, "disposed");
 			} catch (cause) {
@@ -403,8 +366,7 @@ export class PluginSession {
 				errors.push(new PluginLifecycleError(plugin.id, "shutdown", cause));
 			}
 		}
-		if (errors.length)
-			throw new AggregateError(errors, "Plugin disposal failed");
+		if (errors.length) throw new AggregateError(errors, "Plugin disposal failed");
 	}
 }
 
@@ -448,15 +410,11 @@ function validatePluginSet(plugins: readonly WsrtPlugin[]): void {
 		for (const dependency of dependencies(plugin.requires))
 			validateDependency(plugin, dependency, available, true);
 		for (const dependency of dependencies(plugin.optional))
-			if (available.has(dependency.id))
-				validateDependency(plugin, dependency, available, false);
+			if (available.has(dependency.id)) validateDependency(plugin, dependency, available, false);
 		for (const dependency of dependencies(plugin.incompatible))
 			if (
 				available.has(dependency.id) &&
-				versionMatches(
-					available.get(dependency.id)?.version ?? "0.0.0",
-					dependency,
-				)
+				versionMatches(available.get(dependency.id)?.version ?? "0.0.0", dependency)
 			)
 				throw new PluginResolutionError(
 					"plugin.incompatible",
@@ -485,15 +443,10 @@ function validateDependency(
 			`Plugin ${plugin.id} requires ${dependency.id}${dependency.minVersion ? ` >=${dependency.minVersion}` : ""}${dependency.maxVersion ? ` <=${dependency.maxVersion}` : ""}; found ${target.version}`,
 		);
 }
-function versionMatches(
-	version: string,
-	dependency: Exclude<PluginDependency, string>,
-): boolean {
+function versionMatches(version: string, dependency: Exclude<PluginDependency, string>): boolean {
 	return (
-		(!dependency.minVersion ||
-			compareVersions(version, dependency.minVersion) >= 0) &&
-		(!dependency.maxVersion ||
-			compareVersions(version, dependency.maxVersion) <= 0)
+		(!dependency.minVersion || compareVersions(version, dependency.minVersion) >= 0) &&
+		(!dependency.maxVersion || compareVersions(version, dependency.maxVersion) <= 0)
 	);
 }
 function compareVersions(a: string, b: string): number {
@@ -508,25 +461,19 @@ function compareVersions(a: string, b: string): number {
 function versionParts(value: string): number[] {
 	const match = value.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
 	if (!match)
-		throw new PluginResolutionError(
-			"plugin.version_invalid",
-			`Invalid plugin version: ${value}`,
-		);
+		throw new PluginResolutionError("plugin.version_invalid", `Invalid plugin version: ${value}`);
 	return match.slice(1).map((item) => Number(item ?? 0));
 }
 function dependencies(
 	values?: readonly PluginDependency[],
 ): Array<Exclude<PluginDependency, string>> {
-	return (values ?? []).map((value) =>
-		typeof value === "string" ? { id: value } : value,
-	);
+	return (values ?? []).map((value) => (typeof value === "string" ? { id: value } : value));
 }
 function inferredCapabilities(plugin: WsrtPlugin): PluginCapability[] {
 	const values = new Set(plugin.capabilities ?? []);
 	for (const [kind, items] of Object.entries(plugin.contributions ?? {}))
 		if (Array.isArray(items) && items.length) {
-			const capability =
-				contributionCapability[kind as keyof PluginContributions];
+			const capability = contributionCapability[kind as keyof PluginContributions];
 			if (capability) values.add(capability);
 		}
 	return [...values].sort();
@@ -538,19 +485,14 @@ function registrations(plugin: WsrtPlugin): Record<string, readonly string[]> {
 			.map(([kind, values]) => [
 				kind,
 				Object.freeze(
-					(values as readonly { id?: string }[])
-						.map((value) => value.id ?? "anonymous")
-						.sort(),
+					(values as readonly { id?: string }[]).map((value) => value.id ?? "anonymous").sort(),
 				),
 			]),
 	);
 }
 function contributionSnapshots(
 	plugin: WsrtPlugin,
-	invocations: Map<
-		string,
-		{ active: number; lastInvokedAt?: string; lastFailure?: string }
-	>,
+	invocations: Map<string, { active: number; lastInvokedAt?: string; lastFailure?: string }>,
 ): ContributionSnapshot[] {
 	const operational = new Set<keyof PluginContributions>([
 		"runtimes",
@@ -599,9 +541,7 @@ function metadata(plugin: WsrtPlugin): PluginMetadata {
 		incompatible: plugin.incompatible,
 	};
 }
-function stageState(
-	stage: Exclude<PluginLifecycleStage, "shutdown">,
-): PluginState {
+function stageState(stage: Exclude<PluginLifecycleStage, "shutdown">): PluginState {
 	if (stage === "discover") return "discovered";
 	if (stage === "configure") return "configured";
 	if (stage === "workspace" || stage === "graph") return "compiled";
@@ -644,9 +584,7 @@ function assertUniqueContributions(plugins: readonly WsrtPlugin[]): void {
 			if (Array.isArray(values))
 				for (const value of values) {
 					const id =
-						value && typeof value === "object" && "id" in value
-							? String(value.id)
-							: undefined;
+						value && typeof value === "object" && "id" in value ? String(value.id) : undefined;
 					if (!id) continue;
 					if (
 						(kind === "executables" || kind === "cli") &&

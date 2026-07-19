@@ -20,15 +20,11 @@ test("declarative commands support nested paths, aliases, validation, and async 
 						name: "install <name>",
 						description: "Install a plugin",
 						aliases: ["add"],
-						options: [
-							{ name: "--force", description: "Replace an installation" },
-						],
+						options: [{ name: "--force", description: "Replace an installation" }],
 						validate: (name) => {
-							if (name === "invalid")
-								throw new CommandLineError("invalid plugin");
+							if (name === "invalid") throw new CommandLineError("invalid plugin");
 						},
-						action: async (name, options) =>
-							calls.push({ name, force: options.force }),
+						action: async (name, options) => calls.push({ name, force: options.force }),
 					},
 				],
 			},
@@ -48,10 +44,7 @@ test("unknown commands offer an actionable suggestion", async () => {
 		name: "example",
 		commands: [{ name: "inspect", description: "Inspect" }],
 	});
-	await assert.rejects(
-		cli.parseAsync(["node", "example", "inspec"]),
-		/Did you mean `inspect`/,
-	);
+	await assert.rejects(cli.parseAsync(["node", "example", "inspec"]), /Did you mean `inspect`/);
 });
 
 test("completion generation covers supported shells", () => {

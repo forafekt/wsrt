@@ -17,9 +17,7 @@ for (const file of fs
 	.readdirSync(path.join(root, ".release", "tarballs"))
 	.filter((item) => item.endsWith(".tgz"))) {
 	const entries = readTarball(path.join(root, ".release", "tarballs", file));
-	const packed = JSON.parse(
-		entries.get("package/package.json").toString("utf8"),
-	);
+	const packed = JSON.parse(entries.get("package/package.json").toString("utf8"));
 	manifest.devDependencies[packed.name] = `file:../tarballs/${file}`;
 }
 fs.writeFileSync(packageFile, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -57,7 +55,5 @@ execFileSync(
 	{ cwd: consumer, stdio: "inherit" },
 );
 if (!fs.existsSync(path.join(consumer, "apps", "web", "dist", "index.html")))
-	throw new Error(
-		"Packed Vite integration did not produce apps/web/dist/index.html",
-	);
+	throw new Error("Packed Vite integration did not produce apps/web/dist/index.html");
 console.log("External packed-package consumer test passed.");
