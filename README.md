@@ -14,7 +14,7 @@ The initial npm release is being prepared and has not been published. After publ
 pnpm add -D @wsrt/cli@next @wsrt/config@next @wsrt/plugin-vite@next
 ```
 
-Create a typed definition with `defineSystem`, then run `pnpm wsrt validate`, `pnpm wsrt workspace inspect`, and a finite task before adopting services. See [first use](./docs/FIRST_USE.md), the [package publication matrix](./docs/PUBLICATION.md), and the [Activeline trial](./docs/ACTIVELANE_TRIAL.md). The CLI, Node runtime, config, workspace inspection, Vite integration, plugin contracts, dashboard, and MCP are alpha. Low-level graph/lifecycle/CLI dependencies are provisional. Rust npm distribution, durable state, deployment, and distributed operation are not supported.
+Create a typed definition with `defineSystem`, then run `pnpm wsrt validate`, `pnpm wsrt workspace inspect`, and a finite task before adopting services. See [first use](./docs/FIRST_USE.md), the [package publication matrix](./docs/PUBLICATION.md). The CLI, Node runtime, config, workspace inspection, Vite integration, plugin contracts, dashboard, and MCP are alpha. Low-level graph/lifecycle/CLI dependencies are provisional. Rust npm distribution, durable state, deployment, and distributed operation are not supported.
 
 ## System definition
 
