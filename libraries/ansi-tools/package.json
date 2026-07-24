@@ -1,0 +1,47 @@
+{
+	"name": "@wsrt/ansi-tools",
+	"version": "0.1.0-alpha.0",
+	"description": "Internal-facing ANSI terminal formatting utilities used by the WSRT CLI.",
+	"license": "ISC",
+	"type": "module",
+	"main": "./dist/mod.js",
+	"module": "./dist/mod.js",
+	"types": "./dist/mod.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/mod.d.ts",
+			"import": "./dist/mod.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit"
+	},
+	"private": false,
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "libraries/ansi-tools"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
+}
