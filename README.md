@@ -8,7 +8,7 @@
 > **It is not recommended for production use or new projects yet.**
 > If you'd like to follow the project's progress, experiment with the architecture, or contribute feedback, you're very welcome—but please expect things to change frequently.
 
-WSRT is a runtime-centric lifecycle platform...
+
 WSRT is a runtime-centric lifecycle platform for local software systems. One definition describes applications, services, processes, tasks, artifacts, environments, dependencies, runtimes, and plugins. WSRT normalizes that definition, compiles it into a graph, and operates it through one control plane.
 
 Use WSRT when a project needs dependency-aware startup, readiness, task execution, artifact tracking, or several user interfaces over the same runtime state. Do not use it as a container orchestrator, deployment platform, or replacement for a package manager.
