@@ -1,0 +1,47 @@
+{
+	"name": "@wsrt/argparse",
+	"version": "0.1.0-alpha.0",
+	"type": "module",
+	"private": false,
+	"main": "./dist/mod.js",
+	"module": "./dist/mod.js",
+	"types": "./dist/mod.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/mod.d.ts",
+			"import": "./dist/mod.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit"
+	},
+	"description": "Internal-facing argument parsing primitives used by the WSRT CLI.",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "libraries/argparse"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
+}

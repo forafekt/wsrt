@@ -1,16 +1,19 @@
 # @wsrt/commandline
 
-A **Deno-first, composable command-line framework** for building modern CLIs with subcommands, typed options, nested flags, events, and rich help output.
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
+A **runtime-portable, composable command-line framework** for building modern CLIs with subcommands, typed options, nested flags, events, and rich help output.
 
 `@wsrt/commandline` is designed to feel familiar if you’ve used tools like `commander`, but with a few strong opinions:
 
-* Native **Deno support**
+* Native **Deno and Node.js support**
 * Explicit command + option modeling
 * Built-in **subcommands**, **aliases**, and **global options**
 * Dot-notation options (`--config.db.host`)
 * Variadic and required args (`<arg>`, `[arg]`, `[...args]`)
 * Event-driven command lifecycle
-* Zero Node.js shims
+* No runtime compatibility shims
 
 ---
 
@@ -25,14 +28,13 @@ A **Deno-first, composable command-line framework** for building modern CLIs wit
 * 🧩 Extensible help sections
 * 📡 EventEmitter-based command hooks
 * 🚫 Unknown option detection (configurable)
-* 🦕 Pure Deno, no Node dependencies
 
 ---
 
 ## Installation
 
 ```bash
-deno add jsr:@wsrt/commandline
+pnpm add @wsrt/commandline
 ```
 
 ```ts
@@ -52,8 +54,49 @@ cli
   .help()
   .version("1.0.0");
 
-cli.parse(Deno.args);
+await cli.parseAsync();
 ```
+
+For asynchronous actions, use `await cli.parseAsync()` so validation and the
+selected action finish before control returns to the caller.
+
+## Declarative CLI
+
+`createCli` is the preferred API for application CLIs. It builds on the same
+`CommandLine` and `Command` classes, so declarative and fluent definitions can
+be composed.
+
+```ts
+import { createCli } from "@wsrt/commandline";
+
+const cli = createCli({
+  name: "mycli",
+  version: "1.0.0",
+  description: "Manage the example workspace.",
+  options: [
+    { name: "--json", description: "Emit JSON" },
+  ],
+  commands: [
+    {
+      name: "plugin",
+      description: "Manage plugins",
+      commands: [
+        {
+          name: "install <name>",
+          description: "Install a plugin",
+          aliases: ["add"],
+          action: async (name, options) => {},
+        },
+      ],
+    },
+  ],
+});
+
+await cli.parseAsync();
+```
+
+Nested definitions are matched longest-first, aliases retain their parent
+path, and groups can be assigned with `group` for structured global help.
 
 Running:
 
@@ -309,6 +352,29 @@ import { CommandLineError } from "@wsrt/commandline/mod.ts";
 
 You can catch and format them yourself if needed.
 
+Unknown commands produce a nearest-command suggestion when there is a useful
+match. Commands can add synchronous or asynchronous validation before their
+action:
+
+```ts
+cli.command("deploy <environment>", "Deploy")
+  .validate((environment) => {
+    if (!environments.includes(environment)) {
+      throw new CommandLineError(`unknown environment: ${environment}`);
+    }
+  });
+```
+
+## Shell Completion
+
+Generate a completion script from the registered command model:
+
+```ts
+import { generateCompletions } from "@wsrt/commandline";
+
+console.log(generateCompletions(cli, "zsh")); // bash, fish, or zsh
+```
+
 ---
 
 ## Design Philosophy
@@ -317,7 +383,7 @@ You can catch and format them yourself if needed.
 * **Commands are data**
 * **Help output is first-class**
 * **No Node compatibility hacks**
-* **Composable with other bootlane packages**
+* **Composable with other wsrt packages**
 
 This package is intended to be a foundational building block for larger tooling ecosystems, not just one-off scripts.
 

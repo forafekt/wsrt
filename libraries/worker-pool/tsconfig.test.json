@@ -1,0 +1,5 @@
+{
+	"extends": "../../tsconfig.package.json",
+	"compilerOptions": { "noEmit": true, "allowJs": true, "checkJs": false },
+	"include": ["tests/**/*.ts", "tests/**/*.mjs", "examples/**/*.mjs"]
+}

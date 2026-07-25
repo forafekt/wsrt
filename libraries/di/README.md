@@ -1,5 +1,8 @@
 # @wsrt/di
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 A lightweight, strongly-typed Dependency Injection (DI) container for TypeScript and Deno (works in Node and browsers as well).
 
 This container provides:
@@ -46,7 +49,7 @@ This container provides:
 
 ## 📦 Installation
 ```bash
-deno add jsr:@wsrt/di
+pnpm add @wsrt/di
 ```
 
 ### Deno

@@ -1,0 +1,53 @@
+{
+	"name": "@wsrt/workspace",
+	"version": "0.1.0-alpha.0",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"yaml": "^2.9.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.12.2",
+		"typescript": "^5.9.3"
+	},
+	"description": "Workspace package discovery, relationships, aliases, and projections for WSRT.",
+	"private": false,
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "packages/workspace"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
+}

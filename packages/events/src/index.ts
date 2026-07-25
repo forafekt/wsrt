@@ -1,120 +1,67 @@
-import type {
-  RuntimeEventBus,
-  RuntimeEventMap,
-  RuntimeEventName,
-  RuntimeTimeline,
-  RuntimeTimelineEntry,
-} from '@wsrt/types'
-
-export function createRuntimeTimeline(): RuntimeTimeline {
-  const entries: RuntimeTimelineEntry[] = []
-  let nextId = 1
-
-  return {
-    record(name, event) {
-      const entry = {
-        id: nextId,
-        timestamp: new Date().toISOString(),
-        name,
-        ...summarizeEvent(name, event),
-      }
-      nextId += 1
-      entries.push(entry)
-      return entry
-    },
-    list() {
-      return entries
-    },
-    recent(limit = 50) {
-      return entries.slice(Math.max(0, entries.length - limit))
-    },
-    clear() {
-      entries.length = 0
-    },
-  }
+export type StructuredEvent<Type extends string = string, Payload = unknown> = {
+	id: string;
+	sequence?: number;
+	type: Type;
+	timestamp: string;
+	source: string;
+	correlationId: string;
+	causationId?: string;
+	operationId?: string;
+	payload: Payload;
+};
+export type EventQuery = {
+	source?: string;
+	type?: string;
+	operationId?: string;
+	correlationId?: string;
+	sinceSequence?: number;
+	since?: string;
+};
+export class EventJournal<Event extends StructuredEvent = StructuredEvent> extends EventTarget {
+	readonly #history: Event[] = [];
+	#sequence = 0;
+	constructor(readonly maximumSize = 1_000) {
+		super();
+		if (maximumSize < 1) throw new Error("Event journal maximum size must be positive");
+	}
+	publish(input: Event): Event {
+		const event = Object.freeze({
+			...input,
+			sequence: ++this.#sequence,
+		}) as Event;
+		this.#history.push(event);
+		if (this.#history.length > this.maximumSize)
+			this.#history.splice(0, this.#history.length - this.maximumSize);
+		this.dispatchEvent(new CustomEvent(event.type, { detail: event }));
+		return event;
+	}
+	subscribe<Type extends Event["type"]>(
+		type: Type,
+		listener: (event: Extract<Event, { type: Type }>) => void,
+	): () => void {
+		const handler = (event: globalThis.Event) => listener((event as CustomEvent).detail);
+		this.addEventListener(type, handler);
+		return () => this.removeEventListener(type, handler);
+	}
+	query(query: EventQuery = {}): readonly Event[] {
+		return this.#history.filter(
+			(event) =>
+				(!query.source || event.source === query.source) &&
+				(!query.type || event.type === query.type) &&
+				(!query.operationId || event.operationId === query.operationId) &&
+				(!query.correlationId || event.correlationId === query.correlationId) &&
+				(!query.sinceSequence || (event.sequence ?? 0) > query.sinceSequence) &&
+				(!query.since || event.timestamp >= query.since),
+		);
+	}
+	list(): readonly Event[] {
+		return this.query();
+	}
+	get sequence(): number {
+		return this.#sequence;
+	}
+	clear(): void {
+		this.#history.length = 0;
+	}
 }
-
-export function createRuntimeEventBus(timeline = createRuntimeTimeline()): RuntimeEventBus {
-  const listeners = new Map<RuntimeEventName, Set<(event: RuntimeEventMap[RuntimeEventName]) => void>>()
-
-  return {
-    on(name, listener) {
-      const bucket = listeners.get(name) ?? new Set()
-      bucket.add(listener)
-      listeners.set(name, bucket)
-      return () => bucket.delete(listener)
-    },
-    once(name, listener) {
-      const off = this.on(name, (event) => {
-        off()
-        listener(event)
-      })
-      return off
-    },
-    emit(name, event) {
-      timeline.record(name, event)
-      for (const listener of listeners.get(name) ?? []) listener(event as RuntimeEventMap[RuntimeEventName])
-    },
-  }
-}
-
-function summarizeEvent<Name extends RuntimeEventName>(
-  name: Name,
-  event: RuntimeEventMap[Name],
-): Pick<RuntimeTimelineEntry, 'summary' | 'detail'> {
-  if ('service' in event) {
-    return {
-      summary: `${name} ${event.service.id}`,
-      detail: {
-        id: event.service.id,
-        state: event.service.state,
-        kind: event.service.kind,
-        project: event.service.project,
-      },
-    }
-  }
-  if ('task' in event) {
-    return { summary: `${name} ${event.task.id}`, detail: { id: event.task.id } }
-  }
-  if ('command' in event) {
-    return {
-      summary: `${name} ${event.command.id}`,
-      detail: { id: event.command.id, args: 'args' in event ? event.args : undefined },
-    }
-  }
-  if ('action' in event) {
-    return {
-      summary: `${name} ${event.action}${event.id ? ` ${event.id}` : ''}`,
-      detail: event,
-    }
-  }
-  if ('diagnostic' in event) {
-    return {
-      summary: `${name} ${event.diagnostic.code}`,
-      detail: {
-        code: event.diagnostic.code,
-        level: event.diagnostic.level,
-        message: event.diagnostic.message,
-      },
-    }
-  }
-  if ('project' in event) {
-    return { summary: `${name} ${event.project.name}`, detail: { name: event.project.name } }
-  }
-  if ('package' in event) {
-    return { summary: `${name} ${event.package.name}`, detail: { name: event.package.name } }
-  }
-  if ('artifacts' in event) {
-    return { summary: `${name} ${event.artifacts.length} artifact(s)`, detail: event.artifacts }
-  }
-  if ('graph' in event) {
-    return {
-      summary: `${name} ${event.graph.nodes.length} node(s), ${event.graph.edges.length} edge(s)`,
-      detail: { nodes: event.graph.nodes.length, edges: event.graph.edges.length },
-    }
-  }
-  if ('root' in event) {
-    return { summary: `${name} ${event.root}`, detail: event }
-  }
-  return { summary: name.toString() }
-}
+export { EventJournal as EventStream };

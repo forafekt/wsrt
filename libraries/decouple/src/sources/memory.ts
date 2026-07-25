@@ -1,5 +1,3 @@
-export function fromObject(
-  obj: Record<string, string | undefined>,
-) {
-  return () => obj;
+export function fromObject(obj: Record<string, string | undefined>) {
+	return () => obj;
 }

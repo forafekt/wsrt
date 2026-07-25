@@ -19,7 +19,7 @@ Think of it as a **layered config system**: values from higher-priority sources 
 ## Installation
 
 ```bash
-deno add jsr:@wsrt/decouple
+pnpm add @wsrt/decouple
 ````
 
 Or import directly in your Deno project:

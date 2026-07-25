@@ -1,6 +1,6 @@
 # @wsrt/worker-pool
 
-Typed Node.js `worker_threads` pool for CPU-heavy and isolation-sensitive work in ActiveLane packages.
+Typed Node.js `worker_threads` pool for CPU-heavy and isolation-sensitive work.
 
 The package is ESM-first, dependency-free at runtime, and designed for reusable production code rather than examples-only usage. It supports fixed and dynamic worker counts, bounded queues, priorities, retries, cancellation, timeouts, metrics, and structured lifecycle events.
 

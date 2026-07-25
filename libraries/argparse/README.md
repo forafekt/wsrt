@@ -1,17 +1,19 @@
 # @wsrt/argparse
 
+> [!WARNING]
+> This package is part of WSRT, which is under active early development. APIs, configuration, behavior, and package boundaries may change without notice. It is not currently recommended for production or critical workloads.
+
 A tiny, dependency-free argument parser.
 
 `@wsrt/argparse` is a fast, minimal CLI argument parser inspired by the classic Unix style. It supports aliases, booleans, strings, defaults, strict/unknown handling, and `--no-*` flags — without pulling in half the ecosystem.
 
-Designed for **Deno-first tooling** and internal CLIs where control and predictability matter.
+Designed for internal CLIs where control and predictability matter.
 
 ---
 
 ## Features
 
 * 🚀 Zero dependencies
-* 🦕 Deno-native
 * 🔀 Short & long flag aliases
 * 🔤 String & boolean typing
 * 🔢 Automatic number coercion
@@ -25,7 +27,7 @@ Designed for **Deno-first tooling** and internal CLIs where control and predicta
 ## Installation
 
 ```bash
-deno add jsr:@wsrt/argparse
+pnpm add @wsrt/argparse
 ```
 
 ```ts

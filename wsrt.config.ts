@@ -1,81 +1,65 @@
-import { defineWorkspace } from '@wsrt/core'
-import dashboardPlugin from '@wsrt/plugin-dashboard'
-import gitPlugin from '@wsrt/plugin-git'
-import typeScriptPlugin from '@wsrt/plugin-typescript'
-import workspacePlugin from '@wsrt/plugin-workspace'
+import { defineSystem } from "@wsrt/config";
 
-export default defineWorkspace({
-  projects: {},
-  workspace: {
-    packages: [
-      './packages/*',
-    ],
-  },
-  graph: {
-    includeExternal: false,
-  },
-  analyze: {
-    circularDependencies: true,
-    deadPackages: true,
-    deadExports: true,
-    missingDependencies: true,
-    duplicateDependencies: true,
-    versionDrift: true,
-    importStyle: true,
-    health: true,
-    impact: true,
-  },
-  imports: {
-    validateRelativeWorkspaceImports: true,
-    fixRelativeWorkspaceImports: false,
-  },
-  artifacts: {
-    dir: './.wsrt',
-    report: true,
-    graph: true,
-    packages: true,
-    aliases: true,
-    diagnostics: true,
-  },
-  mcp: {
-    enabled: true,
-    name: 'wsrt',
-    exposeSourcePaths: true,
-    exposeReports: true,
-    exposeDiagnostics: true,
-    maxResults: 100,
-  },
-  tsconfig: {
-    enabled: true,
-    mode: 'check',
-    paths: true,
-    root: false,
-    projects: true,
-  },
-  manifests: {
-    enabled: true,
-    mode: 'check',
-    targets: ['package-json'],
-  },
-  report: {
-    file: './.vitem/report.json',
-    pretty: true,
-  },
-  plugins: [
-    dashboardPlugin({
-      enabled: true,
-      host: '0.0.0.0',
-      port: 5177,
-      path: '/wsrt',
-    }),
-    gitPlugin(),
-    typeScriptPlugin(),
-    workspacePlugin(),
-  ],
-})
-
-
-    // "@wsrt/plugin-dashboard?enabled=true&host=0.0.0.0&port=5177&path=/wsrt",
-    // "@wsrt/plugin-git",
-    // "@wsrt/plugin-typescript",
-    // "@wsrt/plugin-workspace",
+export default defineSystem({
+	schemaVersion: "1",
+	name: "wsrt",
+	workspace: { packageManager: "pnpm" },
+	runtimes: {
+		node: { provider: "node", version: "latest" },
+	},
+	plugins: [
+		{
+			provider: "@wsrt/plugin-dashboard",
+			options: {
+				host: "127.0.0.1",
+				port: 5177,
+				basePath: "/__wsrt",
+				open: false,
+			},
+		},
+		// { provider: "@wsrt/plugin-terraform", options: {} },
+	],
+	tasks: {
+		architecture: {
+			command: { command: "node", args: ["scripts/check-architecture.mjs"] },
+		},
+		lint: {
+			command: { command: "pnpm", args: ["exec", "biome", "check", "."] },
+		},
+		typecheck: { command: { command: "pnpm", args: ["-r", "typecheck"] } },
+		build: {
+			command: { command: "pnpm", args: ["-r", "build"] },
+			dependsOn: { typecheck: { condition: "successful" } },
+		},
+		test: {
+			command: {
+				command: "node",
+				args: ["--test", "tests/*.mjs"],
+				shell: true,
+			},
+			dependsOn: { build: { condition: "successful" } },
+		},
+		validate: {
+			command: {
+				command: "node",
+				args: ["-e", "console.log('WSRT validation complete')"],
+			},
+			dependsOn: {
+				architecture: { condition: "successful" },
+				lint: { condition: "successful" },
+				test: { condition: "successful" },
+			},
+		},
+		demo: {
+			command: { command: "echo", args: ["Hello World"] },
+		},
+	},
+	artifacts: {
+		build: {
+			type: "workspace-build",
+			producer: "build",
+			location: "packages/*/dist",
+		},
+	},
+	environments: { development: { activate: { tasks: ["typecheck"] } } },
+});

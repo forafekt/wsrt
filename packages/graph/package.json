@@ -1,30 +1,48 @@
 {
-  "name": "@wsrt/graph",
-  "version": "0.1.0",
-  "type": "module",
-  "private": false,
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@wsrt/types": "workspace:*"
-  }
+	"name": "@wsrt/graph",
+	"version": "0.1.0-alpha.0",
+	"type": "module",
+	"private": false,
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {},
+	"description": "Advanced graph primitives used by WSRT configuration and lifecycle packages.",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "packages/graph"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
 }

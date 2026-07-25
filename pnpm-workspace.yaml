@@ -4,6 +4,7 @@ packages:
   - libraries/*
   - packages/*
   - plugins/*
+  - runtimes/*
   - tooling/*
 
 allowBuilds:
