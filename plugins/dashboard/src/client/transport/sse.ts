@@ -5,6 +5,7 @@ export type SnapshotTransportOptions = {
 	reconnectMs?: number;
 	eventSource?: typeof EventSource;
 	fetcher?: typeof fetch;
+	onProtocolError?: (message: string) => void;
 };
 export class SnapshotTransport {
 	#source?: EventSource;
@@ -34,7 +35,15 @@ export class SnapshotTransport {
 		const response = await (this.options.fetcher ?? fetch)(
 			this.options.snapshotUrl ?? this.#url("/api/snapshot"),
 		);
-		if (!response.ok) throw new Error(`Snapshot request failed: HTTP ${response.status}`);
+		if (!response.ok) {
+			let message = `Snapshot request failed: HTTP ${response.status}`;
+			try {
+				const body = await response.json();
+				message = body?.error?.message ?? message;
+			} catch {}
+			this.options.onProtocolError?.(message);
+			throw new Error(message);
+		}
 		this.#apply(await response.json());
 	}
 	close() {
@@ -53,6 +62,16 @@ export class SnapshotTransport {
 				this.#apply(JSON.parse((event as MessageEvent).data));
 			} catch {
 				this.onConnection(false);
+			}
+		});
+		this.#source.addEventListener("protocol-error", (event) => {
+			try {
+				const value = JSON.parse((event as MessageEvent).data);
+				this.options.onProtocolError?.(
+					value?.error?.message ?? "Dashboard received an oversized transport frame",
+				);
+			} catch {
+				this.options.onProtocolError?.("Dashboard received a malformed protocol error");
 			}
 		});
 		this.#source.onerror = () => {

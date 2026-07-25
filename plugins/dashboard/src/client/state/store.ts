@@ -7,6 +7,11 @@ export type DashboardState = Readonly<{
 	eventFilter: string;
 	search: string;
 	eventsPaused: boolean;
+	virtualStart: number;
+	lineWrap: boolean;
+	graphKind: string;
+	graphHealth: string;
+	graphState: string;
 	error?: string;
 	connected: boolean;
 	contributions: readonly DashboardContributionView[];
@@ -17,6 +22,9 @@ export type DashboardAction =
 	| { type: "filter-events"; value: string }
 	| { type: "search"; value: string }
 	| { type: "pause-events"; value: boolean }
+	| { type: "virtual-window"; value: number }
+	| { type: "line-wrap"; value: boolean }
+	| { type: "graph-filter"; field: "kind" | "health" | "state"; value: string }
 	| { type: "clear-visible-events" }
 	| { type: "error"; value?: string }
 	| { type: "connected"; value: boolean }
@@ -53,6 +61,13 @@ export function reduceDashboardState(
 		});
 	if (action.type === "clear-visible-events")
 		return Object.freeze({ ...state, visibleEvents: Object.freeze([]) });
+	if (action.type === "virtual-window")
+		return action.value === state.virtualStart
+			? state
+			: Object.freeze({ ...state, virtualStart: Math.max(0, action.value) });
+	if (action.type === "line-wrap") return Object.freeze({ ...state, lineWrap: action.value });
+	if (action.type === "graph-filter")
+		return Object.freeze({ ...state, [`graph${capitalize(action.field)}`]: action.value });
 	if (action.type === "error") return Object.freeze({ ...state, error: action.value });
 	if (action.type === "contributions")
 		return Object.freeze({
@@ -66,6 +81,11 @@ export class DashboardStore {
 		eventFilter: "",
 		search: "",
 		eventsPaused: false,
+		virtualStart: 0,
+		lineWrap: false,
+		graphKind: "",
+		graphHealth: "",
+		graphState: "",
 		connected: false,
 		contributions: Object.freeze([]),
 	});
@@ -84,4 +104,8 @@ export class DashboardStore {
 		listener(this.#state);
 		return () => this.#listeners.delete(listener);
 	}
+}
+
+function capitalize(value: string) {
+	return `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
 }

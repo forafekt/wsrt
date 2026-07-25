@@ -1,4 +1,6 @@
 import type { DashboardRoute } from "../shared/contracts.js";
+import { applyContributionSurfaces } from "./contributions.js";
+import { WorkbenchLayout } from "./layout.js";
 import { escapeHtml, renderNodeInspector, renderPage } from "./pages/index.js";
 import { DashboardRouter } from "./router.js";
 import { DashboardStore } from "./state/store.js";
@@ -61,6 +63,8 @@ export function mountDashboard(root: HTMLElement) {
 	const store = new DashboardStore();
 	let route: DashboardRoute = "overview",
 		scale = 1,
+		panX = 0,
+		panY = 0,
 		palette = false,
 		drawer = false;
 	let theme = setting("theme", "system") as Theme,
@@ -77,6 +81,7 @@ export function mountDashboard(root: HTMLElement) {
 				(theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches),
 		);
 	};
+	const layout = new WorkbenchLayout(() => render());
 	applyTheme();
 	const render = () => {
 		const snapshot = store.state.snapshot?.controlPlane;
@@ -102,6 +107,14 @@ export function mountDashboard(root: HTMLElement) {
 				button.disabled = true;
 				button.title = "Mutations are disabled for this dashboard";
 			}
+		layout.enhance(root, store.state);
+		applyContributionSurfaces(root, store.state, route);
+		const virtual = root.querySelector<HTMLElement>(".virtual-list");
+		if (virtual && store.state.virtualStart > 0)
+			virtual.scrollTop = store.state.virtualStart * Number(virtual.dataset.rowHeight ?? 30);
+		const graphViewport = root.querySelector<SVGGElement>("#graph-viewport");
+		if (graphViewport)
+			graphViewport.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
 	};
 	const router = new DashboardRouter((next) => {
 		route = next;
@@ -138,9 +151,9 @@ export function mountDashboard(root: HTMLElement) {
 			setTimeout(() => root.querySelector<HTMLInputElement>("#palette-search")?.focus());
 		}
 		if (action === "collapse") {
-			collapsed = !collapsed;
+			layout.toggleSidebar();
+			collapsed = layout.state.sidebarCollapsed;
 			save("sidebar", collapsed ? "collapsed" : "expanded");
-			render();
 		}
 		if (action === "open-drawer") {
 			drawer = true;
@@ -165,6 +178,24 @@ export function mountDashboard(root: HTMLElement) {
 				value: !store.state.eventsPaused,
 			});
 		if (action === "clear-events") store.dispatch({ type: "clear-visible-events" });
+		if (action === "line-wrap") store.dispatch({ type: "line-wrap", value: !store.state.lineWrap });
+		if (action === "jump-newest") {
+			store.dispatch({ type: "virtual-window", value: 0 });
+			root.querySelector<HTMLElement>(".virtual-list")?.scrollTo({ top: 0 });
+		}
+		if (action === "clear-graph-filters") {
+			store.dispatch({ type: "search", value: "" });
+			for (const field of ["kind", "health", "state"] as const)
+				store.dispatch({ type: "graph-filter", field, value: "" });
+		}
+		if (action === "layout-reset") layout.reset();
+		if (action === "toggle-bottom") layout.toggleBottom();
+		const bottomTab = target.closest<HTMLElement>("[data-open-bottom]")?.dataset.openBottom;
+		if (bottomTab)
+			layout.open(
+				bottomTab as "logs" | "events" | "timeline" | "operations" | "diagnostics",
+				store.state.selectedNode,
+			);
 		const node = target.closest<HTMLElement>("[data-node]");
 		if (node) store.dispatch({ type: "select-node", id: node.dataset.node });
 		const graph = target.closest<HTMLElement>("[data-graph]")?.dataset.graph;
@@ -173,8 +204,12 @@ export function mountDashboard(root: HTMLElement) {
 				graph === "fit" || graph === "reset"
 					? 1
 					: Math.min(2.5, Math.max(0.4, scale + (graph === "in" ? 0.15 : -0.15)));
+			if (graph === "fit" || graph === "reset") {
+				panX = 0;
+				panY = 0;
+			}
 			const viewport = root.querySelector<SVGGElement>("#graph-viewport");
-			if (viewport) viewport.style.transform = `scale(${scale})`;
+			if (viewport) viewport.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
 		}
 		const copy = target.closest<HTMLElement>("[data-copy]")?.dataset.copy;
 		if (copy) void navigator.clipboard?.writeText(copy).then(() => toast("Copied to clipboard"));
@@ -244,15 +279,77 @@ export function mountDashboard(root: HTMLElement) {
 		if (target.id === "event-filter")
 			store.dispatch({ type: "filter-events", value: target.value });
 		if (target.dataset.filter === "global") store.dispatch({ type: "search", value: target.value });
+		if (target.dataset.graphFilter)
+			store.dispatch({
+				type: "graph-filter",
+				field: target.dataset.graphFilter as "kind" | "health" | "state",
+				value: target.value,
+			});
 		if (target.id === "palette-search") filterPalette(root, target.value);
 	});
+	let scrollFrame = 0;
+	root.addEventListener(
+		"scroll",
+		(event) => {
+			const target = event.target as HTMLElement;
+			if (!target.matches(".virtual-list") || scrollFrame) return;
+			scrollFrame = requestAnimationFrame(() => {
+				scrollFrame = 0;
+				const height = Number(target.dataset.rowHeight ?? 30);
+				store.dispatch({
+					type: "virtual-window",
+					value: Math.max(0, Math.floor(target.scrollTop / height) - 10),
+				});
+			});
+		},
+		true,
+	);
 	root.addEventListener("keydown", (event) => {
 		const target = event.target as HTMLElement;
 		if ((event.key === "Enter" || event.key === " ") && target.matches(".graph-node[data-node]")) {
 			event.preventDefault();
 			store.dispatch({ type: "select-node", id: target.dataset.node });
 		}
+		if (event.key.startsWith("Arrow") && target.matches(".graph-node[data-node]")) {
+			event.preventDefault();
+			const nodes = [...root.querySelectorAll<HTMLElement>(".graph-node[data-node]")];
+			const index = nodes.indexOf(target);
+			const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+			const next = nodes[(index + step + nodes.length) % nodes.length];
+			next?.focus();
+			if (next?.dataset.node) store.dispatch({ type: "select-node", id: next.dataset.node });
+		}
 	});
+	root.addEventListener("pointerdown", (event) => {
+		const graph = (event.target as HTMLElement).closest<HTMLElement>(".graph");
+		if (!graph || (event.target as HTMLElement).closest(".graph-node")) return;
+		const startX = event.clientX;
+		const startY = event.clientY;
+		const initialX = panX;
+		const initialY = panY;
+		graph.setPointerCapture(event.pointerId);
+		const move = (next: PointerEvent) => {
+			panX = initialX + next.clientX - startX;
+			panY = initialY + next.clientY - startY;
+			const viewport = root.querySelector<SVGGElement>("#graph-viewport");
+			if (viewport) viewport.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+		};
+		graph.addEventListener("pointermove", move);
+		graph.addEventListener("pointerup", () => graph.removeEventListener("pointermove", move), {
+			once: true,
+		});
+	});
+	root.addEventListener(
+		"wheel",
+		(event) => {
+			if (!(event.target as HTMLElement).closest(".graph")) return;
+			event.preventDefault();
+			scale = Math.min(2.5, Math.max(0.4, scale + (event.deltaY < 0 ? 0.08 : -0.08)));
+			const viewport = root.querySelector<SVGGElement>("#graph-viewport");
+			if (viewport) viewport.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+		},
+		{ passive: false },
+	);
 	document.addEventListener("keydown", (event) => {
 		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
 			event.preventDefault();
@@ -264,12 +361,23 @@ export function mountDashboard(root: HTMLElement) {
 			palette = false;
 			render();
 		}
+		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+			event.preventDefault();
+			layout.toggleBottom();
+		}
 	});
 	const unsubscribe = store.subscribe(() => render()),
 		stopRouter = router.start(),
 		transport = new SnapshotTransport(
 			(snapshot) => store.dispatch({ type: "snapshot", snapshot }),
 			(value) => store.dispatch({ type: "connected", value }),
+			{
+				onProtocolError: (message) =>
+					store.dispatch({
+						type: "error",
+						value: `${message}. Adjust dashboard frame limits or reduce the workspace projection.`,
+					}),
+			},
 		);
 	void transport.start();
 	void fetch(`${base}/api/contributions`)
@@ -283,6 +391,7 @@ export function mountDashboard(root: HTMLElement) {
 		.catch(() => {});
 	return () => {
 		transport.close();
+		layout.dispose();
 		stopRouter();
 		unsubscribe();
 	};
@@ -327,7 +436,9 @@ function renderPalette(
 		)
 		.join("");
 	const actions = contributions
-		.filter((item) => item.kind === "action")
+		.filter((item) =>
+			["action", "command", "artifact-action", "operation-action"].includes(item.kind),
+		)
 		.map(
 			(item) =>
 				`<button data-contribution="${escapeHtml(item.id)}" data-search="${escapeHtml(`${item.title ?? item.id} action`.toLowerCase())}"><span>▷</span><b>${escapeHtml(item.title ?? item.id)}</b><small>Plugin action</small></button>`,

@@ -51,18 +51,30 @@ pending feedback and confirmations for stop/restart; when `mutations: false`, th
 same controls are visibly disabled with an explanation.
 
 Theme selection cycles through system, light, and dark modes and is stored only in
-the browser. Sidebar state is also local. Both themes honor reduced-motion and the
-layout adapts across mobile, tablet, and desktop widths without page-level
-horizontal overflow.
+the browser. The versioned `wsrt.layout.v1` preference stores sidebar, inspector,
+and bottom-panel dimensions, collapse states, maximization, and the active runtime
+tab. Drag resize handles with the pointer, use arrow keys while a handle is
+focused, or press `Home`/double-click to reset one dimension. Settings provides a
+full layout reset. Narrow screens replace desktop resize behavior with drawers and
+bounded overlays.
 
 Keyboard shortcuts:
 
 | Shortcut | Result |
 | --- | --- |
 | `Ctrl+K` / `Cmd+K` | Open and focus the command palette |
+| `Ctrl+J` / `Cmd+J` | Toggle the bottom runtime panel |
 | `Escape` | Close the command palette |
 | `Enter` / `Space` | Select a focused graph node |
-| `Tab` / `Shift+Tab` | Move through navigation, controls, graph nodes, and tables |
+| Arrow keys on resize handle | Resize by 8 px (`Shift`: 32 px) |
+| `Home` on resize handle | Reset that panel dimension |
+| Graph arrow keys | Move selection through filtered graph nodes |
+| `Tab` / `Shift+Tab` | Move through navigation, panels, graph nodes, and records |
+
+The bottom runtime panel keeps Logs, Events, Timeline, Operations, and Diagnostics
+available without replacing the main editor view. It supports independent resize,
+close, maximize/restore, persisted tabs, and contextual opening from the node
+inspector.
 
 ## Architecture
 
@@ -107,7 +119,9 @@ schemas must fail explicitly rather than being guessed.
 
 SSE reconnects use `Last-Event-ID`, refresh from the snapshot endpoint, then
 resubscribe. The control plane bounds operations to 100 and events to 1,000; the
-UI renders bounded tails rather than creating an unbounded browser history.
+UI renders bounded tails rather than creating an unbounded browser history. Logs
+and events use a 60-row fixed-window renderer over the retained 1,000-record
+journal; scrolling changes the window instead of materializing the full stream.
 Individual event payloads larger than 64 KiB are replaced with a bounded preview.
 Clearing logs only clears the local visible projection.
 
@@ -126,6 +140,8 @@ surfaces, and actions execute through the contribution invocation boundary.
 Supported declarative surfaces are pages, navigation, overview widgets, commands,
 inspector sections, badges, graph decorations, diagnostic and event renderers,
 artifact and operation actions, metric panels, status items, and generic panels.
+Every declared kind has a controlled renderer. `panel` intentionally uses the
+generic JSON-safe fallback; all others render in their named workbench surface.
 
 ```ts
 definePlugin({
@@ -161,7 +177,12 @@ state and operation endpoints to that network and now emits an explicit security
 warning; place an authenticated reverse proxy in front of WSRT and disable
 mutations unless they are required. Request URLs are limited to 8 KiB,
 contributions to 1 MiB, and event payloads to 64 KiB. Plugin strings are escaped
-before rendering and arbitrary HTML or script contributions are rejected. Dashboard
+before rendering and arbitrary HTML or script contributions are rejected. Complete
+snapshot and SSE snapshot frames default to 8 MiB, request bodies to 64 KiB, and
+action/secondary API responses to 1 MiB. Configure `maxSnapshotBytes`,
+`maxRequestBytes`, or `maxActionResponseBytes` when necessary. Oversized snapshots
+fail with `dashboard.frame_too_large`; they are never partially written or silently
+truncated, and the client presents recovery guidance. Dashboard
 shutdown closes SSE clients, unsubscribes snapshot listeners, clears heartbeats,
 and then closes the HTTP server. The dashboard never owns the supplied control
 plane.
@@ -174,10 +195,11 @@ plane.
   is shown only when a provider emits it as an event.
 - Configuration is read-only and source locations are shown only when supplied by
   the configuration diagnostics.
-- Graph layout is deterministic and lightweight; very large graph clustering and
-  minimap support remain future work.
-- Sidebar and inspector widths are currently fixed, and v3 does not yet provide a
-  resizable bottom panel.
+- Graph layout is deterministic, cached by topology, and supports search, kind,
+  lifecycle and health filters, related-node dimming, pan, zoom, fit and keyboard
+  traversal. Clustering and a minimap remain future work.
+- Wrapped variable-height log rows use the same bounded window but do not yet use
+  measured-height virtualization.
 
 ## Development and testing
 
@@ -196,11 +218,14 @@ pnpm --filter @wsrt/plugin-dashboard build
 pnpm --filter @wsrt/plugin-dashboard test:browser
 ```
 
-The deterministic rendered fixture covers initial hydration, workspace and
-connection identity, synchronized node inspection, command-palette navigation,
-log filtering/pause/local clear, theme switching, graph keyboard surface, and a
-390 px narrow viewport. The reducer stress test uses 500 nodes, 1,000 retained
-events, 100 operations, 500 artifacts, and 500 contributions:
+The deterministic rendered fixture covers initial hydration, reconnect and
+resubscription, paused inspection with advancing live revisions, panel resize and
+reload persistence, synchronized node inspection, command-palette navigation,
+1,000-record virtualization, contribution failure isolation, oversized-frame
+recovery, theme switching, graph filtering, and a 390 px narrow viewport. The
+large fixture uses 500 rendered graph nodes, 1,000 retained events, 100 operations,
+500 artifacts, and 500 contributed commands. Reducer and frame-boundary tests run
+with:
 
 ```bash
 node --test tests/dashboard-client.test.mjs

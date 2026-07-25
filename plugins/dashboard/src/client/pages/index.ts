@@ -108,8 +108,7 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 				.map((edge) => [escapeHtml(edge.from), badge(edge.kind), escapeHtml(edge.to)]),
 		)}</section></div>`;
 	}
-	if (route === "graph")
-		return renderGraph(data.graph as Graph, snapshot.nodes, state.selectedNode);
+	if (route === "graph") return renderGraph(data.graph as Graph, snapshot.nodes, state);
 	if (route === "nodes")
 		return `${heading("Nodes", "Processes, services, and tasks in the active system.", `<label class="search"><span class="sr-only">Search nodes</span><input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Search nodes…"></label>`)}${table(
 			"All nodes",
@@ -194,17 +193,13 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 			.filter(
 				(e) => !filter || `${e.type} ${e.source} ${e.correlationId}`.toLowerCase().includes(filter),
 			)
-			.slice(-300)
+			.slice(-1_000)
 			.reverse();
-		return `${heading("Events", "A stable, inspectable timeline of control-plane activity.", `<button data-action="toggle-events">${state.eventsPaused ? "Resume live" : "Pause live"}</button>`)}<div class="toolbar"><label class="search"><span class="sr-only">Filter events</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Filter type, source, correlation…"></label>${state.eventsPaused ? badge("Live updates paused") : badge("Live")}</div>${table(
-			"Timeline",
-			["Time", "Type", "Source", "Correlation"],
-			events.map((e) => [
-				time(e.timestamp),
-				`<code>${escapeHtml(e.type)}</code>`,
-				escapeHtml(e.source),
-				`<code>${escapeHtml(e.correlationId)}</code>`,
-			]),
+		return `${heading("Events", "A stable, inspectable timeline of control-plane activity.", `<button data-action="toggle-events">${state.eventsPaused ? "Resume live" : "Pause live"}</button>`)}<div class="toolbar"><label class="search"><span class="sr-only">Filter events</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Filter type, source, correlation…"></label>${state.eventsPaused ? badge("Live updates paused") : badge("Live")}<button data-action="jump-newest">Jump to newest</button></div>${virtualRecords(
+			events,
+			state.virtualStart,
+			(e) =>
+				`<article role="listitem" tabindex="0" data-record-id="${escapeHtml(e.id)}"><time>${time(e.timestamp)}</time><code>${escapeHtml(e.type)}</code><b>${escapeHtml(e.source)}</b><span>${escapeHtml(e.correlationId)}</span></article>`,
 			filter ? "No events match the active filter." : "Events appear as the workspace changes.",
 		)}`;
 	}
@@ -212,9 +207,16 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 		const filter = state.eventFilter.toLowerCase();
 		const logs = data.events
 			.filter((event) => !filter || JSON.stringify(event).toLowerCase().includes(filter))
-			.slice(-500)
+			.slice(-1_000)
 			.reverse();
-		return `${heading("Logs", "Unified structured output from nodes, plugins, providers, and operations.", `<span class="row-actions"><button data-action="toggle-events">${state.eventsPaused ? "Resume" : "Pause"}</button><button data-action="clear-events">Clear local view</button></span>`)}<div class="toolbar"><label class="search"><span class="sr-only">Search logs</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Search logs or /regex/…"></label>${badge(state.eventsPaused ? "Paused" : "Following")}</div><section class="log-viewer" aria-label="Log stream">${logs.length ? logs.map((event) => `<article><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><b>${escapeHtml(event.source)}</b><code>${escapeHtml(event.type)}</code><span>${escapeHtml(event.correlationId)}</span></article>`).join("") : `<p>No log-compatible events match this filter.</p>`}</section>`;
+		return `${heading("Logs", "Unified structured output from nodes, plugins, providers, and operations.", `<span class="row-actions"><button data-action="toggle-events">${state.eventsPaused ? "Resume" : "Pause"}</button><button data-action="clear-events">Clear local view</button></span>`)}<div class="toolbar"><label class="search"><span class="sr-only">Search logs</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Search logs or /regex/…"></label>${badge(state.eventsPaused ? "Paused" : "Following")}<button data-action="line-wrap" aria-pressed="${state.lineWrap}">${state.lineWrap ? "Disable wrap" : "Wrap lines"}</button><button data-action="jump-newest">Jump to newest</button></div>${virtualRecords(
+			logs,
+			state.virtualStart,
+			(event) =>
+				`<article role="listitem" tabindex="0" data-record-id="${escapeHtml(event.id)}"><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><b>${escapeHtml(event.source)}</b><code>${escapeHtml(event.type)}</code><span>${escapeHtml(event.correlationId)}</span></article>`,
+			"No log-compatible events match this filter.",
+			state.lineWrap,
+		)}`;
 	}
 	if (route === "diagnostics")
 		return `${heading("Diagnostics", "Actionable configuration and runtime findings.")}${table(
@@ -295,7 +297,7 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 		return `${heading("Execution timeline", "Correlated workspace activity across lifecycle, health, artifacts, and plugins.")}<div class="timeline" role="list">${entries.map((event) => `<article role="listitem"><div class="timeline-dot ${tone(event.type)}"></div><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><div><b>${escapeHtml(event.type)}</b><p>${escapeHtml(event.source)} · ${escapeHtml(event.correlationId)}</p></div></article>`).join("") || `<p>No timeline events have been recorded.</p>`}</div>`;
 	}
 	if (route === "settings")
-		return `${heading("Settings", "Dashboard preferences stay local to this browser.")}<div class="settings-list"><section><h2>Appearance</h2><p>Cycle system, light, and dark themes from the top bar. Reduced motion and high-contrast system preferences are respected.</p></section><section><h2>Navigation</h2><p>Collapse the desktop sidebar, use the responsive drawer, or press <kbd>Ctrl K</kbd> / <kbd>⌘ K</kbd> anywhere.</p></section><section><h2>Data & privacy</h2><p>The UI consumes immutable snapshots over SSE. Configuration is redacted by the dashboard server and no workspace data is persisted by the dashboard.</p></section></div>`;
+		return `${heading("Settings", "Dashboard preferences stay local to this browser.")}<div class="settings-list"><section><h2>Appearance</h2><p>Cycle system, light, and dark themes from the top bar. Reduced motion and high-contrast system preferences are respected.</p></section><section><h2>Workbench layout</h2><p>Panel sizes and collapsed states use the versioned local layout schema. Press <kbd>Ctrl J</kbd> / <kbd>⌘ J</kbd> to toggle runtime tools.</p><button data-action="layout-reset">Reset workbench layout</button></section><section><h2>Navigation</h2><p>Collapse the desktop sidebar, use the responsive drawer, or press <kbd>Ctrl K</kbd> / <kbd>⌘ K</kbd> anywhere.</p></section><section><h2>Data & privacy</h2><p>The UI consumes immutable snapshots over SSE. Configuration is redacted by the dashboard server and no workspace data is persisted by the dashboard.</p></section></div>`;
 	if (route.startsWith("ext:")) {
 		const id = route.slice(4),
 			contribution = state.contributions.find((item) => item.id === id && item.kind === "page");
@@ -307,6 +309,21 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 		return `${heading(contribution.title ?? contribution.id, "Plugin-contributed page rendered from a serializable view model.")}${contribution.error ? `<div class="alert danger" role="alert">${escapeHtml(contribution.error)}</div>` : renderViewModel(contribution.data)}`;
 	}
 	return `${heading("Configuration", "Effective, normalized, and redacted workspace configuration.")}<div class="toolbar"><button data-copy="${escapeHtml(JSON.stringify(data.configuration, null, 2))}">Copy configuration</button></div><div class="config-explorer">${renderConfig(data.configuration)}</div>`;
+}
+
+const VIRTUAL_ROW_HEIGHT = 30;
+const VIRTUAL_WINDOW = 60;
+function virtualRecords<T>(
+	records: readonly T[],
+	start: number,
+	render: (record: T) => string,
+	emptyText: string,
+	wrap = false,
+) {
+	if (!records.length) return empty("No retained records", emptyText);
+	const safeStart = Math.min(Math.max(0, start), Math.max(0, records.length - VIRTUAL_WINDOW));
+	const visible = records.slice(safeStart, safeStart + VIRTUAL_WINDOW);
+	return `<section class="virtual-list ${wrap ? "wrap" : ""}" role="list" aria-label="Virtualized records" data-total="${records.length}" data-row-height="${VIRTUAL_ROW_HEIGHT}" tabindex="0"><div aria-hidden="true" style="height:${safeStart * VIRTUAL_ROW_HEIGHT}px"></div>${visible.map(render).join("")}<div aria-hidden="true" style="height:${Math.max(0, records.length - safeStart - visible.length) * VIRTUAL_ROW_HEIGHT}px"></div></section>`;
 }
 
 export function renderNodeInspector(state: DashboardState): string {
@@ -345,7 +362,7 @@ export function renderNodeInspector(state: DashboardState): string {
 		</dl></section>
 		<section id="node-relations"><h3>Relationships</h3><p><b>Dependencies:</b> ${dependencies.map(escapeHtml).join(", ") || "None"}</p><p><b>Dependants:</b> ${dependants.map(escapeHtml).join(", ") || "None"}</p><p><b>Artifacts:</b> ${artifacts?.map((item) => escapeHtml(item.id)).join(", ") || "None"}</p></section>
 		<section id="node-timeline"><h3>Recent timeline</h3>${events.length ? `<ol class="mini-timeline">${events.map((event) => `<li><time>${time(event.timestamp)}</time><code>${escapeHtml(event.type)}</code></li>`).join("")}</ol>` : `<p class="muted">No node events are retained.</p>`}</section>
-		<footer><button data-route="nodes">Open full node view</button><button data-route="logs">View logs</button></footer>
+		<footer><button data-route="nodes">Open full node view</button><button data-open-bottom="logs">Reveal logs</button><button data-open-bottom="events">Reveal events</button></footer>
 	</aside>`;
 }
 
@@ -381,20 +398,42 @@ type Graph = {
 function renderGraph(
 	graph: Graph,
 	states: readonly { id: string; health: string; state: string }[],
-	selected?: string,
+	state: DashboardState,
 ) {
-	const nodes = graph.nodes ?? [],
+	const search = state.search.toLowerCase();
+	const allNodes = graph.nodes ?? [];
+	const nodes = allNodes.filter((node) => {
+		const runtime = (node as { metadata?: { runtime?: string } }).metadata?.runtime ?? "";
+		const status = states.find((item) => item.id === node.id);
+		return (
+			(!search || `${node.id} ${node.kind} ${runtime}`.toLowerCase().includes(search)) &&
+			(!state.graphKind || node.kind === state.graphKind) &&
+			(!state.graphHealth || status?.health === state.graphHealth) &&
+			(!state.graphState || status?.state === state.graphState)
+		);
+	});
+	const visible = new Set(nodes.map((node) => node.id));
+	const selected = state.selectedNode;
+	const related = new Set<string>();
+	if (selected)
+		for (const edge of graph.edges ?? []) {
+			if (edge.from === selected) related.add(edge.to);
+			if (edge.to === selected) related.add(edge.from);
+		}
+	const kinds = [...new Set(allNodes.map((node) => node.kind))];
+	const health = [...new Set(states.map((node) => node.health))];
+	const lifecycle = [...new Set(states.map((node) => node.state))];
+	const edges = (graph.edges ?? []).filter(
+		(edge) => visible.has(edge.from) && visible.has(edge.to),
+	);
+	const toolbar = `<div class="graph-filters" aria-label="Graph filters"><label>Search<input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Node or runtime"></label><label>Kind<select data-graph-filter="kind"><option value="">All</option>${kinds.map((value) => `<option ${state.graphKind === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select></label><label>Health<select data-graph-filter="health"><option value="">All</option>${health.map((value) => `<option ${state.graphHealth === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select></label><label>State<select data-graph-filter="state"><option value="">All</option>${lifecycle.map((value) => `<option ${state.graphState === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select></label><button data-action="clear-graph-filters">Clear filters</button><span>${nodes.length}/${allNodes.length} nodes</span></div>`;
+	if (!nodes.length)
+		return `${heading("System graph", "Explore dependencies without losing selection or viewport during live updates.")}${toolbar}${empty("No graph nodes match", "Clear or adjust the active graph filters.")}`;
+	const topologyKey = `${allNodes.map((node) => node.id).join("|")}::${(graph.edges ?? []).map((edge) => `${edge.from}>${edge.to}`).join("|")}`;
+	const positions = graphPositions(topologyKey, allNodes),
 		width = 1000,
 		height = Math.max(500, Math.ceil(nodes.length / 4) * 150);
-	const positions = new Map(
-		nodes.map((node, index) => [
-			node.id,
-			{ x: 140 + (index % 4) * 240, y: 90 + Math.floor(index / 4) * 150 },
-		]),
-	);
-	return `${heading("System graph", "Explore dependencies without losing selection or viewport during live updates.")}<div class="graph-shell"><div class="graph-tools" aria-label="Graph controls"><button data-graph="out" aria-label="Zoom out">−</button><button data-graph="fit">Fit view</button><button data-graph="reset">Reset</button><button data-graph="in" aria-label="Zoom in">+</button></div><div class="graph" tabindex="0" aria-label="Interactive system graph"><svg viewBox="0 0 ${width} ${height}" role="img"><g id="graph-viewport">${(
-		graph.edges ?? []
-	)
+	return `${heading("System graph", "Explore dependencies without losing selection or viewport during live updates.")}${toolbar}<div class="graph-legend"><span>● healthy</span><span>▲ attention</span><span>■ failed</span><span>Lines show compiled relationships</span></div><div class="graph-shell"><div class="graph-tools" aria-label="Graph controls"><button data-graph="out" aria-label="Zoom out">−</button><button data-graph="fit">Fit filtered nodes</button><button data-graph="focus">Focus selected</button><button data-graph="reset">Reset</button><button data-graph="in" aria-label="Zoom in">+</button></div><div class="graph" tabindex="0" aria-label="Interactive system graph"><svg viewBox="0 0 ${width} ${height}" role="img"><g id="graph-viewport">${edges
 		.map((edge) => {
 			const from = positions.get(edge.from),
 				to = positions.get(edge.to);
@@ -406,9 +445,23 @@ function renderGraph(
 		.map((node) => {
 			const point = positions.get(node.id) ?? { x: 0, y: 0 },
 				state = states.find((item) => item.id === node.id);
-			return `<g class="graph-node ${selected === node.id ? "selected" : ""} ${tone(state?.health)}" data-node="${escapeHtml(node.id)}" role="button" aria-label="${escapeHtml(node.id)}, ${escapeHtml(state?.state)}, ${escapeHtml(state?.health)}" tabindex="0" transform="translate(${point.x - 85} ${point.y - 32})"><rect width="170" height="64" rx="10"></rect><circle cx="153" cy="17" r="5"></circle><text x="12" y="25">${escapeHtml(node.id)}</text><text x="12" y="47" class="sub">${escapeHtml(node.kind)} · ${escapeHtml(state?.state)}</text></g>`;
+			return `<g class="graph-node ${selected === node.id ? "selected" : ""} ${selected && selected !== node.id && !related.has(node.id) ? "unrelated" : ""} ${tone(state?.health)}" data-node="${escapeHtml(node.id)}" role="button" aria-label="${escapeHtml(node.id)}, ${escapeHtml(state?.state)}, ${escapeHtml(state?.health)}" tabindex="0" transform="translate(${point.x - 85} ${point.y - 32})"><rect width="170" height="64" rx="10"></rect><circle cx="153" cy="17" r="5"></circle><text x="12" y="25">${escapeHtml(node.id)}</text><text x="12" y="47" class="sub">${escapeHtml(node.kind)} · ${escapeHtml(state?.state)}</text></g>`;
 		})
 		.join(
 			"",
 		)}</g></svg></div>${selected ? `<aside class="detail-panel"><button class="close" data-action="clear-selection" aria-label="Close details">×</button><span class="eyebrow">Selected node</span><h2>${escapeHtml(selected)}</h2><p>Selection is preserved across snapshot revisions.</p><button data-route="nodes">Open node list</button></aside>` : ""}</div>`;
+}
+
+let cachedTopology = "";
+let cachedPositions = new Map<string, { x: number; y: number }>();
+function graphPositions(key: string, nodes: readonly { id: string }[]) {
+	if (key === cachedTopology) return cachedPositions;
+	cachedTopology = key;
+	cachedPositions = new Map(
+		nodes.map((node, index) => [
+			node.id,
+			{ x: 140 + (index % 4) * 240, y: 90 + Math.floor(index / 4) * 150 },
+		]),
+	);
+	return cachedPositions;
 }

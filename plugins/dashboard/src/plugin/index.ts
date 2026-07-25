@@ -11,6 +11,9 @@ export type DashboardOptions = {
 	open?: boolean;
 	mutations?: boolean;
 	title?: string;
+	maxSnapshotBytes?: number;
+	maxActionResponseBytes?: number;
+	maxRequestBytes?: number;
 };
 
 export const DEFAULT_DASHBOARD_OPTIONS = Object.freeze({
@@ -22,6 +25,9 @@ export const DEFAULT_DASHBOARD_OPTIONS = Object.freeze({
 	open: false,
 	mutations: true,
 	title: "WSRT Dashboard",
+	maxSnapshotBytes: 8 * 1024 * 1024,
+	maxActionResponseBytes: 1024 * 1024,
+	maxRequestBytes: 64 * 1024,
 });
 
 export function normalizeDashboardOptions(
@@ -39,6 +45,13 @@ export function normalizeDashboardOptions(
 		options.basePath.includes("..")
 	)
 		throw new Error(`Invalid dashboard base path: ${options.basePath}`);
+	for (const [name, value] of [
+		["maxSnapshotBytes", options.maxSnapshotBytes],
+		["maxActionResponseBytes", options.maxActionResponseBytes],
+		["maxRequestBytes", options.maxRequestBytes],
+	] as const)
+		if (!Number.isSafeInteger(value) || value < 1024)
+			throw new Error(`Invalid dashboard ${name}: ${value}`);
 	options.basePath = options.basePath === "/" ? "" : options.basePath.replace(/\/+$/, "");
 	return options;
 }

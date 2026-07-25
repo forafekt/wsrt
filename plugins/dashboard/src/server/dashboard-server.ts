@@ -20,6 +20,7 @@ export type DashboardHandle = {
 	host: string;
 	port: number;
 	basePath: string;
+	disconnectClients(): void;
 	close(): Promise<void>;
 };
 const clientRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
@@ -44,6 +45,7 @@ export async function startDashboard(
 				request.method ?? "GET",
 				request.url ?? "/",
 				request.headers["last-event-id"] as string | undefined,
+				Number(request.headers["content-length"] ?? 0),
 				response,
 			);
 		} catch (cause) {
@@ -79,6 +81,10 @@ export async function startDashboard(
 		host: options.host,
 		port,
 		basePath: options.basePath || "/",
+		disconnectClients() {
+			for (const close of [...streams]) close();
+			streams.clear();
+		},
 		async close() {
 			if (closed) return;
 			closed = true;
@@ -98,12 +104,20 @@ async function route(
 	method: string,
 	rawUrl: string,
 	lastEventId: string | undefined,
+	contentLength: number,
 	response: ServerResponse,
 ) {
 	const url = new URL(rawUrl, "http://localhost"),
 		base = options.basePath;
 	if (rawUrl.length > 8192)
 		return error(response, 414, "dashboard.uri_too_long", "Request URL exceeds 8192 bytes");
+	if (!Number.isFinite(contentLength) || contentLength > options.maxRequestBytes)
+		return error(
+			response,
+			413,
+			"dashboard.request_too_large",
+			`Request exceeds the ${options.maxRequestBytes}-byte limit`,
+		);
 	if (base && url.pathname === base) {
 		response.writeHead(308, { location: `${base}/${url.search}` });
 		response.end();
@@ -123,13 +137,18 @@ async function route(
 			`event: connected\ndata: ${JSON.stringify({ revision: plane.snapshot().revision })}\n\n`,
 		);
 		let close = () => {};
-		close = streamSnapshots(plane, response, lastEventId, () => streams.delete(close));
+		close = streamSnapshots(
+			plane,
+			response,
+			lastEventId,
+			() => streams.delete(close),
+			options.maxSnapshotBytes,
+		);
 		streams.add(close);
 		response.on("close", close);
 		return;
 	}
-	if (relative.startsWith("/api/"))
-		return api(plane, options.mutations, method, relative, response);
+	if (relative.startsWith("/api/")) return api(plane, options, method, relative, response);
 	if (relative === "/assets/styles.css")
 		return textResponse(response, 200, "text/css; charset=utf-8", dashboardStyles);
 	if (relative.startsWith("/assets/client/") && relative.endsWith(".js")) {
@@ -155,7 +174,7 @@ async function route(
 
 async function api(
 	plane: WsrtControlPlane,
-	mutations: boolean,
+	options: ReturnType<typeof normalizeDashboardOptions>,
 	method: string,
 	relative: string,
 	response: ServerResponse,
@@ -206,41 +225,52 @@ async function api(
 		} else return error(response, 404, "dashboard.not_found", "API resource not found");
 		if (id && value === undefined)
 			return error(response, 404, "dashboard.not_found", `${resource} ${id} was not found`);
-		return json(response, 200, value);
+		return json(
+			response,
+			200,
+			value,
+			resource === "snapshot" || resource === "configuration"
+				? options.maxSnapshotBytes
+				: options.maxActionResponseBytes,
+		);
 	}
 	if (method !== "POST")
 		return error(response, 405, "dashboard.method_not_allowed", "Method not allowed");
-	if (!mutations)
+	if (!options.mutations)
 		return error(response, 403, "dashboard.read_only", "Dashboard mutations are disabled");
 	if (resource === "contributions" && id && action === "run") {
 		const contribution = plane
 			.pluginContributions("dashboard")
-			.find((item) => item.kind === "action" && item.id === id);
+			.find(
+				(item) =>
+					["action", "command", "artifact-action", "operation-action"].includes(item.kind) &&
+					item.id === id,
+			);
 		if (!contribution?.run)
 			return error(response, 404, "dashboard.not_found", `Action ${id} was not found`);
 		try {
 			const value = await plane.invokePluginContribution("dashboard", id, (context) =>
 				contribution.run?.({}, context, new AbortController().signal),
 			);
-			return json(response, 200, value);
+			return json(response, 200, value, options.maxActionResponseBytes);
 		} catch (cause) {
 			return error(response, 409, "dashboard.action_failed", String(cause));
 		}
 	}
 	if (resource === "nodes" && id && ["start", "stop", "restart"].includes(action ?? ""))
 		return void dashboardOperation(plane, action as "start" | "stop" | "restart", [id]).then(
-			(value) => json(response, 202, value),
+			(value) => json(response, 202, value, options.maxActionResponseBytes),
 			(cause) => error(response, 409, "dashboard.operation_failed", String(cause)),
 		);
 	if (resource === "tasks" && id && action === "run")
 		return void dashboardOperation(plane, "run", [id]).then(
-			(value) => json(response, 202, value),
+			(value) => json(response, 202, value, options.maxActionResponseBytes),
 			(cause) => error(response, 409, "dashboard.operation_failed", String(cause)),
 		);
 	if (resource === "operations" && id && action === "cancel") {
 		const value = dashboardCancelOperation(plane, id);
 		return value.cancelled
-			? json(response, 202, value)
+			? json(response, 202, value, options.maxActionResponseBytes)
 			: error(response, 409, "dashboard.not_cancellable", "Operation is not active");
 	}
 	return error(response, 404, "dashboard.not_found", "Mutation route not found");
@@ -276,8 +306,26 @@ function escapeAttribute(value: string) {
 			({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" })[character] ?? character,
 	);
 }
-function json(response: ServerResponse, status: number, value: unknown) {
-	textResponse(response, status, "application/json; charset=utf-8", JSON.stringify(value));
+function json(response: ServerResponse, status: number, value: unknown, limit = 8 * 1024 * 1024) {
+	let body: string;
+	try {
+		body = JSON.stringify(value);
+	} catch {
+		return error(
+			response,
+			500,
+			"dashboard.serialization_failed",
+			"Response could not be serialized safely",
+		);
+	}
+	if (Buffer.byteLength(body) > limit)
+		return error(
+			response,
+			413,
+			"dashboard.frame_too_large",
+			`Response exceeds the ${limit}-byte transport limit`,
+		);
+	textResponse(response, status, "application/json; charset=utf-8", body);
 }
 function error(response: ServerResponse, status: number, code: string, message: string) {
 	json(response, status, { error: { code, message, status } });

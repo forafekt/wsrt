@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	loadLayout,
 	matchDashboardRoute,
 	reduceDashboardState,
 	safeSerializable,
@@ -18,6 +19,26 @@ test("dashboard routes unknown paths to overview", () => {
 	assert.equal(matchDashboardRoute("/metrics"), "metrics");
 	assert.equal(matchDashboardRoute("/timeline"), "timeline");
 	assert.equal(matchDashboardRoute("/not-a-page"), "overview");
+});
+
+test("dashboard layout persistence is versioned, bounded, and migratable", () => {
+	const valid = loadLayout({
+		getItem: () =>
+			JSON.stringify({
+				version: 1,
+				sidebarWidth: 9999,
+				inspectorWidth: 100,
+				bottomHeight: 300,
+				bottomCollapsed: false,
+				bottomTab: "events",
+			}),
+	});
+	assert.equal(valid.sidebarWidth, 420);
+	assert.equal(valid.inspectorWidth, 280);
+	assert.equal(valid.bottomHeight, 300);
+	assert.equal(valid.bottomCollapsed, false);
+	assert.equal(valid.bottomTab, "events");
+	assert.equal(loadLayout({ getItem: () => JSON.stringify({ version: 99 }) }).version, 1);
 });
 
 test("dashboard stores plugin view models without mutating interaction state", () => {
@@ -245,4 +266,45 @@ test("SSE snapshots suppress duplicate revisions and clean up", () => {
 	assert.equal(chunks.filter((chunk) => chunk.includes("event: snapshot")).length, 1);
 	close();
 	assert.equal(unsubscribed, true);
+});
+
+test("SSE oversized snapshots produce one complete typed protocol error frame", () => {
+	const plane = {
+		subscribeSnapshots(listener) {
+			listener({ revision: 1 });
+			return () => undefined;
+		},
+		snapshot: () => ({
+			revision: 1,
+			workspace: { name: "large" },
+			nodes: [],
+			operations: [],
+			artifacts: [],
+			diagnostics: [],
+			events: { size: 0 },
+		}),
+		definition: () => ({ large: "x".repeat(4_000) }),
+		graph: () => ({ toJSON: () => ({}) }),
+		listEvents: () => [],
+	};
+	const capture = (limit) => {
+		const chunks = [];
+		const close = streamSnapshots(
+			plane,
+			{ write: (chunk) => chunks.push(chunk), end() {} },
+			undefined,
+			undefined,
+			limit,
+		);
+		close();
+		return chunks[0];
+	};
+	const complete = capture(Number.MAX_SAFE_INTEGER);
+	const bytes = Buffer.byteLength(complete);
+	assert.match(capture(bytes + 1), /event: snapshot/);
+	assert.match(capture(bytes), /event: snapshot/);
+	const rejected = capture(bytes - 1);
+	assert.match(rejected, /event: protocol-error/);
+	assert.match(rejected, /dashboard\.frame_too_large/);
+	assert.doesNotMatch(rejected, /x{100}/);
 });
