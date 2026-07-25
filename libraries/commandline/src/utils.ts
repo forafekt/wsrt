@@ -23,14 +23,16 @@ export const findAllBrackets = (v: string) => {
 		};
 	};
 
-	const angledMatch = ANGLED_BRACKET_RE_GLOBAL.exec(v);
+	let angledMatch = ANGLED_BRACKET_RE_GLOBAL.exec(v);
 	while (angledMatch) {
 		res.push(parse(angledMatch));
+		angledMatch = ANGLED_BRACKET_RE_GLOBAL.exec(v);
 	}
 
-	const squareMatch = SQUARE_BRACKET_RE_GLOBAL.exec(v);
+	let squareMatch = SQUARE_BRACKET_RE_GLOBAL.exec(v);
 	while (squareMatch) {
 		res.push(parse(squareMatch));
+		squareMatch = SQUARE_BRACKET_RE_GLOBAL.exec(v);
 	}
 
 	return res;

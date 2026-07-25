@@ -1,19 +1,13 @@
-import process from "node:process";
 import { createRequire } from "node:module";
+import process from "node:process";
 import {
 	CommandLineError,
 	type CompletionShell,
 	createCli,
 	generateCompletions,
 } from "@wsrt/commandline";
-import { loadSystemDefinition } from "@wsrt/config";
-import { createControlPlane } from "@wsrt/control-plane";
-import {
-	type CliContribution,
-	type PluginContext,
-	PluginSession,
-	resolveWorkspacePlugins,
-} from "@wsrt/plugins";
+import type { createControlPlane } from "@wsrt/control-plane";
+import type { CliContribution, PluginContext, PluginSession } from "@wsrt/plugins";
 import { logger } from "./logger.js";
 
 const packageMetadata = createRequire(import.meta.url)("../package.json") as {
@@ -59,6 +53,7 @@ export function createWsrtCli(
 		async (...args: unknown[]) => {
 			const options = args.at(-1) as GlobalOptions;
 			if (options.json) process.env.WSRT_JSON_OUTPUT = "1";
+			const { createControlPlane } = await import("@wsrt/control-plane");
 			const plane = await createControlPlane({
 				root: options.root,
 				config: options.config,
@@ -314,6 +309,7 @@ export function createWsrtCli(
 				description: "Resolve runtime completion candidates",
 				hidden: true,
 				action: async (input: string | undefined, options: GlobalOptions) => {
+					const { createControlPlane } = await import("@wsrt/control-plane");
 					const plane = await createControlPlane({
 						root: options.root,
 						config: options.config,
@@ -368,6 +364,19 @@ async function workspaceCommand(root: string, command: "inspect" | "resolve" | "
 export async function run(argv = process.argv, cliVersion = version): Promise<void> {
 	let session: PluginSession | undefined;
 	try {
+		const bootstrapArgv =
+			argv[2] === "help" ? [...argv.slice(0, 2), "--help", ...argv.slice(3)] : argv;
+		const separator = bootstrapArgv.indexOf("--");
+		const bootstrapArguments =
+			separator < 0 ? bootstrapArgv.slice(2) : bootstrapArgv.slice(2, separator);
+		if (bootstrapArguments.includes("-h") || bootstrapArguments.includes("--help")) {
+			await createWsrtCli([], undefined, cliVersion).parseAsync(bootstrapArgv);
+			return;
+		}
+		if (bootstrapArguments.includes("-v") || bootstrapArguments.includes("--version")) {
+			await createWsrtCli([], undefined, cliVersion).parseAsync(bootstrapArgv);
+			return;
+		}
 		const resolved = await discoverPluginCommands(argv);
 		session = resolved.session;
 		await createWsrtCli(resolved.commands, session, cliVersion).parseAsync(argv);
@@ -393,8 +402,10 @@ async function discoverPluginCommands(
 	const configIndex = argv.findIndex((item) => item === "--config" || item === "-c");
 	const root = rootIndex >= 0 && argv[rootIndex + 1] ? argv[rootIndex + 1] : undefined;
 	const config = configIndex >= 0 && argv[configIndex + 1] ? argv[configIndex + 1] : undefined;
+	const { loadSystemDefinition } = await import("@wsrt/config");
 	const loaded = await loadSystemDefinition(root, config);
 	if (!loaded.definition) return { commands: [] };
+	const { PluginSession, resolveWorkspacePlugins } = await import("@wsrt/plugins");
 	const plugins = await resolveWorkspacePlugins(loaded.definition.plugins, loaded.definition.root);
 	const session = new PluginSession(plugins);
 	const contributions = session.contributions("cli");

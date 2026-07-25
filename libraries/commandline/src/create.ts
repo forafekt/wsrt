@@ -1,5 +1,5 @@
-import CommandLine from "./commandline.js";
 import type { CommandConfig, CommandExample, HelpCallback } from "./command.js";
+import CommandLine from "./commandline.js";
 import type { OptionConfig } from "./option.js";
 
 export interface CliOption extends OptionConfig {
@@ -41,7 +41,13 @@ export function createCli(config: CliConfig): CommandLine {
 	for (const option of config.options ?? []) cli.option(option.name, option.description, option);
 	for (const example of config.examples ?? []) cli.example(example);
 
+	const activeDefinitions = new Set<CliCommand>();
 	const register = (definition: CliCommand, parents: string[] = []) => {
+		if (activeDefinitions.has(definition)) {
+			const path = [...parents, definition.name].filter(Boolean).join(" ");
+			throw new TypeError(`Cyclic command hierarchy at \`${path}\``);
+		}
+		activeDefinitions.add(definition);
 		const ownName = definition.name.replace(/[<[].+/, "").trim();
 		const prefix = parents.join(" ");
 		const rawName = `${prefix}${prefix ? " " : ""}${definition.name}`;
@@ -54,7 +60,11 @@ export function createCli(config: CliConfig): CommandLine {
 		for (const example of definition.examples ?? []) command.example(example);
 		if (definition.validate) command.validate(definition.validate);
 		if (definition.action) command.action(definition.action);
-		for (const child of definition.commands ?? []) register(child, [...parents, ownName]);
+		try {
+			for (const child of definition.commands ?? []) register(child, [...parents, ownName]);
+		} finally {
+			activeDefinitions.delete(definition);
+		}
 	};
 	for (const command of config.commands ?? []) register(command);
 	return cli;
