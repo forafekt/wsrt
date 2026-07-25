@@ -16,6 +16,7 @@ export type ViteAdapterOptions = {
 	configFile?: string;
 	host?: string;
 	port?: number;
+	strictPort?: boolean;
 };
 export type ViteBridge = {
 	workspaceRoot: string;

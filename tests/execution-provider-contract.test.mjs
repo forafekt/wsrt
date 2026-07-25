@@ -24,6 +24,11 @@ test("Vite satisfies the reusable execution-adapter contract", async () => {
 		"127.0.0.1",
 		"--port",
 		"4173",
+		"--strictPort",
 	]);
 	assert.notEqual(...result.concurrentExecutionIds);
+});
+test("Vite build adapters declare exit-based completion", () => {
+	const validation = viteAdapter.validate({ command: "build" });
+	assert.equal(viteAdapter.prepare(validation.options).completion, "exit");
 });

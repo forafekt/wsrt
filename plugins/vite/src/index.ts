@@ -1,6 +1,6 @@
 import { viteAdapter } from "./adapter.js";
 
-export { viteAdapter } from "./adapter.js";
+export { createViteAdapter, viteAdapter } from "./adapter.js";
 export { mergeAliases, workspaceAliasEntries } from "./aliases.js";
 export { createViteBridge } from "./bridge.js";
 export { composeViteConfig } from "./config.js";

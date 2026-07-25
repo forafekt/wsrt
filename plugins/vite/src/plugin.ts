@@ -4,7 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { ArtifactProvider, ProcessHandle, ReadinessProvider } from "@wsrt/capabilities";
 import { definePlugin, type ExecutableContribution, type WsrtPlugin } from "@wsrt/plugins";
-import { viteAdapter } from "./adapter.js";
+import { createViteAdapter } from "./adapter.js";
 import {
 	createOwnedExecutionState,
 	ExecutionTelemetryReader,
@@ -158,7 +158,7 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 			"dashboard",
 		],
 		contributions: {
-			adapters: [viteAdapter],
+			adapters: [createViteAdapter(options)],
 			readiness: [readiness],
 			artifacts: [artifacts],
 			executables: [executable],

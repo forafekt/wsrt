@@ -166,6 +166,7 @@ export class WsrtControlPlane {
 	readonly #artifactProviders = new Map<string, ArtifactProvider>();
 	readonly #executionMetadata = new Map<string, Record<string, unknown>>();
 	readonly #closedExecutions = new Set<string>();
+	readonly #completedExecutions = new Set<string>();
 	readonly #executionSignals = new Map<string, AbortSignal>();
 	readonly #executionCleanup = new Map<string, () => void | Promise<void>>();
 	readonly #telemetryIngestion = new Map<string, Promise<void>>();
@@ -465,6 +466,9 @@ export class WsrtControlPlane {
 			),
 		);
 	}
+	hasActiveProcesses(): boolean {
+		return [...this.#handles.values()].some((handle) => handle.running);
+	}
 	async dispose(): Promise<void> {
 		this.#disposed = true;
 		for (const controller of this.#operationControllers.values())
@@ -517,8 +521,10 @@ export class WsrtControlPlane {
 		return {
 			start: async ({ signal }: { signal: AbortSignal }) => {
 				this.#closedExecutions.delete(item.id);
+				this.#completedExecutions.delete(item.id);
 				this.#executionSignals.set(item.id, signal);
 				let command = item.command;
+				let completion: "process" | "exit" = "process";
 				let providerEnvironment: Readonly<Record<string, string>> = {};
 				if (item.provider) {
 					const adapter = this.#adapters.get(item.provider.provider);
@@ -530,7 +536,13 @@ export class WsrtControlPlane {
 							validation.diagnostics.join("\n") ||
 								`Invalid adapter options: ${item.provider.provider}`,
 						);
-					const prepared = adapter.prepare(validation.options);
+					const prepared = adapter.prepare(validation.options, {
+						nodeId: item.id,
+						workspaceRoot: this.definition().root,
+						projectRoot: item.root,
+						environment: item.environment,
+					});
+					completion = prepared.completion ?? "process";
 					providerEnvironment = prepared.environment ?? {};
 					this.#executionMetadata.set(item.id, {
 						...(prepared.metadata ?? {}),
@@ -563,17 +575,21 @@ export class WsrtControlPlane {
 					type: "execution.started",
 					timestamp: new Date().toISOString(),
 				});
-				if (item.kind === "task") {
+				if (item.kind === "task" || completion === "exit") {
 					try {
-						await this.#invalidateOutputs(item);
+						if (item.kind === "task") await this.#invalidateOutputs(item);
 						const exit = await handle.exit;
 						if (exit.code !== 0) {
-							await this.#failOutputs(item, `Task ${item.name} exited with code ${exit.code}`);
-							throw new Error(`Task ${item.name} exited with code ${exit.code}`);
+							if (item.kind === "task")
+								await this.#failOutputs(item, `Task ${item.name} exited with code ${exit.code}`);
+							throw new Error(
+								`${item.kind === "task" ? "Task" : "Process"} ${item.name} exited with code ${exit.code}`,
+							);
 						}
 						await this.#telemetryIngestion.get(item.id);
 						await this.#collectArtifacts(item, signal);
-						await this.#verifyOutputs(item);
+						if (item.kind === "task") await this.#verifyOutputs(item);
+						else this.#completedExecutions.add(item.id);
 					} finally {
 						this.#closedExecutions.add(item.id);
 						await this.#cleanupExecution(item.id);
@@ -609,6 +625,10 @@ export class WsrtControlPlane {
 			},
 			ready: async ({ signal }: { signal: AbortSignal }) => {
 				if (item.kind === "task") return;
+				if (this.#completedExecutions.has(item.id)) {
+					this.#setHealth(item.id, "healthy");
+					return;
+				}
 				const providerId = item.provider?.provider;
 				const provider = providerId ? this.#readinessProviders.get(providerId) : undefined;
 				if (provider && providerId) {
@@ -1164,7 +1184,7 @@ export class WsrtControlPlane {
 	}
 	#resolve(value: string, kind?: NormalizedExecutable["kind"]) {
 		const match = this.definition().executables.find(
-			(item) => item.id === value || item.name === value,
+			(item) => item.id === value || item.name === value || processShorthand(item.id) === value,
 		);
 		if (!match || (kind && match.kind !== kind))
 			throw new Error(`Unknown ${kind ?? "executable"}: ${value}`);
@@ -1324,6 +1344,10 @@ export class WsrtControlPlane {
 		if (this.options.allowMutations === false)
 			throw new Error("Mutating control-plane operations are disabled");
 	}
+}
+function processShorthand(id: string): string | undefined {
+	const match = /^application:([^/]+)\/process:(.+)$/.exec(id);
+	return match ? `${match[1]}.${match[2]}` : undefined;
 }
 function required<T>(value: T | undefined, message: string): T {
 	if (value === undefined) throw new Error(message);

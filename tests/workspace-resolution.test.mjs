@@ -21,7 +21,10 @@ async function fixture() {
 			{
 				name: "@fixture/ui",
 				private: false,
-				exports: { ".": { source: "./src/index.ts" } },
+				exports: {
+					".": { source: "./src/index.ts" },
+					"./node": { import: "./dist/node.js" },
+				},
 			},
 			"export const ui = true",
 		],
@@ -37,6 +40,8 @@ async function fixture() {
 			`${JSON.stringify(manifest, null, 2)}\n`,
 		);
 		await fs.writeFile(path.join(root, dir, "src/index.ts"), source);
+		if (dir === "packages/ui")
+			await fs.writeFile(path.join(root, dir, "src/node.ts"), "export const node = true");
 		await fs.writeFile(
 			path.join(root, dir, "tsconfig.json"),
 			'{"compilerOptions":{"paths":{"user/*":["owned/*"]}}}\n',
@@ -52,6 +57,7 @@ test("workspace discovery resolves pnpm packages, sources, aliases, and inferred
 		["@fixture/ui", "@fixture/web"],
 	);
 	assert.equal(model.aliases["@fixture/ui"], path.join(root, "packages/ui/src/index.ts"));
+	assert.equal(model.aliases["@fixture/ui/node"], path.join(root, "packages/ui/src/node.ts"));
 	assert.deepEqual(model.edges, [{ from: "@fixture/web", to: "@fixture/ui", type: "inferred" }]);
 });
 test("projections preserve user paths and synchronize idempotently", async () => {

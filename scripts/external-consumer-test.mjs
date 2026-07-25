@@ -57,6 +57,7 @@ try {
 	run("workspace", "inspect", "--json");
 	run("plugins", "--json");
 	run("run", "hello", "--json");
+	run("run", "webBuild", "--json");
 	run("exec", "vite", "build");
 	execFileSync(
 		process.execPath,

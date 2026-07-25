@@ -67,7 +67,7 @@ test("composite application expands, starts, restarts a child, and stops all chi
 		assert.equal(started.states["application:desktop"], "ready");
 		assert.equal(started.states["application:desktop/process:main"], "ready");
 		assert.equal(started.states["application:desktop/process:worker"], "ready");
-		await plane.restart(["application:desktop/process:main"]);
+		await plane.restart(["desktop.main"]);
 		assert.equal(plane.getNodeState("application:desktop/process:main"), "ready");
 		await plane.stop(["desktop"]);
 		assert.equal(plane.getNodeState("application:desktop/process:main"), "stopped");
@@ -85,6 +85,7 @@ test("Vite is an explicit command and readiness contribution", () => {
 		"127.0.0.1",
 		"--port",
 		"5199",
+		"--strictPort",
 	]);
 	assert.equal(contribution.healthcheck.url, "http://127.0.0.1:5199");
 	assert.equal(hasWsrtVitePlugin([wsrtVitePlugin()]), true);

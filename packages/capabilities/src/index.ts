@@ -145,14 +145,24 @@ export interface ExecutionAdapter<Options = unknown> {
 		options?: Options;
 		diagnostics: readonly string[];
 	};
-	prepare(options: Options): {
+	prepare(
+		options: Options,
+		context?: ExecutionAdapterContext,
+	): {
 		command: string;
 		args: readonly string[];
 		shell?: boolean;
+		completion?: "process" | "exit";
 		environment?: Readonly<Record<string, string>>;
 		metadata?: Readonly<Record<string, unknown>>;
 		dispose?(): void | Promise<void>;
 	};
+}
+export interface ExecutionAdapterContext {
+	readonly nodeId: string;
+	readonly workspaceRoot: string;
+	readonly projectRoot: string;
+	readonly environment: Readonly<Record<string, string>>;
 }
 export interface ReadinessProvider<Options = unknown> {
 	readonly id: string;

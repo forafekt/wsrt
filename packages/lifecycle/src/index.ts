@@ -128,7 +128,7 @@ export class LifecycleEngine {
 				this.#transition(id, "ready", correlationId);
 			}
 		} catch (cause) {
-			this.#transition(id, "failed", correlationId, cause);
+			if (this.state(id) !== "failed") this.#transition(id, "failed", correlationId, cause);
 			throw cause;
 		}
 	}

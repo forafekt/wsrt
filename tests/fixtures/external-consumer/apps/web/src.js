@@ -1,1 +1,3 @@
-document.querySelector("#app").textContent = "WSRT packed consumer";
+import { message } from "@fixture/lib";
+
+document.querySelector("#app").textContent = message;

@@ -63,7 +63,7 @@ export function createWsrtCli(
 			try {
 				const result = await action(plane, options);
 				printResult(result, !!options.json);
-				if (keepAlive && plane.definition().executables.some((item) => item.kind !== "task")) {
+				if (keepAlive && plane.hasActiveProcesses()) {
 					retained = true;
 					await waitForSignal(() => plane.dispose());
 				}

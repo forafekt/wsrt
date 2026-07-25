@@ -154,6 +154,11 @@ export async function resolveWorkspace(
 						package: item.name,
 					});
 				else aliases[alias] = item.source;
+				for (const [subpath, source] of await exportedSourceEntries(
+					item.root,
+					item.manifest.exports,
+				))
+					aliases[`${alias}/${subpath}`] = source;
 			}
 	const edges: WorkspaceEdge[] = [];
 	for (const item of entries) {
@@ -357,6 +362,48 @@ function packageAliases(name: string, manifest: Record<string, unknown>): string
 		? manifest.wsrtAliases.filter((item): item is string => typeof item === "string")
 		: [];
 	return [...new Set([name, ...aliases])].sort();
+}
+async function exportedSourceEntries(
+	root: string,
+	value: unknown,
+): Promise<readonly [string, string][]> {
+	const result: [string, string][] = [];
+	for (const [key, entry] of Object.entries(record(value))) {
+		if (!key.startsWith("./") || key === "." || key.includes("*")) continue;
+		const target =
+			typeof entry === "string"
+				? entry
+				: [
+						record(entry).source,
+						record(entry).development,
+						record(entry).import,
+						record(entry).default,
+					].find((item): item is string => typeof item === "string");
+		if (!target) continue;
+		const relative = target.replace(/^\.?\//, "").replace(/^dist\//, "src/");
+		const extensionless = relative.replace(/\.(?:[cm]?[jt]sx?|css)$/, "");
+		const candidates = target.startsWith("./src/")
+			? [relative]
+			: [
+					...[".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cts", ".cjs"].map(
+						(extension) => `${extensionless}${extension}`,
+					),
+					path.join(extensionless, "index.ts"),
+					path.join(extensionless, "index.tsx"),
+					path.join(extensionless, "index.js"),
+					relative,
+				];
+		for (const candidate of candidates) {
+			const file = path.resolve(root, candidate);
+			try {
+				if ((await fs.stat(file)).isFile()) {
+					result.push([key.slice(2), file]);
+					break;
+				}
+			} catch {}
+		}
+	}
+	return result;
 }
 function dependencies(manifest: Record<string, unknown>): Record<string, string> {
 	const result: Record<string, string> = {};
