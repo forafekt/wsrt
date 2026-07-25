@@ -99,6 +99,17 @@ export type WorkspaceDefinitionInput = {
 	artifacts?: Record<string, ArtifactInput>;
 	environments?: Record<string, EnvironmentInput>;
 	plugins?: Array<string | { provider: string; options?: unknown } | PluginObjectInput>;
+	persistence?:
+		| false
+		| {
+				provider?: "filesystem";
+				root?: string;
+				journals?: {
+					maxFileSizeBytes?: number;
+					maxFiles?: number;
+					flushIntervalMs?: number;
+				};
+		  };
 };
 export type NormalizedCommand = {
 	command: string;
@@ -138,6 +149,17 @@ export type NormalizedSystemDefinition = {
 	artifacts: readonly NormalizedArtifact[];
 	environments: Readonly<Record<string, EnvironmentInput>>;
 	plugins: readonly (string | { provider: string; options?: unknown } | PluginObjectInput)[];
+	persistence:
+		| false
+		| {
+				provider: "filesystem";
+				root: string;
+				journals: {
+					maxFileSizeBytes: number;
+					maxFiles: number;
+					flushIntervalMs: number;
+				};
+		  };
 	sourceFile: string;
 };
 
@@ -152,6 +174,7 @@ const coreKeys = new Set([
 	"artifacts",
 	"environments",
 	"plugins",
+	"persistence",
 ]);
 export function defineSystem(input: WorkspaceDefinitionInput): WorkspaceDefinitionInput {
 	return input;
@@ -234,6 +257,19 @@ export function normalizeSystemDefinition(
 		artifacts: Object.freeze(artifacts),
 		environments: Object.freeze({ ...input.environments }),
 		plugins: Object.freeze([...(input.plugins ?? [])]),
+		persistence:
+			input.persistence === false
+				? false
+				: Object.freeze({
+						provider: input.persistence?.provider ?? "filesystem",
+						root: input.persistence?.root ?? ".wsrt",
+						journals: Object.freeze({
+							maxFileSizeBytes:
+								input.persistence?.journals?.maxFileSizeBytes ?? 20 * 1024 * 1024,
+							maxFiles: input.persistence?.journals?.maxFiles ?? 5,
+							flushIntervalMs: input.persistence?.journals?.flushIntervalMs ?? 250,
+						}),
+					}),
 		sourceFile: options.file,
 	};
 	diagnostics.push(...references(definition));

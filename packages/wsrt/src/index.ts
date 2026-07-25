@@ -36,3 +36,25 @@ export type {
 } from "@wsrt/control-plane";
 
 export { NodeRuntimeProvider } from "@wsrt/runtime-node";
+export {
+	createRecord,
+	MigrationRegistry,
+	pluginStorage,
+	validatePersistenceKey,
+	validatePluginId,
+} from "@wsrt/persistence";
+export type {
+	PersistedEntry,
+	PersistedRecord,
+	PersistedValue,
+	PersistenceContext,
+	PersistenceProvider,
+	PluginStorage,
+	RuntimeSession,
+	WorkspaceIdentity,
+} from "@wsrt/persistence";
+export {
+	filesystemPersistence,
+	FilesystemPersistenceProvider,
+} from "@wsrt/persistence-filesystem";
+export { memoryPersistence, MemoryPersistenceProvider } from "@wsrt/persistence-memory";

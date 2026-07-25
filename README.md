@@ -1,5 +1,17 @@
 # WSRT
 
+WSRT persists workspace-local identity, sessions, snapshots, operation history, and
+bounded event journals under `.wsrt/` by default. Add this directory to the
+workspace's `.gitignore`:
+
+```gitignore
+.wsrt/
+```
+
+Set `persistence: false` in the workspace definition for an ephemeral run, or pass
+a persistence provider instance to the control plane. Tests should normally use
+`memoryPersistence()`.
+
 > [!WARNING]
 > **WSRT is currently in active early development (pre-alpha).**
 >

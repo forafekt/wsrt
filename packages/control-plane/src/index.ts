@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import type {
 	ArtifactCandidate,
@@ -21,6 +22,16 @@ import {
 } from "@wsrt/config";
 import type { ExecutionPlan, SystemGraph, SystemNode } from "@wsrt/graph";
 import { LifecycleEngine, type LifecycleEvent, type LifecycleState } from "@wsrt/lifecycle";
+import {
+	createRecord,
+	MigrationRegistry,
+	type PersistedRecord,
+	type PersistenceProvider,
+	pluginStorage,
+	type RuntimeSession,
+	type WorkspaceIdentity,
+} from "@wsrt/persistence";
+import { filesystemPersistence } from "@wsrt/persistence-filesystem";
 import {
 	type ContributionDiagnostic,
 	type PluginContext,
@@ -134,6 +145,8 @@ export type ControlPlaneOptions = {
 	providers?: RuntimeProvider[];
 	allowMutations?: boolean;
 	pluginSession?: PluginSession;
+	/** Overrides normalized configuration. Use `false` for an ephemeral control plane. */
+	persistence?: PersistenceProvider | false;
 };
 export class WsrtControlPlane {
 	readonly #events: WorkspaceEvent[] = [];
@@ -161,6 +174,12 @@ export class WsrtControlPlane {
 	#diagnostics: SystemDiagnostic[] = [];
 	#providerIds: string[] = [];
 	#pluginSession?: PluginSession;
+	#persistence?: PersistenceProvider;
+	#workspaceIdentity?: WorkspaceIdentity;
+	#session?: RuntimeSession;
+	#snapshotTimer?: ReturnType<typeof setTimeout>;
+	#persistenceFailure?: unknown;
+	readonly #migrations = new MigrationRegistry();
 	readonly #adapters = new Map<string, ExecutionAdapter>();
 	readonly #readinessProviders = new Map<string, ReadinessProvider>();
 	readonly #artifactProviders = new Map<string, ArtifactProvider>();
@@ -176,6 +195,7 @@ export class WsrtControlPlane {
 		this.#diagnostics = [...loaded.diagnostics];
 		if (!loaded.definition) throw new Error(this.#diagnostics.map((d) => d.message).join("\n"));
 		this.#definition = loaded.definition;
+		await this.#initializePersistence();
 		const report = this.options.pluginSession
 			? { plugins: this.options.pluginSession.list(), diagnostics: [] }
 			: await resolveWorkspacePluginsReport(loaded.definition.plugins, loaded.definition.root);
@@ -237,6 +257,7 @@ export class WsrtControlPlane {
 		this.#engine = new LifecycleEngine(this.#graph, {
 			onEvent: (event) => {
 				this.#events.push(event);
+				this.#persistEvent(event);
 				this.#changed();
 			},
 		});
@@ -470,6 +491,7 @@ export class WsrtControlPlane {
 		return [...this.#handles.values()].some((handle) => handle.running);
 	}
 	async dispose(): Promise<void> {
+		if (this.#disposed) return;
 		this.#disposed = true;
 		for (const controller of this.#operationControllers.values())
 			controller.abort(new DOMException("Control plane disposed", "AbortError"));
@@ -482,6 +504,25 @@ export class WsrtControlPlane {
 		this.#runtimes.clear();
 		this.#subscribers.clear();
 		await this.#pluginSession?.dispose(this.#pluginContext());
+		if (this.#snapshotTimer) clearTimeout(this.#snapshotTimer);
+		this.#snapshotTimer = undefined;
+		await this.#persistSnapshot();
+		if (this.#persistence && this.#session) {
+			this.#session = {
+				...this.#session,
+				endedAt: new Date().toISOString(),
+				exitReason: "shutdown",
+			};
+			await this.#persistence.write(
+				`session/${this.#session.id}`,
+				createRecord("wsrt.runtime-session", this.#session, {
+					workspaceId: this.#workspaceIdentity?.id ?? this.#session.workspaceId,
+					sessionId: this.#session.id,
+				}),
+			);
+			await this.#persistence.flush?.();
+			await this.#persistence.dispose();
+		}
 	}
 	#pluginContext(): PluginContext {
 		return Object.freeze({
@@ -498,7 +539,13 @@ export class WsrtControlPlane {
 			events: {
 				emit: (type, payload) => this.#event(type, "plugin", "plugin", payload),
 			},
-			services: Object.freeze({ graph: this.#graph, controlPlane: this }),
+			services: Object.freeze({
+				graph: this.#graph,
+				controlPlane: this,
+				...(this.#persistence
+					? { pluginStorage: (pluginId: string) => pluginStorage(this.#persistence!, pluginId) }
+					: {}),
+			}),
 		});
 	}
 	#pluginDiagnostic(diagnostic: ContributionDiagnostic): SystemDiagnostic {
@@ -1172,14 +1219,16 @@ export class WsrtControlPlane {
 		this.#changed();
 	}
 	#event(type: string, source: string, correlationId: string, payload: unknown) {
-		this.#events.push({
+		const event = {
 			id: crypto.randomUUID(),
 			type,
 			timestamp: new Date().toISOString(),
 			source,
 			correlationId,
 			payload,
-		});
+		};
+		this.#events.push(event);
+		this.#persistEvent(event);
 		if (this.#events.length > 1000) this.#events.shift();
 	}
 	#resolve(value: string, kind?: NormalizedExecutable["kind"]) {
@@ -1272,6 +1321,7 @@ export class WsrtControlPlane {
 		this.#operationControllers.set(id, controller);
 		for (const node of affected) this.#nodeOperations.set(node, id);
 		this.#changed();
+		await this.#persistOperation(operation);
 		try {
 			if (controller.signal.aborted) throw controller.signal.reason;
 			await run(controller.signal);
@@ -1325,6 +1375,7 @@ export class WsrtControlPlane {
 		} finally {
 			const index = this.#operations.findIndex((item) => item.id === id);
 			if (index >= 0) this.#operations[index] = operation;
+			await this.#persistOperation(operation);
 			this.#operationControllers.delete(id);
 			for (const node of affected)
 				if (this.#nodeOperations.get(node) === id) this.#nodeOperations.delete(node);
@@ -1339,6 +1390,170 @@ export class WsrtControlPlane {
 				subscriber(snapshot);
 			} catch {}
 		}
+		if (this.#persistence && !this.#disposed && !this.#snapshotTimer) {
+			this.#snapshotTimer = setTimeout(() => {
+				this.#snapshotTimer = undefined;
+				void this.#persistSnapshot();
+			}, 100);
+			this.#snapshotTimer.unref?.();
+		}
+	}
+	async #initializePersistence(): Promise<void> {
+		const definition = required(this.#definition, "Control plane definition unavailable");
+		const configured = definition.persistence;
+		if (this.options.persistence === false || (this.options.persistence === undefined && configured === false))
+			return;
+		const sessionId = crypto.randomUUID();
+		const provider =
+			this.options.persistence ??
+			filesystemPersistence({
+				root: configured === false ? ".wsrt" : configured.root,
+				journals: configured === false ? undefined : configured.journals,
+			});
+		try {
+			await provider.initialize({ workspaceRoot: definition.root, sessionId });
+			this.#persistence = provider;
+			const existing = await provider.read<PersistedRecord<WorkspaceIdentity>>(
+				"workspace/identity",
+			);
+			const existingIdentity = existing
+				? this.#migrations.read<WorkspaceIdentity>(
+						existing.value,
+						"wsrt.workspace-identity",
+					)
+				: undefined;
+			const now = new Date().toISOString();
+			const identity: WorkspaceIdentity = existingIdentity
+				? { ...existingIdentity.data, root: definition.root }
+				: { id: crypto.randomUUID(), createdAt: now, root: definition.root };
+			this.#workspaceIdentity = identity;
+			await provider.write(
+				"workspace/identity",
+				createRecord("wsrt.workspace-identity", identity, {
+					workspaceId: identity.id,
+					previous: existingIdentity,
+				}),
+			);
+			for (const entry of await provider.list("session")) {
+				try {
+					const value = await provider.read<PersistedRecord<RuntimeSession>>(entry.key);
+					if (!value) continue;
+					const stored = this.#migrations.read<RuntimeSession>(
+						value.value,
+						"wsrt.runtime-session",
+					);
+					if (stored.data.endedAt) continue;
+					const interrupted = {
+						...stored.data,
+						endedAt: now,
+						exitReason: "unknown" as const,
+					};
+					await provider.write(
+						entry.key,
+						createRecord("wsrt.runtime-session", interrupted, {
+							workspaceId: identity.id,
+							sessionId: interrupted.id,
+							previous: stored,
+						}),
+					);
+					this.#diagnostics.push({
+						code: "WSRT_PREVIOUS_SESSION_INTERRUPTED",
+						severity: "warning",
+						message: `Previous session ${interrupted.id} did not shut down cleanly`,
+						source: { file: definition.sourceFile, path: "persistence" },
+					});
+				} catch (cause) {
+					this.#diagnostics.push({
+						code: "WSRT_PERSISTED_SESSION_INVALID",
+						severity: "warning",
+						message: `Unable to recover ${entry.key}: ${
+							cause instanceof Error ? cause.message : String(cause)
+						}`,
+						source: { file: definition.sourceFile, path: "persistence" },
+					});
+				}
+			}
+			this.#session = {
+				id: sessionId,
+				workspaceId: identity.id,
+				startedAt: now,
+				wsrtVersion: "0.1.0-alpha.0",
+				host: { hostname: os.hostname(), platform: process.platform, arch: process.arch },
+			};
+			await provider.write(
+				`session/${sessionId}`,
+				createRecord("wsrt.runtime-session", this.#session, {
+					workspaceId: identity.id,
+					sessionId,
+				}),
+			);
+		} catch (cause) {
+			await provider.dispose().catch(() => {});
+			this.#persistence = undefined;
+			throw cause;
+		}
+	}
+	async #persistSnapshot(): Promise<void> {
+		if (!this.#persistence || !this.#workspaceIdentity || !this.#session || !this.#definition)
+			return;
+		try {
+			const snapshot = JSON.parse(JSON.stringify(this.snapshot())) as ControlPlaneSnapshot;
+			await this.#persistence.write(
+				"snapshot/latest",
+				createRecord("wsrt.control-plane-snapshot", snapshot, {
+					workspaceId: this.#workspaceIdentity.id,
+					sessionId: this.#session.id,
+				}),
+			);
+		} catch (cause) {
+			this.#recordPersistenceFailure(cause);
+		}
+	}
+	async #persistOperation(operation: OperationSnapshot): Promise<void> {
+		if (!this.#persistence || !this.#workspaceIdentity || !this.#session) return;
+		try {
+			await this.#persistence.write(
+				`operation/${operation.id}`,
+				createRecord("wsrt.operation", JSON.parse(JSON.stringify(operation)), {
+					workspaceId: this.#workspaceIdentity.id,
+					sessionId: this.#session.id,
+				}),
+			);
+		} catch (cause) {
+			this.#recordPersistenceFailure(cause);
+		}
+	}
+	#persistEvent(event: WorkspaceEvent): void {
+		if (!this.#persistence || !this.#workspaceIdentity || !this.#session) return;
+		void this.#persistence
+			.append(
+				"journal/events",
+				createRecord("wsrt.event", JSON.parse(JSON.stringify(event)), {
+					workspaceId: this.#workspaceIdentity.id,
+					sessionId: this.#session.id,
+				}),
+			)
+			.catch((cause) => this.#recordPersistenceFailure(cause));
+		if (event.type.startsWith("plugin.log."))
+			void this.#persistence
+				.append(
+					"journal/logs",
+					createRecord("wsrt.log", JSON.parse(JSON.stringify(event)), {
+						workspaceId: this.#workspaceIdentity.id,
+						sessionId: this.#session.id,
+					}),
+				)
+				.catch((cause) => this.#recordPersistenceFailure(cause));
+	}
+	#recordPersistenceFailure(cause: unknown): void {
+		if (this.#persistenceFailure) return;
+		this.#persistenceFailure = cause;
+		this.#diagnostics.push({
+			code: "WSRT_PERSISTENCE_WRITE_FAILED",
+			severity: "warning",
+			message: cause instanceof Error ? cause.message : String(cause),
+			source: { file: this.#definition?.sourceFile ?? "<persistence>", path: "persistence" },
+		});
 	}
 	#assertMutable() {
 		if (this.options.allowMutations === false)
@@ -1357,6 +1572,11 @@ export async function createControlPlane(
 	options: ControlPlaneOptions = {},
 ): Promise<WsrtControlPlane> {
 	const plane = new WsrtControlPlane(options);
-	await plane.load();
-	return plane;
+	try {
+		await plane.load();
+		return plane;
+	} catch (cause) {
+		await plane.dispose().catch(() => {});
+		throw cause;
+	}
 }

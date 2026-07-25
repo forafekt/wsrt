@@ -23,6 +23,8 @@
 		"@wsrt/config": "workspace:*",
 		"@wsrt/graph": "workspace:*",
 		"@wsrt/lifecycle": "workspace:*",
+		"@wsrt/persistence": "workspace:*",
+		"@wsrt/persistence-filesystem": "workspace:*",
 		"@wsrt/plugins": "workspace:*",
 		"@wsrt/runtime-node": "workspace:*"
 	},

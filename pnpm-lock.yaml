@@ -147,6 +147,12 @@ importers:
       '@wsrt/lifecycle':
         specifier: workspace:*
         version: link:../lifecycle
+      '@wsrt/persistence':
+        specifier: workspace:*
+        version: link:../persistence
+      '@wsrt/persistence-filesystem':
+        specifier: workspace:*
+        version: link:../persistence-filesystem
       '@wsrt/plugins':
         specifier: workspace:*
         version: link:../plugins
@@ -180,6 +186,20 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
 
+  packages/persistence: {}
+
+  packages/persistence-filesystem:
+    dependencies:
+      '@wsrt/persistence':
+        specifier: workspace:*
+        version: link:../persistence
+
+  packages/persistence-memory:
+    dependencies:
+      '@wsrt/persistence':
+        specifier: workspace:*
+        version: link:../persistence
+
   packages/plugins:
     dependencies:
       '@wsrt/capabilities':
@@ -210,6 +230,15 @@ importers:
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@wsrt/persistence':
+        specifier: workspace:*
+        version: link:../persistence
+      '@wsrt/persistence-filesystem':
+        specifier: workspace:*
+        version: link:../persistence-filesystem
+      '@wsrt/persistence-memory':
+        specifier: workspace:*
+        version: link:../persistence-memory
       '@wsrt/runtime-node':
         specifier: workspace:*
         version: link:../../runtimes/node
