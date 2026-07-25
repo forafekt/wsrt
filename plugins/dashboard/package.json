@@ -18,6 +18,7 @@
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
+		"test:browser": "node --test tests/browser.test.mjs",
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
@@ -47,5 +48,8 @@
 		"access": "public",
 		"provenance": true
 	},
-	"sideEffects": false
+	"sideEffects": false,
+	"devDependencies": {
+		"playwright": "^1.61.1"
+	}
 }

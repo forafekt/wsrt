@@ -2,6 +2,7 @@ export {
 	dashboardCancelOperation,
 	dashboardOperation,
 	dashboardSnapshot,
+	safeSerializable,
 } from "./api.js";
 export { matchDashboardRoute } from "./client/router.js";
 export { DashboardStore, reduceDashboardState } from "./client/state/store.js";
@@ -17,6 +18,7 @@ export {
 	startDashboard,
 	streamSnapshots,
 } from "./server/index.js";
+export { DASHBOARD_PROTOCOL } from "./shared/contracts.js";
 export {
 	validateDashboardContribution,
 	validateDashboardContributions,

@@ -2,12 +2,27 @@ import type { ControlPlaneSnapshot, WorkspaceEvent } from "@wsrt/control-plane";
 
 export type DashboardSnapshot = Readonly<{
 	protocolVersion: 3;
+	protocol: DashboardProtocolDescriptor;
 	revision: number;
 	controlPlane: ControlPlaneSnapshot;
 	graph: unknown;
 	events: readonly WorkspaceEvent[];
 	configuration: unknown;
 }>;
+export type DashboardProtocolDescriptor = Readonly<{
+	transport: 1;
+	snapshot: 3;
+	contributions: 1;
+	actions: 1;
+	events: 1;
+}>;
+export const DASHBOARD_PROTOCOL: DashboardProtocolDescriptor = Object.freeze({
+	transport: 1,
+	snapshot: 3,
+	contributions: 1,
+	actions: 1,
+	events: 1,
+});
 export type DashboardContributionView = Readonly<{
 	id: string;
 	kind:

@@ -193,12 +193,21 @@ function spawnCli(...arguments_) {
 		child.stderr.on("data", (chunk) => (stderr += chunk));
 		const timeout = setTimeout(() => {
 			child.kill("SIGKILL");
-			reject(new Error(`CLI timed out for ${arguments_.join(" ")}`));
+			reject(
+				new Error(
+					`CLI timed out for ${arguments_.join(" ")} after 2000ms\nstdout:\n${stdout || "<empty>"}\nstderr:\n${stderr || "<empty>"}\nmemory: ${JSON.stringify(process.memoryUsage())}`,
+				),
+			);
 		}, 2_000);
 		child.on("error", (error) => {
 			settled = true;
 			clearTimeout(timeout);
-			reject(error);
+			reject(
+				new Error(
+					`CLI child failed to spawn for ${arguments_.join(" ")}: ${error.code ?? error.name}: ${error.message}\nThis test requires permission to spawn ${process.execPath}.\nstdout:\n${stdout || "<empty>"}\nstderr:\n${stderr || "<empty>"}`,
+					{ cause: error },
+				),
+			);
 		});
 		child.on("close", (code, signal) => {
 			if (settled) return;

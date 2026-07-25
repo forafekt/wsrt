@@ -3,6 +3,7 @@ import test from "node:test";
 import {
 	matchDashboardRoute,
 	reduceDashboardState,
+	safeSerializable,
 	streamSnapshots,
 	validateDashboardContributions,
 } from "@wsrt/plugin-dashboard";
@@ -52,6 +53,7 @@ test("dashboard reducer preserves interaction state across snapshots", () => {
 		type: "snapshot",
 		snapshot: {
 			protocolVersion: 3,
+			protocol: { transport: 1, snapshot: 3, contributions: 1, actions: 1, events: 1 },
 			revision: 3,
 			controlPlane: {},
 			graph: {},
@@ -68,6 +70,7 @@ test("dashboard reducer preserves interaction state across snapshots", () => {
 test("dashboard reducer applies only monotonic snapshot revisions", () => {
 	const first = {
 		protocolVersion: 3,
+		protocol: { transport: 1, snapshot: 3, contributions: 1, actions: 1, events: 1 },
 		revision: 2,
 		controlPlane: {},
 		graph: {},
@@ -105,6 +108,7 @@ test("paused event inspection remains bounded to its visible revision", () => {
 		type: "snapshot",
 		snapshot: {
 			protocolVersion: 3,
+			protocol: { transport: 1, snapshot: 3, contributions: 1, actions: 1, events: 1 },
 			revision: 1,
 			controlPlane: {},
 			graph: {},
@@ -129,6 +133,16 @@ test("paused event inspection remains bounded to its visible revision", () => {
 	);
 });
 
+test("dashboard serialization redacts secrets and circular values", () => {
+	const value = { token: "secret", nested: { password: "hidden" } };
+	value.circular = value;
+	assert.deepEqual(safeSerializable(value), {
+		token: "[REDACTED]",
+		nested: { password: "[REDACTED]" },
+		circular: "[CIRCULAR]",
+	});
+});
+
 test("dashboard contribution validation isolates invalid and duplicate payloads", () => {
 	const values = validateDashboardContributions([
 		{ id: "deploy", kind: "command", title: "Deploy", data: { enabled: true } },
@@ -139,6 +153,63 @@ test("dashboard contribution validation isolates invalid and duplicate payloads"
 	assert.match(values[1].error, /Duplicate/);
 	assert.match(values[2].error, /Unsupported/);
 	assert.equal(Object.isFrozen(values), true);
+});
+
+test("dashboard stress fixture remains bounded and indexes contributions promptly", () => {
+	const nodes = Array.from({ length: 500 }, (_, index) => ({
+		id: `service:${index}`,
+		kind: "service",
+		state: "running",
+		health: "healthy",
+	}));
+	const events = Array.from({ length: 1_000 }, (_, index) => ({
+		id: `event-${index}`,
+		type: index % 5 === 0 ? "node.health.checked" : "node.log",
+		source: `service:${index % nodes.length}`,
+		timestamp: new Date(index * 1000).toISOString(),
+		correlationId: `operation-${index % 100}`,
+		payload: { index },
+	}));
+	const operations = Array.from({ length: 100 }, (_, index) => ({
+		id: `operation-${index}`,
+		status: "completed",
+	}));
+	const artifacts = Array.from({ length: 500 }, (_, index) => ({
+		id: `artifact:${index}`,
+		producer: `service:${index}`,
+	}));
+	const contributions = Array.from({ length: 500 }, (_, index) => ({
+		id: `contribution-${index}`,
+		kind: index % 2 ? "command" : "metric-panel",
+		data: { value: index },
+	}));
+	const started = performance.now();
+	const state = reduceDashboardState(
+		{ eventFilter: "", search: "", eventsPaused: false, connected: true, contributions: [] },
+		{
+			type: "snapshot",
+			snapshot: {
+				protocolVersion: 3,
+				protocol: {
+					transport: 1,
+					snapshot: 3,
+					contributions: 1,
+					actions: 1,
+					events: 1,
+				},
+				revision: 1,
+				controlPlane: { nodes, operations, artifacts },
+				graph: { nodes, edges: [] },
+				events,
+				configuration: {},
+			},
+		},
+	);
+	const validated = validateDashboardContributions(contributions);
+	const elapsed = performance.now() - started;
+	assert.equal(state.visibleEvents.length, 1_000);
+	assert.equal(validated.length, 500);
+	assert.ok(elapsed < 1_000, `stress fixture processing took ${elapsed.toFixed(1)}ms`);
 });
 
 test("SSE snapshots suppress duplicate revisions and clean up", () => {

@@ -333,7 +333,7 @@ function renderPalette(
 				`<button data-contribution="${escapeHtml(item.id)}" data-search="${escapeHtml(`${item.title ?? item.id} action`.toLowerCase())}"><span>▷</span><b>${escapeHtml(item.title ?? item.id)}</b><small>Plugin action</small></button>`,
 		)
 		.join("");
-	return `<div class="modal-backdrop" data-action="palette"><section class="command-menu" role="dialog" aria-modal="true" aria-label="Command palette" onclick="event.stopPropagation()"><label><span class="sr-only">Search commands</span><input id="palette-search" autocomplete="off" placeholder="Search nodes, plugins, operations, artifacts…"></label><div class="command-results"><h2>Workspace</h2>${commands}${nodes}${entities}${actions}</div><footer><kbd>↑↓</kbd> move <kbd>Enter</kbd> open <kbd>Esc</kbd> close</footer></section></div>`;
+	return `<div class="modal-backdrop" data-action="palette"><section class="command-menu" role="dialog" aria-modal="true" aria-label="Command palette"><label><span class="sr-only">Search commands</span><input id="palette-search" autocomplete="off" placeholder="Search nodes, plugins, operations, artifacts…"></label><div class="command-results"><h2>Workspace</h2>${commands}${nodes}${entities}${actions}</div><footer><kbd>↑↓</kbd> move <kbd>Enter</kbd> open <kbd>Esc</kbd> close</footer></section></div>`;
 }
 function filterPalette(root: HTMLElement, value: string) {
 	for (const item of root.querySelectorAll<HTMLElement>("[data-search]"))

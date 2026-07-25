@@ -55,6 +55,15 @@ the browser. Sidebar state is also local. Both themes honor reduced-motion and t
 layout adapts across mobile, tablet, and desktop widths without page-level
 horizontal overflow.
 
+Keyboard shortcuts:
+
+| Shortcut | Result |
+| --- | --- |
+| `Ctrl+K` / `Cmd+K` | Open and focus the command palette |
+| `Escape` | Close the command palette |
+| `Enter` / `Space` | Select a focused graph node |
+| `Tab` / `Shift+Tab` | Move through navigation, controls, graph nodes, and tables |
+
 ## Architecture
 
 Dashboard v3 is a small dependency-free workbench. The server adapts one existing
@@ -72,12 +81,35 @@ WSRT plugin discovery ──> control plane ──> dashboard adapter ──HTTP
                               └── public operations─┘
 ```
 
-The wire snapshot declares `protocolVersion: 3` and a monotonic control-plane
-revision. The browser rejects incompatible, duplicate, and stale snapshots. SSE
-reconnects use `Last-Event-ID`, refresh from the snapshot endpoint, then
-resubscribe. The control plane bounds operation and event journals; the UI renders
-bounded tails rather than creating an unbounded browser history. Clearing logs
-only clears the local visible projection.
+The wire snapshot keeps the `protocolVersion: 3` compatibility marker and also
+declares a structured descriptor:
+
+```json
+{
+  "transport": 1,
+  "snapshot": 3,
+  "contributions": 1,
+  "actions": 1,
+  "events": 1
+}
+```
+
+The global number remains for v3 clients. The component versions identify the
+schema that actually changed: transport covers SSE framing and reconnect
+behavior; snapshot covers the immutable state DTO; contributions covers
+declarative view models; actions covers HTTP operation requests and results; and
+events covers retained event envelopes. Optional fields are additive. Removing a
+field, changing meaning or type, or changing framing increments the affected
+component. Clients reject unsupported transport/snapshot versions and ignore
+unknown additive fields. Duplicate and stale revisions are ignored. Action HTTP
+errors retain `{ error: { code, message, status } }`; incompatible future action
+schemas must fail explicitly rather than being guessed.
+
+SSE reconnects use `Last-Event-ID`, refresh from the snapshot endpoint, then
+resubscribe. The control plane bounds operations to 100 and events to 1,000; the
+UI renders bounded tails rather than creating an unbounded browser history.
+Individual event payloads larger than 64 KiB are replaced with a bounded preview.
+Clearing logs only clears the local visible projection.
 
 The shell provides Overview, Workspace Explorer, Graph, Nodes, Operations, Tasks,
 Artifacts, Events, Logs, Diagnostics, Health, Metrics, Timeline, Plugins,
@@ -125,8 +157,11 @@ The server defaults to `127.0.0.1`, emits no environment values, redacts
 configuration keys resembling secrets, serves a fixed asset root, applies
 `nosniff`, and exposes no browser code-execution endpoint. Mutations can be
 disabled with `--read-only`. Binding to a non-loopback address exposes workspace
-state and operation endpoints to that network; place an authenticated reverse
-proxy in front of WSRT and disable mutations unless they are required. Dashboard
+state and operation endpoints to that network and now emits an explicit security
+warning; place an authenticated reverse proxy in front of WSRT and disable
+mutations unless they are required. Request URLs are limited to 8 KiB,
+contributions to 1 MiB, and event payloads to 64 KiB. Plugin strings are escaped
+before rendering and arbitrary HTML or script contributions are rejected. Dashboard
 shutdown closes SSE clients, unsubscribes snapshot listeners, clears heartbeats,
 and then closes the HTTP server. The dashboard never owns the supplied control
 plane.
@@ -141,6 +176,8 @@ plane.
   the configuration diagnostics.
 - Graph layout is deterministic and lightweight; very large graph clustering and
   minimap support remain future work.
+- Sidebar and inspector widths are currently fixed, and v3 does not yet provide a
+  resizable bottom panel.
 
 ## Development and testing
 
@@ -150,3 +187,21 @@ The client tests cover routing, monotonic/protocol snapshot updates, paused live
 inspection, preserved interaction state, contribution validation and isolation,
 and SSE cleanup. The workspace test suite additionally covers API integration,
 plugin isolation, lifecycle operations, and architecture boundaries.
+
+Rendered Chromium acceptance:
+
+```bash
+pnpm --filter @wsrt/plugin-dashboard exec playwright install chromium
+pnpm --filter @wsrt/plugin-dashboard build
+pnpm --filter @wsrt/plugin-dashboard test:browser
+```
+
+The deterministic rendered fixture covers initial hydration, workspace and
+connection identity, synchronized node inspection, command-palette navigation,
+log filtering/pause/local clear, theme switching, graph keyboard surface, and a
+390 px narrow viewport. The reducer stress test uses 500 nodes, 1,000 retained
+events, 100 operations, 500 artifacts, and 500 contributions:
+
+```bash
+node --test tests/dashboard-client.test.mjs
+```

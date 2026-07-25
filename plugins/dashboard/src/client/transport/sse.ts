@@ -80,6 +80,8 @@ function isDashboardSnapshot(value: unknown): value is DashboardSnapshot {
 	const input = value as Partial<DashboardSnapshot>;
 	return (
 		input.protocolVersion === 3 &&
+		input.protocol?.transport === 1 &&
+		input.protocol.snapshot === 3 &&
 		Number.isSafeInteger(input.revision) &&
 		!!input.controlPlane &&
 		Array.isArray(input.events)

@@ -4,7 +4,12 @@ import { createServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WsrtControlPlane } from "@wsrt/control-plane";
-import { dashboardCancelOperation, dashboardOperation, dashboardSnapshot } from "../api.js";
+import {
+	dashboardCancelOperation,
+	dashboardOperation,
+	dashboardSnapshot,
+	safeSerializable,
+} from "../api.js";
 import { dashboardStyles } from "../client/styles.js";
 import { type DashboardOptions, normalizeDashboardOptions } from "../plugin/index.js";
 import { validateDashboardContributions } from "../shared/contributions.js";
@@ -25,6 +30,10 @@ export async function startDashboard(
 ): Promise<DashboardHandle> {
 	const options = normalizeDashboardOptions(input);
 	if (!options.enabled) throw new Error("Dashboard is disabled");
+	if (!isLoopback(options.host))
+		console.warn(
+			`WSRT Dashboard security warning: ${options.host} is not loopback. Workspace data and ${options.mutations ? "mutation endpoints" : "read-only endpoints"} will be reachable from the bound network. Use an authenticated reverse proxy.`,
+		);
 	const streams = new Set<() => void>();
 	const server = createServer(async (request, response) => {
 		try {
@@ -93,6 +102,8 @@ async function route(
 ) {
 	const url = new URL(rawUrl, "http://localhost"),
 		base = options.basePath;
+	if (rawUrl.length > 8192)
+		return error(response, 414, "dashboard.uri_too_long", "Request URL exceeds 8192 bytes");
 	if (base && url.pathname === base) {
 		response.writeHead(308, { location: `${base}/${url.search}` });
 		response.end();
@@ -167,7 +178,7 @@ async function api(
 		else if (resource === "diagnostics") value = snapshot.controlPlane.diagnostics;
 		else if (resource === "plugins") value = snapshot.controlPlane.plugins;
 		else if (resource === "providers") value = snapshot.controlPlane.providers;
-		else if (resource === "configuration") value = safeConfiguration(plane.definition());
+		else if (resource === "configuration") value = safeSerializable(plane.definition());
 		else if (resource === "contributions") {
 			const contributions = plane.pluginContributions("dashboard");
 			value = validateDashboardContributions(
@@ -254,17 +265,6 @@ function nodeDetail(
 		}
 	);
 }
-function safeConfiguration(value: unknown): unknown {
-	return JSON.parse(
-		JSON.stringify(value, (key, item) =>
-			/(?:secret|token|password|key)/i.test(key)
-				? "[REDACTED]"
-				: typeof item === "function"
-					? undefined
-					: item,
-		),
-	);
-}
 function html(options: ReturnType<typeof normalizeDashboardOptions>) {
 	const base = options.basePath;
 	return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="wsrt-base-path" content="${escapeAttribute(base)}"><meta name="wsrt-mutations" content="${options.mutations}"><title>${escapeAttribute(options.title)}</title><link rel="stylesheet" href="${base}/assets/styles.css"></head><body><div id="app"><main class="boot"><span class="spinner"></span>Loading WSRT Dashboard…</main></div><script type="module" src="${base}/assets/client/main.js"></script></body></html>`;
@@ -307,6 +307,9 @@ function listen(server: ReturnType<typeof createServer>, port: number, host: str
 }
 function isAddressInUse(cause: unknown): boolean {
 	return !!cause && typeof cause === "object" && "code" in cause && cause.code === "EADDRINUSE";
+}
+function isLoopback(host: string) {
+	return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 function openBrowser(url: string) {
 	const command =
