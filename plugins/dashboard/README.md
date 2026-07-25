@@ -5,6 +5,8 @@
 
 The local WSRT control-plane dashboard. It serves a base-path-aware browser client, JSON API, and Server-Sent Events stream from one existing `WsrtControlPlane`.
 
+![Alt text](./screenshot.png?raw=true "Dashboard")
+
 Install and configure it explicitly:
 
 ```bash
@@ -209,6 +211,19 @@ The client tests cover routing, monotonic/protocol snapshot updates, paused live
 inspection, preserved interaction state, contribution validation and isolation,
 and SSE cleanup. The workspace test suite additionally covers API integration,
 plugin isolation, lifecycle operations, and architecture boundaries.
+
+The HTTP/SSE transport runs in one persistent worker thread. It receives immutable,
+serializable snapshots and sends serialized start, stop, restart, task, and cancellation
+commands to the parent. The parent control plane remains the single owner of plugins,
+operations, and runtime resources. A synchronous or CPU-bound provider operation therefore
+cannot stall dashboard HTTP or SSE handling.
+
+`@wsrt/worker-pool` is intentionally not used for lifecycle execution. Its serializable
+worker-thread protocol does use separate event loops and provides bounded jobs,
+cancellation, error serialization, heartbeat recovery, and forced worker shutdown. Its job
+model is not suitable for the persistent dashboard server and bidirectional snapshot/command
+stream, while lifecycle work itself depends on live plugin instances, process handles, and
+one authoritative state. Runtime providers may still use the pool for serializable CPU work.
 
 Rendered Chromium acceptance:
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -78,3 +79,81 @@ test("timer cancellation before scheduling is immediate and listener-safe", asyn
 		await runtime.dispose();
 	}
 });
+
+test("awaited termination kills descendants, is idempotent, and releases their listener", {
+	skip: process.platform === "win32",
+}, async (t) => {
+	const root = await fs.mkdtemp(path.join(os.tmpdir(), "wsrt-process-tree-"));
+	const runtime = await new NodeRuntimeProvider().create();
+	const details = path.join(root, "descendant.json");
+	const descendant = path.join(root, "descendant.cjs");
+	const parent = path.join(root, "parent.cjs");
+	await fs.writeFile(
+		descendant,
+		'const net=require("node:net");const server=net.createServer();server.once("error",error=>process.send({error:error.code}));server.listen(0,"127.0.0.1",()=>process.send({port:server.address().port}));',
+	);
+	await fs.writeFile(
+		parent,
+		'const {spawn}=require("node:child_process");const fs=require("node:fs");const child=spawn(process.execPath,[process.argv[2]],{stdio:["ignore","ignore","ignore","ipc"]});child.once("message",message=>fs.writeFileSync(process.argv[3],JSON.stringify({pid:child.pid,...message})));child.once("error",error=>fs.writeFileSync(process.argv[3],JSON.stringify({error:String(error)})));setInterval(()=>{},1000);',
+	);
+	const handle = runtime.capabilities.require("spawn").spawn({
+		command: "node",
+		args: [parent, descendant, details],
+		cwd: root,
+		environment: {},
+		terminationGraceMs: 100,
+	});
+	try {
+		const { pid, port, error } = await waitForJson(details);
+		if (error === "EPERM") {
+			t.skip("sandbox does not permit TCP listeners");
+			return;
+		}
+		assert.equal(await canConnect(port), true);
+		assert.equal(handle.terminationState, "running");
+		await Promise.all([handle.terminateTree(), handle.terminateTree()]);
+		assert.equal(handle.running, false);
+		assert.equal(handle.terminationState, "stopped");
+		assert.equal(processExists(pid), false);
+		const rebound = net.createServer();
+		await new Promise((resolve, reject) => {
+			rebound.once("error", reject);
+			rebound.listen(port, "127.0.0.1", resolve);
+		});
+		await new Promise((resolve) => rebound.close(resolve));
+	} finally {
+		await runtime.dispose();
+		await fs.rm(root, { recursive: true, force: true });
+	}
+});
+
+async function waitForJson(file) {
+	for (let attempt = 0; attempt < 500; attempt++) {
+		try {
+			return JSON.parse(await fs.readFile(file, "utf8"));
+		} catch {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		}
+	}
+	throw new Error(`Timed out waiting for ${file}`);
+}
+
+function canConnect(port) {
+	return new Promise((resolve) => {
+		const socket = net.createConnection({ host: "127.0.0.1", port });
+		socket.once("connect", () => {
+			socket.destroy();
+			resolve(true);
+		});
+		socket.once("error", () => resolve(false));
+	});
+}
+
+function processExists(pid) {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}

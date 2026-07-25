@@ -5,12 +5,25 @@ export type SpawnRequest = {
 	environment: Readonly<Record<string, string>>;
 	shell?: boolean;
 	signal?: AbortSignal;
+	/** Time allowed for graceful process-tree termination before escalation. */
+	terminationGraceMs?: number;
 };
+export type ProcessTerminationState =
+	| "running"
+	| "stop-requested"
+	| "terminating"
+	| "forcing"
+	| "stopped"
+	| "failed";
 export type ProcessHandle = {
 	pid: number;
 	running: boolean;
+	readonly terminationState: ProcessTerminationState;
 	exit: Promise<{ code: number | null; signal: string | null }>;
+	/** Requests a signal without waiting. Prefer terminateTree for lifecycle shutdown. */
 	terminate(signal?: string): void;
+	/** Gracefully terminates the owned process tree, escalates, and waits for exit. */
+	terminateTree(options?: { graceMs?: number; signal?: AbortSignal }): Promise<void>;
 };
 export type ArtifactCandidate = {
 	readonly path: string;

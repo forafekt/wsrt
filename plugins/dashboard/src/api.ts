@@ -15,16 +15,14 @@ export function dashboardSnapshot(plane: WsrtControlPlane) {
 		configuration: safeSerializable(plane.definition()),
 	};
 }
-export async function dashboardOperation(
+export function dashboardOperation(
 	plane: WsrtControlPlane,
 	operation: "start" | "stop" | "restart" | "run",
 	ids: string[],
 ) {
-	if (operation === "start") return plane.start(ids);
-	if (operation === "stop") return plane.stop(ids);
-	if (operation === "restart") return plane.restart(ids);
-	if (ids.length !== 1) throw new Error("Task operation requires exactly one task");
-	return plane.runTask(ids[0]);
+	if (operation === "run" && ids.length !== 1)
+		throw new Error("Task operation requires exactly one task");
+	return plane.submit(operation === "run" ? "task" : operation, ids);
 }
 export function dashboardCancelOperation(plane: WsrtControlPlane, operationId: string) {
 	return { operationId, cancelled: plane.cancelOperation(operationId) };

@@ -5,6 +5,7 @@ import process from "node:process";
 import {
 	CapabilityRegistry,
 	type ProcessHandle,
+	type ProcessTerminationState,
 	type RuntimeInstance,
 	type RuntimeProvider,
 } from "@wsrt/capabilities";
@@ -74,16 +75,22 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 					});
 					let running = true;
 					let settled = false;
+					let terminationState: ProcessTerminationState = "running";
+					let termination: Promise<void> | undefined;
 					const handle: ProcessHandle = {
 						pid: child.pid ?? -1,
 						get running() {
 							return running;
+						},
+						get terminationState() {
+							return terminationState;
 						},
 						exit: new Promise((resolve) => {
 							const finish = (code: number | null, signal: string | null) => {
 								if (settled) return;
 								settled = true;
 								running = false;
+								if (terminationState === "running") terminationState = "stopped";
 								children.delete(handle);
 								request.signal?.removeEventListener("abort", abort);
 								resolve({ code, signal });
@@ -99,8 +106,25 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 								} catch {}
 							} else child.kill(signal as NodeJS.Signals);
 						},
+						terminateTree: (options = {}) => {
+							if (termination) return termination;
+							if (!running && !treeExists(child.pid ?? -1)) return Promise.resolve();
+							terminationState = "stop-requested";
+							termination = terminateProcessTree(
+								handle,
+								options.graceMs ?? request.terminationGraceMs ?? 3000,
+								options.signal,
+								(state) => {
+									terminationState = state;
+								},
+							).catch((cause) => {
+								terminationState = "failed";
+								throw cause;
+							});
+							return termination;
+						},
 					};
-					const abort = () => handle.terminate();
+					const abort = () => void handle.terminateTree().catch(() => {});
 					if (request.signal?.aborted) abort();
 					else request.signal?.addEventListener("abort", abort, { once: true });
 					children.add(handle);
@@ -111,16 +135,94 @@ export class NodeRuntimeProvider implements RuntimeProvider {
 			provider: this.id,
 			capabilities,
 			dispose: async () => {
-				for (const child of children) child.terminate();
-				await Promise.race([
-					Promise.allSettled([...children].map((child) => child.exit)),
-					new Promise((resolve) => setTimeout(resolve, 3000)),
-				]);
-				for (const child of children) child.terminate("SIGKILL");
-				await Promise.allSettled([...children].map((child) => child.exit));
+				await Promise.allSettled([...children].map((child) => child.terminateTree()));
 			},
 		};
 	}
+}
+
+async function terminateProcessTree(
+	handle: ProcessHandle,
+	graceMs: number,
+	signal?: AbortSignal,
+	setState: (state: ProcessTerminationState) => void = () => {},
+): Promise<void> {
+	if (!handle.running && !treeExists(handle.pid)) return;
+	setState("terminating");
+	await signalTree(handle.pid, false);
+	await waitForTreeExit(handle.pid, Math.max(0, graceMs), signal);
+	if (treeExists(handle.pid)) {
+		setState("forcing");
+		await signalTree(handle.pid, true);
+	}
+	await handle.exit;
+	await waitForTreeExit(handle.pid, Math.max(1000, graceMs), signal);
+	if (treeExists(handle.pid))
+		throw new Error(`Process tree ${handle.pid} remained alive after forced termination`);
+	setState("stopped");
+}
+
+async function signalTree(pid: number, force: boolean): Promise<void> {
+	if (pid <= 0) return;
+	if (process.platform !== "win32") {
+		try {
+			process.kill(-pid, force ? "SIGKILL" : "SIGTERM");
+		} catch (cause) {
+			if ((cause as NodeJS.ErrnoException).code !== "ESRCH") throw cause;
+		}
+		return;
+	}
+	await new Promise<void>((resolve, reject) => {
+		const killer = spawn("taskkill", ["/PID", String(pid), "/T", ...(force ? ["/F"] : [])], {
+			windowsHide: true,
+			stdio: "ignore",
+		});
+		killer.once("error", reject);
+		killer.once("exit", (code) =>
+			code === 0 || !handleExists(pid)
+				? resolve()
+				: reject(new Error(`taskkill exited with code ${code}`)),
+		);
+	});
+}
+
+function handleExists(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function treeExists(pid: number): boolean {
+	if (process.platform === "win32") return handleExists(pid);
+	try {
+		process.kill(-pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function waitForTreeExit(
+	pid: number,
+	timeoutMs: number,
+	signal?: AbortSignal,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (treeExists(pid) && Date.now() < deadline) await delay(20, signal);
+}
+
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(resolve, milliseconds);
+		const abort = () => {
+			clearTimeout(timer);
+			reject(signal?.reason ?? new DOMException("Termination cancelled", "AbortError"));
+		};
+		signal?.addEventListener("abort", abort, { once: true });
+	});
 }
 
 function connect(

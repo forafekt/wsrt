@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
 import type { WsrtControlPlane } from "@wsrt/control-plane";
 import {
 	dashboardCancelOperation,
@@ -26,6 +27,113 @@ export type DashboardHandle = {
 const clientRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
 export async function startDashboard(
+	plane: WsrtControlPlane,
+	input: DashboardOptions = {},
+): Promise<DashboardHandle> {
+	const initialSnapshot = {
+		...dashboardSnapshot(plane),
+		contributions: await serializedContributions(plane),
+	};
+	const worker = new Worker(new URL("./dashboard-worker.js", import.meta.url), {
+		workerData: { options: normalizeDashboardOptions(input), snapshot: initialSnapshot },
+	});
+	const ready = new Promise<Omit<DashboardHandle, "disconnectClients" | "close">>(
+		(resolve, reject) => {
+			worker.on("message", async (message: WorkerMessage) => {
+				if (message.type === "ready") resolve(message.handle);
+				if (message.type === "command") {
+					try {
+						const value = await (message.command.type === "cancel"
+							? {
+									operationId: message.command.operationId,
+									cancelled: plane.cancelOperation(message.command.operationId),
+								}
+							: message.command.type === "contribution"
+								? awaitContribution(plane, message.command.contributionId)
+								: plane.submit(
+										message.command.type,
+										message.command.nodeIds,
+										message.command.operationId,
+									));
+						worker.postMessage({ type: "command-result", id: message.id, value });
+					} catch (cause) {
+						worker.postMessage({
+							type: "command-result",
+							id: message.id,
+							error: cause instanceof Error ? cause.message : String(cause),
+						});
+					}
+				}
+			});
+			worker.once("error", reject);
+			worker.once("exit", (code) => {
+				if (code !== 0) reject(new Error(`Dashboard worker exited with code ${code}`));
+			});
+		},
+	);
+	const unsubscribe = plane.subscribeSnapshots(() =>
+		worker.postMessage({ type: "snapshot", snapshot: dashboardSnapshot(plane) }),
+	);
+	const handle = await ready;
+	let sequence = 0;
+	const pending = new Map<number, { resolve(): void; reject(cause: unknown): void }>();
+	worker.on("message", (message: WorkerMessage) => {
+		if (message.type !== "response") return;
+		const waiter = pending.get(message.id);
+		if (!waiter) return;
+		pending.delete(message.id);
+		message.error ? waiter.reject(new Error(message.error)) : waiter.resolve();
+	});
+	const control = (action: "disconnect" | "close") =>
+		new Promise<void>((resolve, reject) => {
+			const id = ++sequence;
+			pending.set(id, { resolve, reject });
+			worker.postMessage({ type: "control", id, action });
+		});
+	let closed = false;
+	return {
+		...handle,
+		disconnectClients: () => void control("disconnect"),
+		async close() {
+			if (closed) return;
+			closed = true;
+			unsubscribe();
+			await control("close");
+			await worker.terminate();
+		},
+	};
+}
+
+async function serializedContributions(plane: WsrtControlPlane) {
+	return validateDashboardContributions(
+		await Promise.all(
+			plane.pluginContributions("dashboard").map(async (contribution) => {
+				try {
+					const data = contribution.load
+						? await plane.invokePluginContribution("dashboard", contribution.id, (context) =>
+								contribution.load?.(context, new AbortController().signal),
+							)
+						: undefined;
+					return safeSerializable({
+						...contribution,
+						load: undefined,
+						run: undefined,
+						data,
+					});
+				} catch (cause) {
+					return {
+						id: contribution.id,
+						kind: contribution.kind,
+						title: contribution.title,
+						error: cause instanceof Error ? cause.message : String(cause),
+					};
+				}
+			}),
+		),
+	);
+}
+
+export async function startDashboardInProcess(
 	plane: WsrtControlPlane,
 	input: DashboardOptions = {},
 ): Promise<DashboardHandle> {
@@ -95,6 +203,32 @@ export async function startDashboard(
 			);
 		},
 	};
+}
+
+type WorkerMessage =
+	| { type: "ready"; handle: Omit<DashboardHandle, "disconnectClients" | "close"> }
+	| {
+			type: "command";
+			id: number;
+			command:
+				| {
+						type: "start" | "stop" | "restart" | "task";
+						operationId: string;
+						nodeIds: string[];
+				  }
+				| { type: "cancel"; operationId: string }
+				| { type: "contribution"; contributionId: string };
+	  }
+	| { type: "response"; id: number; error?: string };
+
+async function awaitContribution(plane: WsrtControlPlane, contributionId: string) {
+	const contribution = plane
+		.pluginContributions("dashboard")
+		.find((item) => item.id === contributionId);
+	if (!contribution?.run) throw new Error(`Action ${contributionId} was not found`);
+	return plane.invokePluginContribution("dashboard", contributionId, (context) =>
+		contribution.run?.({}, context, new AbortController().signal),
+	);
 }
 
 async function route(
@@ -258,15 +392,27 @@ async function api(
 		}
 	}
 	if (resource === "nodes" && id && ["start", "stop", "restart"].includes(action ?? ""))
-		return void dashboardOperation(plane, action as "start" | "stop" | "restart", [id]).then(
-			(value) => json(response, 202, value, options.maxActionResponseBytes),
-			(cause) => error(response, 409, "dashboard.operation_failed", String(cause)),
-		);
+		try {
+			return json(
+				response,
+				202,
+				dashboardOperation(plane, action as "start" | "stop" | "restart", [id]),
+				options.maxActionResponseBytes,
+			);
+		} catch (cause) {
+			return error(response, 409, "dashboard.operation_failed", String(cause));
+		}
 	if (resource === "tasks" && id && action === "run")
-		return void dashboardOperation(plane, "run", [id]).then(
-			(value) => json(response, 202, value, options.maxActionResponseBytes),
-			(cause) => error(response, 409, "dashboard.operation_failed", String(cause)),
-		);
+		try {
+			return json(
+				response,
+				202,
+				dashboardOperation(plane, "run", [id]),
+				options.maxActionResponseBytes,
+			);
+		} catch (cause) {
+			return error(response, 409, "dashboard.operation_failed", String(cause));
+		}
 	if (resource === "operations" && id && action === "cancel") {
 		const value = dashboardCancelOperation(plane, id);
 		return value.cancelled

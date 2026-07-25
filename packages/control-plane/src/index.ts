@@ -75,6 +75,11 @@ export type OperationResult = {
 	status: "completed" | "partially-completed" | "failed" | "cancelled";
 	results: readonly NodeOperationResult[];
 };
+export type SubmittedOperation = {
+	operationId: string;
+	nodes: readonly string[];
+	status: "accepted";
+};
 export type NodeOperationResult = {
 	nodeId: string;
 	status:
@@ -108,6 +113,7 @@ export type NodeSnapshot = {
 	health: HealthState;
 	runtime?: string;
 	pid?: number;
+	terminationState?: ProcessHandle["terminationState"];
 	restartCount: number;
 	consecutiveSuccesses: number;
 	consecutiveFailures: number;
@@ -164,6 +170,7 @@ export class WsrtControlPlane {
 	readonly #generations = new Map<string, number>();
 	readonly #restartControllers = new Map<string, AbortController>();
 	readonly #operationControllers = new Map<string, AbortController>();
+	readonly #submittedOperationIds: string[] = [];
 	readonly #nodeOperations = new Map<string, string>();
 	readonly #manualStops = new Set<string>();
 	#disposed = false;
@@ -360,6 +367,7 @@ export class WsrtControlPlane {
 					health: this.#health.get(item.id) ?? "unknown",
 					runtime: item.runtime,
 					pid: this.#handles.get(item.id)?.pid,
+					terminationState: this.#handles.get(item.id)?.terminationState,
 					restartCount: 0,
 					consecutiveSuccesses: 0,
 					consecutiveFailures: 0,
@@ -433,9 +441,49 @@ export class WsrtControlPlane {
 	cancelOperation(id: string): boolean {
 		const controller = this.#operationControllers.get(id);
 		if (!controller || controller.signal.aborted) return false;
+		const operation = this.#operations.find((item) => item.id === id);
+		for (const node of operation?.affectedNodes ?? []) {
+			this.#manualStops.add(node);
+			this.#cancelRestart(node, "operation cancelled");
+			this.#stopMonitor(node);
+		}
 		controller.abort(new DOMException("Operation cancelled", "AbortError"));
 		this.#event("operation.cancelled", id, id, { operationId: id });
 		return true;
+	}
+	/**
+	 * Submits lifecycle work without coupling a transport request to its duration.
+	 * Operation state, cancellation, and results remain owned by this control plane.
+	 */
+	submit(
+		type: "start" | "stop" | "restart" | "task",
+		ids: readonly string[],
+		operationId: string = crypto.randomUUID(),
+	): SubmittedOperation {
+		const operationCount = this.#operations.length;
+		this.#submittedOperationIds.push(operationId);
+		const execution =
+			type === "start"
+				? this.start(ids)
+				: type === "stop"
+					? this.stop(ids)
+					: type === "restart"
+						? this.restart(ids)
+						: this.runTask(required(ids[0], "Task operation requires exactly one task"));
+		// #operate records structured terminal failure before rejecting.
+		void execution.catch(() => {});
+		const operation =
+			this.#operations.length > operationCount ? this.#operations.at(-1) : undefined;
+		if (!operation) {
+			const index = this.#submittedOperationIds.indexOf(operationId);
+			if (index >= 0) this.#submittedOperationIds.splice(index, 1);
+			throw new Error("Control-plane operation was not accepted");
+		}
+		return {
+			operationId: operation.id,
+			nodes: operation.affectedNodes,
+			status: "accepted",
+		};
 	}
 	async start(ids?: readonly string[]): Promise<OperationResult> {
 		this.#assertMutable();
@@ -525,6 +573,7 @@ export class WsrtControlPlane {
 		}
 	}
 	#pluginContext(): PluginContext {
+		const persistence = this.#persistence;
 		return Object.freeze({
 			root: this.#definition?.root ?? path.resolve(this.options.root ?? "."),
 			configuration: this.#definition,
@@ -542,8 +591,8 @@ export class WsrtControlPlane {
 			services: Object.freeze({
 				graph: this.#graph,
 				controlPlane: this,
-				...(this.#persistence
-					? { pluginStorage: (pluginId: string) => pluginStorage(this.#persistence!, pluginId) }
+				...(persistence
+					? { pluginStorage: (pluginId: string) => pluginStorage(persistence, pluginId) }
 					: {}),
 			}),
 		});
@@ -657,18 +706,17 @@ export class WsrtControlPlane {
 			stop: async () => {
 				this.#stopMonitor(item.id);
 				const handle = this.#handles.get(item.id);
-				if (!handle?.running) {
+				if (!handle) {
+					this.#handles.delete(item.id);
+					this.#closedExecutions.add(item.id);
+					await this.#cleanupExecution(item.id);
 					this.#manualStops.delete(item.id);
 					return;
 				}
-				handle.terminate();
-				await Promise.race([handle.exit, runtime().capabilities.require("timers").delay(3000)]);
-				if (handle.running) handle.terminate("SIGKILL");
-				await handle.exit;
+				await handle.terminateTree();
 				this.#handles.delete(item.id);
 				this.#closedExecutions.add(item.id);
 				await this.#cleanupExecution(item.id);
-				this.#manualStops.delete(item.id);
 			},
 			ready: async ({ signal }: { signal: AbortSignal }) => {
 				if (item.kind === "task") return;
@@ -873,6 +921,9 @@ export class WsrtControlPlane {
 		exit: { code: number | null; signal: string | null },
 	) {
 		if (this.#handles.get(item.id) !== handle) return;
+		// The root may exit while descendants remain. Preserve ownership until the
+		// runtime has verified that the complete resource tree is gone.
+		await handle.terminateTree({ graceMs: 0 });
 		this.#handles.delete(item.id);
 		this.#closedExecutions.add(item.id);
 		await this.#cleanupExecution(item.id);
@@ -1301,7 +1352,7 @@ export class WsrtControlPlane {
 	): Promise<OperationResult> {
 		const conflict = affected.map((node) => this.#nodeOperations.get(node)).find(Boolean);
 		if (conflict) throw new Error(`WSRT_OPERATION_CONFLICT: operation ${conflict} is running`);
-		const id = crypto.randomUUID(),
+		const id = this.#submittedOperationIds.shift() ?? crypto.randomUUID(),
 			correlationId = crypto.randomUUID(),
 			startedAt = new Date().toISOString();
 		let operation: OperationSnapshot = Object.freeze({
@@ -1401,7 +1452,10 @@ export class WsrtControlPlane {
 	async #initializePersistence(): Promise<void> {
 		const definition = required(this.#definition, "Control plane definition unavailable");
 		const configured = definition.persistence;
-		if (this.options.persistence === false || (this.options.persistence === undefined && configured === false))
+		if (
+			this.options.persistence === false ||
+			(this.options.persistence === undefined && configured === false)
+		)
 			return;
 		const sessionId = crypto.randomUUID();
 		const provider =
@@ -1413,14 +1467,10 @@ export class WsrtControlPlane {
 		try {
 			await provider.initialize({ workspaceRoot: definition.root, sessionId });
 			this.#persistence = provider;
-			const existing = await provider.read<PersistedRecord<WorkspaceIdentity>>(
-				"workspace/identity",
-			);
+			const existing =
+				await provider.read<PersistedRecord<WorkspaceIdentity>>("workspace/identity");
 			const existingIdentity = existing
-				? this.#migrations.read<WorkspaceIdentity>(
-						existing.value,
-						"wsrt.workspace-identity",
-					)
+				? this.#migrations.read<WorkspaceIdentity>(existing.value, "wsrt.workspace-identity")
 				: undefined;
 			const now = new Date().toISOString();
 			const identity: WorkspaceIdentity = existingIdentity
@@ -1438,10 +1488,7 @@ export class WsrtControlPlane {
 				try {
 					const value = await provider.read<PersistedRecord<RuntimeSession>>(entry.key);
 					if (!value) continue;
-					const stored = this.#migrations.read<RuntimeSession>(
-						value.value,
-						"wsrt.runtime-session",
-					);
+					const stored = this.#migrations.read<RuntimeSession>(value.value, "wsrt.runtime-session");
 					if (stored.data.endedAt) continue;
 					const interrupted = {
 						...stored.data,

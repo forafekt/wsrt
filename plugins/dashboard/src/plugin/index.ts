@@ -39,7 +39,7 @@ export function normalizeDashboardOptions(
 	if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)
 		throw new Error(`Invalid dashboard port: ${options.port}`);
 	if (
-		!options.basePath.startsWith("/") ||
+		(options.basePath !== "" && !options.basePath.startsWith("/")) ||
 		options.basePath.includes("?") ||
 		options.basePath.includes("#") ||
 		options.basePath.includes("..")

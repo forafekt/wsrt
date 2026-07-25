@@ -128,8 +128,24 @@ export class LifecycleEngine {
 				this.#transition(id, "ready", correlationId);
 			}
 		} catch (cause) {
-			if (this.state(id) !== "failed") this.#transition(id, "failed", correlationId, cause);
-			throw cause;
+			let failure = cause;
+			// A start may already own resources even when readiness or the operation is cancelled.
+			// Roll it back with a fresh signal so cancellation cannot prevent cleanup.
+			try {
+				await this.#attempt(
+					() =>
+						handler.stop({
+							signal: new AbortController().signal,
+							nodeId: id,
+							correlationId,
+						}),
+					new AbortController().signal,
+				);
+			} catch (rollbackCause) {
+				failure = new AggregateError([cause, rollbackCause], `Failed to start and roll back ${id}`);
+			}
+			if (this.state(id) !== "failed") this.#transition(id, "failed", correlationId, failure);
+			throw failure;
 		}
 	}
 	async #stopOne(id: string, signal: AbortSignal): Promise<void> {
@@ -141,7 +157,7 @@ export class LifecycleEngine {
 			await this.#attempt(() => handler.stop({ signal, nodeId: id, correlationId }), signal);
 			this.#transition(id, "stopped", correlationId);
 		} catch (cause) {
-			this.#transition(id, "failed", correlationId, cause);
+			if (this.state(id) !== "failed") this.#transition(id, "failed", correlationId, cause);
 			throw cause;
 		}
 	}
