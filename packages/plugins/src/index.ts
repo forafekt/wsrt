@@ -118,8 +118,27 @@ export type ConfigurationContribution = {
 };
 export type DashboardContribution = {
 	readonly id: string;
-	readonly kind: "page" | "widget" | "panel" | "action";
+	readonly kind:
+		| "page"
+		| "widget"
+		| "panel"
+		| "action"
+		| "command"
+		| "inspector"
+		| "badge"
+		| "graph-decoration"
+		| "diagnostic-renderer"
+		| "artifact-action"
+		| "operation-action"
+		| "event-renderer"
+		| "metric-panel"
+		| "status-item"
+		| "navigation";
 	readonly title?: string;
+	readonly description?: string;
+	readonly target?: string;
+	readonly group?: string;
+	readonly order?: number;
 	readonly refreshMs?: number;
 	readonly mutation?: boolean;
 	load?(context: PluginContext, signal: AbortSignal): unknown | Promise<unknown>;

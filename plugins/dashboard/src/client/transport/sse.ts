@@ -35,7 +35,7 @@ export class SnapshotTransport {
 			this.options.snapshotUrl ?? this.#url("/api/snapshot"),
 		);
 		if (!response.ok) throw new Error(`Snapshot request failed: HTTP ${response.status}`);
-		this.#apply((await response.json()) as DashboardSnapshot);
+		this.#apply(await response.json());
 	}
 	close() {
 		this.#closed = true;
@@ -48,7 +48,13 @@ export class SnapshotTransport {
 		const Source = this.options.eventSource ?? EventSource;
 		this.#source = new Source(this.options.eventsUrl ?? this.#url("/api/stream"));
 		this.#source.onopen = () => this.onConnection(true);
-		this.#source.onmessage = (event) => this.#apply(JSON.parse(event.data) as DashboardSnapshot);
+		this.#source.addEventListener("snapshot", (event) => {
+			try {
+				this.#apply(JSON.parse((event as MessageEvent).data));
+			} catch {
+				this.onConnection(false);
+			}
+		});
 		this.#source.onerror = () => {
 			this.onConnection(false);
 			this.#source?.close();
@@ -60,9 +66,22 @@ export class SnapshotTransport {
 				}, this.options.reconnectMs ?? 1000);
 		};
 	}
-	#apply(snapshot: DashboardSnapshot) {
+	#apply(value: unknown) {
+		if (!isDashboardSnapshot(value)) return;
+		const snapshot = value;
 		if (snapshot.revision <= this.#revision) return;
 		this.#revision = snapshot.revision;
 		this.onSnapshot(snapshot);
 	}
+}
+
+function isDashboardSnapshot(value: unknown): value is DashboardSnapshot {
+	if (!value || typeof value !== "object") return false;
+	const input = value as Partial<DashboardSnapshot>;
+	return (
+		input.protocolVersion === 3 &&
+		Number.isSafeInteger(input.revision) &&
+		!!input.controlPlane &&
+		Array.isArray(input.events)
+	);
 }

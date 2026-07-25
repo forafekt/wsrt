@@ -17,3 +17,7 @@ export {
 	startDashboard,
 	streamSnapshots,
 } from "./server/index.js";
+export {
+	validateDashboardContribution,
+	validateDashboardContributions,
+} from "./shared/contributions.js";

@@ -2,6 +2,7 @@ import type { WsrtControlPlane } from "@wsrt/control-plane";
 export function dashboardSnapshot(plane: WsrtControlPlane) {
 	const snapshot = plane.snapshot();
 	return {
+		protocolVersion: 3 as const,
 		revision: snapshot.revision,
 		controlPlane: snapshot,
 		graph: plane.graph().toJSON(),

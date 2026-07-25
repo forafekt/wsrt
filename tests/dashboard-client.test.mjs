@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { matchDashboardRoute, reduceDashboardState, streamSnapshots } from "@wsrt/plugin-dashboard";
+import {
+	matchDashboardRoute,
+	reduceDashboardState,
+	streamSnapshots,
+	validateDashboardContributions,
+} from "@wsrt/plugin-dashboard";
 
 test("dashboard routes unknown paths to overview", () => {
 	assert.equal(matchDashboardRoute("/operations"), "operations");
@@ -46,6 +51,7 @@ test("dashboard reducer preserves interaction state across snapshots", () => {
 	const hydrated = reduceDashboardState(selected, {
 		type: "snapshot",
 		snapshot: {
+			protocolVersion: 3,
 			revision: 3,
 			controlPlane: {},
 			graph: {},
@@ -61,6 +67,7 @@ test("dashboard reducer preserves interaction state across snapshots", () => {
 
 test("dashboard reducer applies only monotonic snapshot revisions", () => {
 	const first = {
+		protocolVersion: 3,
 		revision: 2,
 		controlPlane: {},
 		graph: {},
@@ -73,6 +80,65 @@ test("dashboard reducer applies only monotonic snapshot revisions", () => {
 		{ type: "snapshot", snapshot: first },
 	);
 	assert.equal(reduceDashboardState(state, { type: "snapshot", snapshot: stale }), state);
+});
+
+test("dashboard rejects incompatible protocol snapshots", () => {
+	const state = { eventFilter: "", search: "", eventsPaused: false, connected: false };
+	assert.equal(
+		reduceDashboardState(state, {
+			type: "snapshot",
+			snapshot: { protocolVersion: 2, revision: 1, controlPlane: {}, events: [] },
+		}),
+		state,
+	);
+});
+
+test("paused event inspection remains bounded to its visible revision", () => {
+	const base = {
+		eventFilter: "",
+		search: "",
+		eventsPaused: false,
+		connected: true,
+		contributions: [],
+	};
+	const first = reduceDashboardState(base, {
+		type: "snapshot",
+		snapshot: {
+			protocolVersion: 3,
+			revision: 1,
+			controlPlane: {},
+			graph: {},
+			events: [{ id: "one" }],
+			configuration: {},
+		},
+	});
+	const paused = reduceDashboardState(first, { type: "pause-events", value: true });
+	const live = reduceDashboardState(paused, {
+		type: "snapshot",
+		snapshot: {
+			...first.snapshot,
+			revision: 2,
+			events: [{ id: "one" }, { id: "two" }],
+		},
+	});
+	assert.equal(live.snapshot.revision, 2);
+	assert.deepEqual(live.visibleEvents, [{ id: "one" }]);
+	assert.deepEqual(
+		reduceDashboardState(live, { type: "pause-events", value: false }).visibleEvents,
+		[{ id: "one" }, { id: "two" }],
+	);
+});
+
+test("dashboard contribution validation isolates invalid and duplicate payloads", () => {
+	const values = validateDashboardContributions([
+		{ id: "deploy", kind: "command", title: "Deploy", data: { enabled: true } },
+		{ id: "deploy", kind: "command" },
+		{ id: "unsafe", kind: "react-component" },
+	]);
+	assert.equal(values[0].error, undefined);
+	assert.match(values[1].error, /Duplicate/);
+	assert.match(values[2].error, /Unsupported/);
+	assert.equal(Object.isFrozen(values), true);
 });
 
 test("SSE snapshots suppress duplicate revisions and clean up", () => {

@@ -43,7 +43,9 @@ const heading = (title: string, description: string, actions = "") =>
 	`<div class="page-heading"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div>${actions}</div>`;
 
 export function renderPage(route: DashboardRoute, state: DashboardState): string {
-	const data = state.snapshot;
+	const data = state.snapshot
+		? { ...state.snapshot, events: state.visibleEvents ?? state.snapshot.events }
+		: undefined;
 	const snapshot = data?.controlPlane;
 	if (state.error)
 		return `<div class="alert danger" role="alert"><b>Dashboard unavailable</b><span>${escapeHtml(state.error)}</span><button data-action="refresh">Try again</button></div>`;
@@ -132,7 +134,7 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 	if (route === "operations")
 		return `${heading("Operations", "Track lifecycle work and per-node outcomes.")}${table(
 			"Operation history",
-			["ID", "Type", "Status", "Targets", "Duration", "Correlation"],
+			["ID", "Type", "Status", "Targets", "Duration", "Correlation", "Action"],
 			snapshot.operations
 				.slice()
 				.reverse()
@@ -143,6 +145,9 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 					escapeHtml(o.requestedNodes.join(", ") || "—"),
 					duration(o.startedAt, o.completedAt),
 					`<code>${escapeHtml(o.correlationId)}</code>`,
+					o.status === "pending" || o.status === "running"
+						? `<button class="danger-button" data-cancel-operation="${escapeHtml(o.id)}">Cancel</button>`
+						: "—",
 				]),
 			"Operations will appear after a lifecycle action or task run.",
 		)}`;
@@ -209,7 +214,7 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 			.filter((event) => !filter || JSON.stringify(event).toLowerCase().includes(filter))
 			.slice(-500)
 			.reverse();
-		return `${heading("Logs", "Unified structured output from nodes, plugins, providers, and operations.", `<button data-action="toggle-events">${state.eventsPaused ? "Resume" : "Pause"}</button>`)}<div class="toolbar"><label class="search"><span class="sr-only">Search logs</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Search logs or /regex/…"></label>${badge(state.eventsPaused ? "Paused" : "Following")}</div><section class="log-viewer" aria-label="Log stream">${logs.length ? logs.map((event) => `<article><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><b>${escapeHtml(event.source)}</b><code>${escapeHtml(event.type)}</code><span>${escapeHtml(event.correlationId)}</span></article>`).join("") : `<p>No log-compatible events match this filter.</p>`}</section>`;
+		return `${heading("Logs", "Unified structured output from nodes, plugins, providers, and operations.", `<span class="row-actions"><button data-action="toggle-events">${state.eventsPaused ? "Resume" : "Pause"}</button><button data-action="clear-events">Clear local view</button></span>`)}<div class="toolbar"><label class="search"><span class="sr-only">Search logs</span><input id="event-filter" value="${escapeHtml(state.eventFilter)}" placeholder="Search logs or /regex/…"></label>${badge(state.eventsPaused ? "Paused" : "Following")}</div><section class="log-viewer" aria-label="Log stream">${logs.length ? logs.map((event) => `<article><time>${escapeHtml(new Date(event.timestamp).toLocaleTimeString())}</time><b>${escapeHtml(event.source)}</b><code>${escapeHtml(event.type)}</code><span>${escapeHtml(event.correlationId)}</span></article>`).join("") : `<p>No log-compatible events match this filter.</p>`}</section>`;
 	}
 	if (route === "diagnostics")
 		return `${heading("Diagnostics", "Actionable configuration and runtime findings.")}${table(
@@ -302,6 +307,46 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 		return `${heading(contribution.title ?? contribution.id, "Plugin-contributed page rendered from a serializable view model.")}${contribution.error ? `<div class="alert danger" role="alert">${escapeHtml(contribution.error)}</div>` : renderViewModel(contribution.data)}`;
 	}
 	return `${heading("Configuration", "Effective, normalized, and redacted workspace configuration.")}<div class="toolbar"><button data-copy="${escapeHtml(JSON.stringify(data.configuration, null, 2))}">Copy configuration</button></div><div class="config-explorer">${renderConfig(data.configuration)}</div>`;
+}
+
+export function renderNodeInspector(state: DashboardState): string {
+	const snapshot = state.snapshot?.controlPlane;
+	const node = snapshot?.nodes.find((item) => item.id === state.selectedNode);
+	if (!state.selectedNode || !node) return "";
+	const graph = state.snapshot?.graph as Graph;
+	const dependencies = (graph?.edges ?? [])
+		.filter((edge) => edge.from === node.id)
+		.map((edge) => edge.to);
+	const dependants = (graph?.edges ?? [])
+		.filter((edge) => edge.to === node.id)
+		.map((edge) => edge.from);
+	const events = (state.visibleEvents ?? state.snapshot?.events ?? [])
+		.filter((event) => event.source === node.id)
+		.slice(-8)
+		.reverse();
+	const artifacts = snapshot?.artifacts.filter(
+		(artifact) => artifact.producer === node.id || artifact.consumers.includes(node.id),
+	);
+	const operation = snapshot?.operations
+		.slice()
+		.reverse()
+		.find((item) => item.affectedNodes.includes(node.id));
+	return `<aside class="inspector" aria-label="Node inspector">
+		<header><div><span class="eyebrow">${escapeHtml(node.kind)} inspector</span><h2>${escapeHtml(node.id)}</h2></div><button class="close" data-action="clear-selection" aria-label="Close inspector">×</button></header>
+		<div class="inspector-status">${badge(node.state)} ${badge(node.health)}${node.restartPending ? badge("restart pending") : ""}</div>
+		<nav class="inspector-tabs" aria-label="Inspector sections"><a href="#node-overview">Overview</a><a href="#node-relations">Relations</a><a href="#node-timeline">Timeline</a></nav>
+		<section id="node-overview"><h3>Runtime</h3><dl class="facts">
+			<div><dt>Runtime</dt><dd>${escapeHtml(node.runtime ?? "Not reported")}</dd></div>
+			<div><dt>PID</dt><dd>${escapeHtml(node.pid ?? "Not reported")}</dd></div>
+			<div><dt>Restarts</dt><dd>${node.restartCount}</dd></div>
+			<div><dt>Health checks</dt><dd>${node.consecutiveSuccesses} passed · ${node.consecutiveFailures} failed</dd></div>
+			<div><dt>Last check</dt><dd>${time(node.lastCheckAt)}</dd></div>
+			<div><dt>Latest operation</dt><dd>${operation ? `${escapeHtml(operation.type)} · ${badge(operation.status)}` : "None"}</dd></div>
+		</dl></section>
+		<section id="node-relations"><h3>Relationships</h3><p><b>Dependencies:</b> ${dependencies.map(escapeHtml).join(", ") || "None"}</p><p><b>Dependants:</b> ${dependants.map(escapeHtml).join(", ") || "None"}</p><p><b>Artifacts:</b> ${artifacts?.map((item) => escapeHtml(item.id)).join(", ") || "None"}</p></section>
+		<section id="node-timeline"><h3>Recent timeline</h3>${events.length ? `<ol class="mini-timeline">${events.map((event) => `<li><time>${time(event.timestamp)}</time><code>${escapeHtml(event.type)}</code></li>`).join("")}</ol>` : `<p class="muted">No node events are retained.</p>`}</section>
+		<footer><button data-route="nodes">Open full node view</button><button data-route="logs">View logs</button></footer>
+	</aside>`;
 }
 
 function renderViewModel(value: unknown): string {

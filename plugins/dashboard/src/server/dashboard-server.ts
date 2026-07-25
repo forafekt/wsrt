@@ -7,6 +7,7 @@ import type { WsrtControlPlane } from "@wsrt/control-plane";
 import { dashboardCancelOperation, dashboardOperation, dashboardSnapshot } from "../api.js";
 import { dashboardStyles } from "../client/styles.js";
 import { type DashboardOptions, normalizeDashboardOptions } from "../plugin/index.js";
+import { validateDashboardContributions } from "../shared/contributions.js";
 import { streamSnapshots } from "./snapshots.js";
 
 export type DashboardHandle = {
@@ -169,25 +170,27 @@ async function api(
 		else if (resource === "configuration") value = safeConfiguration(plane.definition());
 		else if (resource === "contributions") {
 			const contributions = plane.pluginContributions("dashboard");
-			value = await Promise.all(
-				contributions.map(async (contribution) => {
-					try {
-						const data = contribution.load
-							? await plane.invokePluginContribution("dashboard", contribution.id, (context) =>
-									contribution.load?.(context, new AbortController().signal),
-								)
-							: undefined;
-						JSON.stringify(data);
-						return { ...contribution, load: undefined, run: undefined, data };
-					} catch (cause) {
-						return {
-							id: contribution.id,
-							kind: contribution.kind,
-							title: contribution.title,
-							error: cause instanceof Error ? cause.message : String(cause),
-						};
-					}
-				}),
+			value = validateDashboardContributions(
+				await Promise.all(
+					contributions.map(async (contribution) => {
+						try {
+							const data = contribution.load
+								? await plane.invokePluginContribution("dashboard", contribution.id, (context) =>
+										contribution.load?.(context, new AbortController().signal),
+									)
+								: undefined;
+							JSON.stringify(data);
+							return { ...contribution, load: undefined, run: undefined, data };
+						} catch (cause) {
+							return {
+								id: contribution.id,
+								kind: contribution.kind,
+								title: contribution.title,
+								error: cause instanceof Error ? cause.message : String(cause),
+							};
+						}
+					}),
+				),
 			);
 		} else return error(response, 404, "dashboard.not_found", "API resource not found");
 		if (id && value === undefined)
