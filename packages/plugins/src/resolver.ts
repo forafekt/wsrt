@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { WsrtPlugin } from "./index.js";
 
 export type PluginReference = string | { provider: string; options?: unknown } | WsrtPlugin;
+
 export type PluginLoadReport = {
 	plugins: readonly WsrtPlugin[];
 	diagnostics: readonly {

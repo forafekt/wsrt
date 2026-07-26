@@ -8,6 +8,7 @@ export const escapeHtml = (value: unknown) =>
 			({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ??
 			character,
 	);
+
 const tone = (value: unknown) => {
 	const text = String(value ?? "unknown").toLowerCase();
 	if (/healthy|running|completed|ready|unchanged|success/.test(text)) return "success";
@@ -15,10 +16,13 @@ const tone = (value: unknown) => {
 	if (/degraded|warning|partial|stopping|pending|generating/.test(text)) return "warning";
 	return "neutral";
 };
+
 const badge = (value: unknown) =>
 	`<span class="badge ${tone(value)}">${escapeHtml(value ?? "unknown")}</span>`;
+
 const empty = (title: string, detail: string) =>
 	`<div class="empty"><span class="empty-icon">◇</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p></div>`;
+
 const duration = (start?: string, end?: string) => {
 	if (!start) return "—";
 	const ms = new Date(end ?? Date.now()).getTime() - new Date(start).getTime();
@@ -28,10 +32,12 @@ const duration = (start?: string, end?: string) => {
 			? `${Math.round(ms / 100) / 10} s`
 			: `${Math.round(ms / 60000)} min`;
 };
+
 const time = (value?: string) =>
 	value
 		? `<time datetime="${escapeHtml(value)}" title="${escapeHtml(value)}">${escapeHtml(new Date(value).toLocaleString())}</time>`
 		: "—";
+
 const table = (
 	title: string,
 	headers: string[],
@@ -39,6 +45,7 @@ const table = (
 	emptyText = "No data is available yet.",
 ) =>
 	`<section class="section"><div class="section-heading"><h2>${escapeHtml(title)}</h2><span class="count">${rows.length}</span></div>${rows.length ? `<div class="table-wrap"><table><thead><tr>${headers.map((item) => `<th scope="col">${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((item) => `<td>${item}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : empty(title, emptyText)}</section>`;
+
 const heading = (title: string, description: string, actions = "") =>
 	`<div class="page-heading"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div>${actions}</div>`;
 
@@ -312,7 +319,9 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 }
 
 const VIRTUAL_ROW_HEIGHT = 30;
+
 const VIRTUAL_WINDOW = 60;
+
 function virtualRecords<T>(
 	records: readonly T[],
 	start: number,
@@ -380,6 +389,7 @@ function renderViewModel(value: unknown): string {
 			.join("")}</dl>`;
 	return `<p>${escapeHtml(value)}</p>`;
 }
+
 function renderConfig(value: unknown, path = "workspace"): string {
 	if (!value || typeof value !== "object")
 		return `<span class="config-value">${escapeHtml(value)}</span>`;
@@ -395,6 +405,7 @@ type Graph = {
 	nodes?: { id: string; kind: string }[];
 	edges?: { from: string; to: string; kind: string }[];
 };
+
 function renderGraph(
 	graph: Graph,
 	states: readonly { id: string; health: string; state: string }[],
@@ -453,7 +464,9 @@ function renderGraph(
 }
 
 let cachedTopology = "";
+
 let cachedPositions = new Map<string, { x: number; y: number }>();
+
 function graphPositions(key: string, nodes: readonly { id: string }[]) {
 	if (key === cachedTopology) return cachedPositions;
 	cachedTopology = key;

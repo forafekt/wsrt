@@ -1,5 +1,7 @@
 const ESC = "\x1B";
+
 const CSI = `${ESC}[`;
+
 const beep = "\u0007";
 
 export interface AnsiCursor {

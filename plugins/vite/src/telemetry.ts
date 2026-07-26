@@ -6,9 +6,13 @@ import path from "node:path";
 import type { ExecutionTelemetryEvent } from "@wsrt/capabilities";
 
 export const telemetryProtocol = "wsrt.execution-telemetry" as const;
+
 export const telemetryVersion = 1 as const;
+
 export const maximumTelemetryRecordBytes = 64 * 1024;
+
 export const maximumTelemetryFileBytes = 8 * 1024 * 1024;
+
 const temporaryRoot = path.join(os.tmpdir(), "wsrt", "executions");
 
 export type ExecutionTelemetryEnvelope = {
@@ -288,13 +292,16 @@ function isEvent(value: unknown): value is ExecutionTelemetryEvent {
 function issue(code: TelemetryIssue["code"], message: string) {
 	return { issue: { code, message } } as const;
 }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value);
 }
+
 function isWithinTemporaryRoot(value: string): boolean {
 	const relative = path.relative(temporaryRoot, value);
 	return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
+
 function isProcessAlive(pid: unknown): boolean {
 	if (!Number.isSafeInteger(pid) || Number(pid) <= 0) return false;
 	try {

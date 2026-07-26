@@ -6,22 +6,35 @@ import { fileURLToPath } from "node:url";
 import { readTarball } from "./tarball.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
 execFileSync("pnpm", ["release:pack"], { cwd: root, stdio: "inherit" });
+
 const fixture = path.join(root, "tests", "fixtures", "external-consumer");
+
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "wsrt-packed-consumer-"));
+
 const consumer = path.join(temporaryRoot, "consumer");
+
 const tarballDirectory = path.join(temporaryRoot, "tarballs");
+
 fs.cpSync(fixture, consumer, { recursive: true });
+
 fs.cpSync(path.join(root, ".release", "tarballs"), tarballDirectory, { recursive: true });
+
 const packageFile = path.join(consumer, "package.json");
+
 const manifest = JSON.parse(fs.readFileSync(packageFile, "utf8"));
+
 manifest.devDependencies = {};
+
 for (const file of fs.readdirSync(tarballDirectory).filter((item) => item.endsWith(".tgz"))) {
 	const entries = readTarball(path.join(tarballDirectory, file));
 	const packed = JSON.parse(entries.get("package/package.json").toString("utf8"));
 	manifest.devDependencies[packed.name] = `file:../tarballs/${file}`;
 }
+
 fs.writeFileSync(packageFile, `${JSON.stringify(manifest, null, 2)}\n`);
+
 try {
 	execFileSync("npm", ["install", "--ignore-scripts", "--no-package-lock"], {
 		cwd: consumer,

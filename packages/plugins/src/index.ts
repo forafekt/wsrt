@@ -6,6 +6,7 @@ import type {
 } from "@wsrt/capabilities";
 
 export type PluginIdentity = { readonly id: string; readonly version: string };
+
 export type PluginCapability =
 	| "runtime-provider"
 	| "execution-provider"
@@ -19,6 +20,7 @@ export type PluginCapability =
 	| "dashboard"
 	| "mcp"
 	| "completion";
+
 export type PluginDependency =
 	| string
 	| {
@@ -26,6 +28,7 @@ export type PluginDependency =
 			readonly minVersion?: string;
 			readonly maxVersion?: string;
 	  };
+
 export type PluginMetadata = PluginIdentity & {
 	readonly name?: string;
 	readonly description?: string;
@@ -34,6 +37,7 @@ export type PluginMetadata = PluginIdentity & {
 	readonly optional?: readonly PluginDependency[];
 	readonly incompatible?: readonly PluginDependency[];
 };
+
 export type ContributionDiagnostic = {
 	readonly code: string;
 	readonly severity: "info" | "warning" | "error";
@@ -44,18 +48,21 @@ export type ContributionDiagnostic = {
 	readonly lifecycleStage?: string;
 	readonly detail?: Readonly<Record<string, unknown>>;
 };
+
 export type ValidationResult<T> =
 	| {
 			readonly value: T;
 			readonly diagnostics?: readonly ContributionDiagnostic[];
 	  }
 	| { readonly diagnostics: readonly ContributionDiagnostic[] };
+
 export type PluginLogger = {
 	debug?(message: string, attributes?: Readonly<Record<string, unknown>>): void;
 	info(message: string, attributes?: Readonly<Record<string, unknown>>): void;
 	warn(message: string, attributes?: Readonly<Record<string, unknown>>): void;
 	error(message: string, attributes?: Readonly<Record<string, unknown>>): void;
 };
+
 export type PluginContext = {
 	readonly root: string;
 	readonly configuration: unknown;
@@ -64,6 +71,7 @@ export type PluginContext = {
 	readonly events: { emit(type: string, payload: unknown): void };
 	readonly services: Readonly<Record<string, unknown>>;
 };
+
 export type PluginLifecycleStage =
 	| "discover"
 	| "configure"
@@ -72,6 +80,7 @@ export type PluginLifecycleStage =
 	| "providers"
 	| "runtime"
 	| "shutdown";
+
 export type PluginLifecycle = Partial<
 	Record<PluginLifecycleStage, (context: PluginContext) => void | Promise<void>>
 >;
@@ -81,12 +90,14 @@ export interface ExecutableHandle<TResult = unknown> {
 	wait?(): Promise<void>;
 	close(): Promise<void>;
 }
+
 export type ExecutableContext = {
 	readonly controlPlane: unknown;
 	readonly signal: AbortSignal;
 	readonly arguments: readonly string[];
 	readonly logger: Pick<PluginLogger, "info" | "warn" | "error">;
 };
+
 export interface ExecutableContribution<TOptions = unknown, TResult = unknown> {
 	readonly id: string;
 	readonly description?: string;
@@ -97,6 +108,7 @@ export interface ExecutableContribution<TOptions = unknown, TResult = unknown> {
 		options: TOptions,
 	): Promise<ExecutableHandle<TResult> | TResult>;
 }
+
 export type CliContribution = {
 	readonly id: string;
 	readonly path: string;
@@ -104,18 +116,22 @@ export type CliContribution = {
 	readonly owner: PluginIdentity;
 	run(context: PluginContext, args: readonly string[]): unknown | Promise<unknown>;
 };
+
 export type WorkspaceContribution = {
 	readonly id: string;
 	compile(context: PluginContext): unknown | Promise<unknown>;
 };
+
 export type GraphContribution = {
 	readonly id: string;
 	contribute(graph: unknown, context: PluginContext): void | Promise<void>;
 };
+
 export type ConfigurationContribution = {
 	readonly id: string;
 	validate(value: unknown): readonly ContributionDiagnostic[];
 };
+
 export type DashboardContribution = {
 	readonly id: string;
 	readonly kind:
@@ -144,6 +160,7 @@ export type DashboardContribution = {
 	load?(context: PluginContext, signal: AbortSignal): unknown | Promise<unknown>;
 	run?(input: unknown, context: PluginContext, signal: AbortSignal): unknown | Promise<unknown>;
 };
+
 export type McpContribution = {
 	readonly id: string;
 	readonly kind: "tool" | "resource" | "prompt";
@@ -152,10 +169,12 @@ export type McpContribution = {
 	validate?(input: unknown): readonly ContributionDiagnostic[];
 	run(input: unknown, context: PluginContext, signal: AbortSignal): unknown | Promise<unknown>;
 };
+
 export type CompletionContribution = {
 	readonly id: string;
 	complete(input: string, context: PluginContext): readonly string[] | Promise<readonly string[]>;
 };
+
 export type PluginContributions = {
 	runtimes?: readonly RuntimeProvider[];
 	adapters?: readonly ExecutionAdapter[];
@@ -171,11 +190,13 @@ export type PluginContributions = {
 	completion?: readonly CompletionContribution[];
 	executables?: readonly ExecutableContribution[];
 };
+
 export interface WsrtPlugin extends PluginMetadata {
 	readonly contributions?: PluginContributions;
 	readonly lifecycle?: PluginLifecycle;
 	dispose?(): void | Promise<void>;
 }
+
 export function definePlugin<const Plugin extends WsrtPlugin>(plugin: Plugin): Plugin {
 	return Object.freeze(plugin);
 }
@@ -228,11 +249,13 @@ export type PluginState =
 	| "running"
 	| "failed"
 	| "disposed";
+
 export type ContributionOperationalStatus =
 	| "operational"
 	| "declarative"
 	| "experimental"
 	| "inactive";
+
 export type ContributionSnapshot = {
 	readonly id: string;
 	readonly kind: keyof PluginContributions;
@@ -242,12 +265,14 @@ export type ContributionSnapshot = {
 	readonly lastInvokedAt?: string;
 	readonly lastFailure?: string;
 };
+
 export type PluginSnapshot = PluginMetadata & {
 	readonly state: PluginState;
 	readonly registrations: Readonly<Record<string, readonly string[]>>;
 	readonly diagnostics: readonly ContributionDiagnostic[];
 	readonly contributions: readonly ContributionSnapshot[];
 };
+
 export class PluginSession {
 	readonly #plugins: readonly WsrtPlugin[];
 	readonly #states = new Map<string, PluginState>();
@@ -398,6 +423,7 @@ export class PluginResolutionError extends Error {
 		this.name = "PluginResolutionError";
 	}
 }
+
 export class PluginLifecycleError extends Error {
 	constructor(
 		readonly plugin: string,
@@ -441,6 +467,7 @@ function validatePluginSet(plugins: readonly WsrtPlugin[]): void {
 				);
 	}
 }
+
 function validateDependency(
 	plugin: WsrtPlugin,
 	dependency: Exclude<PluginDependency, string>,
@@ -462,12 +489,14 @@ function validateDependency(
 			`Plugin ${plugin.id} requires ${dependency.id}${dependency.minVersion ? ` >=${dependency.minVersion}` : ""}${dependency.maxVersion ? ` <=${dependency.maxVersion}` : ""}; found ${target.version}`,
 		);
 }
+
 function versionMatches(version: string, dependency: Exclude<PluginDependency, string>): boolean {
 	return (
 		(!dependency.minVersion || compareVersions(version, dependency.minVersion) >= 0) &&
 		(!dependency.maxVersion || compareVersions(version, dependency.maxVersion) <= 0)
 	);
 }
+
 function compareVersions(a: string, b: string): number {
 	const left = versionParts(a),
 		right = versionParts(b);
@@ -477,17 +506,20 @@ function compareVersions(a: string, b: string): number {
 	}
 	return 0;
 }
+
 function versionParts(value: string): number[] {
 	const match = value.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
 	if (!match)
 		throw new PluginResolutionError("plugin.version_invalid", `Invalid plugin version: ${value}`);
 	return match.slice(1).map((item) => Number(item ?? 0));
 }
+
 function dependencies(
 	values?: readonly PluginDependency[],
 ): Array<Exclude<PluginDependency, string>> {
 	return (values ?? []).map((value) => (typeof value === "string" ? { id: value } : value));
 }
+
 function inferredCapabilities(plugin: WsrtPlugin): PluginCapability[] {
 	const values = new Set(plugin.capabilities ?? []);
 	for (const [kind, items] of Object.entries(plugin.contributions ?? {}))
@@ -497,6 +529,7 @@ function inferredCapabilities(plugin: WsrtPlugin): PluginCapability[] {
 		}
 	return [...values].sort();
 }
+
 function registrations(plugin: WsrtPlugin): Record<string, readonly string[]> {
 	return Object.fromEntries(
 		Object.entries(plugin.contributions ?? {})
@@ -509,6 +542,7 @@ function registrations(plugin: WsrtPlugin): Record<string, readonly string[]> {
 			]),
 	);
 }
+
 function contributionSnapshots(
 	plugin: WsrtPlugin,
 	invocations: Map<string, { active: number; lastInvokedAt?: string; lastFailure?: string }>,
@@ -549,6 +583,7 @@ function contributionSnapshots(
 			: [],
 	);
 }
+
 function metadata(plugin: WsrtPlugin): PluginMetadata {
 	return {
 		id: plugin.id,
@@ -560,6 +595,7 @@ function metadata(plugin: WsrtPlugin): PluginMetadata {
 		incompatible: plugin.incompatible,
 	};
 }
+
 function stageState(stage: Exclude<PluginLifecycleStage, "shutdown">): PluginState {
 	if (stage === "discover") return "discovered";
 	if (stage === "configure") return "configured";
@@ -567,6 +603,7 @@ function stageState(stage: Exclude<PluginLifecycleStage, "shutdown">): PluginSta
 	if (stage === "providers") return "registered";
 	return "running";
 }
+
 function scopedContext(
 	context: PluginContext,
 	plugin: string,
@@ -583,6 +620,7 @@ function scopedContext(
 		},
 	});
 }
+
 function failureDiagnostic(
 	plugin: string,
 	stage: PluginLifecycleStage,
@@ -596,6 +634,7 @@ function failureDiagnostic(
 		detail: { stage },
 	};
 }
+
 function assertUniqueContributions(plugins: readonly WsrtPlugin[]): void {
 	const seen = new Map<string, string>();
 	for (const plugin of plugins)
@@ -624,6 +663,7 @@ function assertUniqueContributions(plugins: readonly WsrtPlugin[]): void {
 					seen.set(key, plugin.id);
 				}
 }
+
 function duplicateIds(ids: readonly string[]): string[] {
 	return [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 }

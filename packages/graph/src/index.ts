@@ -14,7 +14,9 @@ export const nodeKinds = [
 ] as const;
 
 export type SystemNodeKind = (typeof nodeKinds)[number];
+
 export type NodeHealth = "unknown" | "healthy" | "degraded" | "unhealthy";
+
 export type SystemNode = {
 	id: string;
 	kind: SystemNodeKind;
@@ -36,8 +38,11 @@ export const edgeKinds = [
 	"observes",
 	"activates",
 ] as const;
+
 export type SystemEdgeKind = (typeof edgeKinds)[number];
+
 export type DependencyCondition = "started" | "ready" | "healthy" | "completed" | "successful";
+
 export type SystemEdge = {
 	from: string;
 	to: string;
@@ -51,6 +56,7 @@ export type GraphIssue = {
 	message: string;
 	path: readonly string[];
 };
+
 export type ExecutionPlan = {
 	order: readonly string[];
 	stages: readonly (readonly string[])[];
@@ -171,6 +177,7 @@ export type WorkspacePackageDescriptor = {
 	root: string;
 	dependencies: readonly string[];
 };
+
 export type WorkspaceDependencyGraph = {
 	nodes: { id: string; root: string }[];
 	edges: { from: string; to: string; type: "workspace" | "external" }[];

@@ -7,6 +7,9 @@ const pool = createWorkerPool({
 });
 
 await pool.ready();
+
 const result = await pool.run("heavyCpuTask", { iterations: 5_000_000 }, { timeoutMs: 30_000 });
+
 console.log(result);
+
 await pool.shutdown("graceful");

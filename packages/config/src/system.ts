@@ -7,6 +7,7 @@ export type SourceReference = {
 	line?: number;
 	column?: number;
 };
+
 export type SystemDiagnostic = {
 	code: string;
 	severity: "info" | "warning" | "error";
@@ -14,7 +15,9 @@ export type SystemDiagnostic = {
 	source: SourceReference;
 	suggestion?: string;
 };
+
 export type CommandInput = string | { command: string; args?: string[]; shell?: boolean };
+
 export type HealthcheckInput =
 	| { type: "process"; unhealthyThreshold?: number; healthyThreshold?: number }
 	| {
@@ -36,6 +39,7 @@ export type HealthcheckInput =
 			unhealthyThreshold?: number;
 			healthyThreshold?: number;
 	  };
+
 export type RestartPolicyInput =
 	| { policy: "never" }
 	| {
@@ -46,12 +50,14 @@ export type RestartPolicyInput =
 			maximumDelayMs?: number;
 			restartOnUnhealthy?: boolean;
 	  };
+
 export type TaskOutputInput = {
 	artifact: string;
 	path: string;
 	type?: string;
 	directory?: boolean;
 };
+
 export type ExecutableInput = {
 	root?: string;
 	runtime?: string;
@@ -65,14 +71,17 @@ export type ExecutableInput = {
 	/** Execution adapter contribution id (for example `vite`). */
 	adapter?: string;
 };
+
 export type ApplicationInput = ExecutableInput & {
 	processes?: Record<string, ExecutableInput>;
 	consumes?: string[];
 };
+
 export type TaskInput = ExecutableInput & {
 	produces?: string[];
 	outputs?: TaskOutputInput[];
 };
+
 export type ArtifactInput = {
 	type: string;
 	producer?: string;
@@ -80,14 +89,17 @@ export type ArtifactInput = {
 	location?: string;
 	metadata?: Readonly<Record<string, unknown>>;
 };
+
 export type EnvironmentInput = {
 	activate?: { applications?: string[]; services?: string[]; tasks?: string[] };
 };
+
 export type PluginObjectInput = {
 	readonly id: string;
 	readonly version: string;
 	readonly [key: string]: unknown;
 };
+
 export type WorkspaceDefinitionInput = {
 	schemaVersion?: "1";
 	name: string;
@@ -111,11 +123,13 @@ export type WorkspaceDefinitionInput = {
 				};
 		  };
 };
+
 export type NormalizedCommand = {
 	command: string;
 	args: readonly string[];
 	shell: boolean;
 };
+
 export type NormalizedExecutable = {
 	id: string;
 	name: string;
@@ -132,6 +146,7 @@ export type NormalizedExecutable = {
 	environment: Readonly<Record<string, string>>;
 	source: SourceReference;
 };
+
 export type NormalizedArtifact = ArtifactInput & {
 	id: string;
 	name: string;
@@ -139,6 +154,7 @@ export type NormalizedArtifact = ArtifactInput & {
 	metadata: Readonly<Record<string, unknown>>;
 	source: SourceReference;
 };
+
 export type NormalizedSystemDefinition = {
 	schemaVersion: "1";
 	name: string;
@@ -176,9 +192,11 @@ const coreKeys = new Set([
 	"plugins",
 	"persistence",
 ]);
+
 export function defineSystem(input: WorkspaceDefinitionInput): WorkspaceDefinitionInput {
 	return input;
 }
+
 export function normalizeSystemDefinition(
 	input: WorkspaceDefinitionInput,
 	options: { root: string; file: string },
@@ -276,6 +294,7 @@ export function normalizeSystemDefinition(
 		? { diagnostics }
 		: { definition: Object.freeze(definition), diagnostics };
 }
+
 function command(value?: CommandInput): NormalizedCommand | undefined {
 	if (!value) return;
 	if (typeof value === "string") return { command: value, args: [], shell: true };
@@ -285,6 +304,7 @@ function command(value?: CommandInput): NormalizedCommand | undefined {
 		shell: value.shell ?? false,
 	};
 }
+
 function dependencies(
 	value?: ExecutableInput["dependsOn"],
 ): { id: string; condition: DependencyCondition }[] {
@@ -295,6 +315,7 @@ function dependencies(
 		condition: item.condition ?? "started",
 	}));
 }
+
 function references(definition: NormalizedSystemDefinition): SystemDiagnostic[] {
 	const result: SystemDiagnostic[] = [],
 		names = new Set(definition.executables.map((e) => e.name));
@@ -379,6 +400,7 @@ function references(definition: NormalizedSystemDefinition): SystemDiagnostic[] 
 	}
 	return result;
 }
+
 export function compileSystemGraph(definition: NormalizedSystemDefinition): SystemGraph {
 	const graph = new SystemGraph(),
 		workspace = `workspace:${definition.name}`,

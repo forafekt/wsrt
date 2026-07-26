@@ -4,6 +4,7 @@ import { releaseVersion, workspaceRoot } from "./package-metadata.mjs";
 import { privatePackages, publicPackages } from "./public-packages.mjs";
 
 const expected = new Set([...publicPackages, ...privatePackages]);
+
 const updated = [];
 
 for (const directory of ["packages", "plugins", "runtimes", "libraries"])

@@ -1,4 +1,4 @@
-import { casters, type CastFn } from "./casters.ts";
+import { type CastFn, casters } from "./casters.ts";
 import { DecoupleError } from "./errors.ts";
 
 export class DecoupledVar {

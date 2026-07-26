@@ -17,6 +17,7 @@ const kinds = new Set<DashboardContributionView["kind"]>([
 	"status-item",
 	"navigation",
 ]);
+
 const idPattern = /^[a-z0-9][a-z0-9._:/-]{0,127}$/i;
 
 export function validateDashboardContribution(value: unknown): {

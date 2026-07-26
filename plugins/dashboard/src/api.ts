@@ -1,5 +1,6 @@
 import type { WsrtControlPlane } from "@wsrt/control-plane";
 import { DASHBOARD_PROTOCOL } from "./shared/contracts.js";
+
 export function dashboardSnapshot(plane: WsrtControlPlane) {
 	const snapshot = plane.snapshot();
 	return {
@@ -15,6 +16,7 @@ export function dashboardSnapshot(plane: WsrtControlPlane) {
 		configuration: safeSerializable(plane.definition()),
 	};
 }
+
 export function dashboardOperation(
 	plane: WsrtControlPlane,
 	operation: "start" | "stop" | "restart" | "run",
@@ -24,6 +26,7 @@ export function dashboardOperation(
 		throw new Error("Task operation requires exactly one task");
 	return plane.submit(operation === "run" ? "task" : operation, ids);
 }
+
 export function dashboardCancelOperation(plane: WsrtControlPlane, operationId: string) {
 	return { operationId, cancelled: plane.cancelOperation(operationId) };
 }

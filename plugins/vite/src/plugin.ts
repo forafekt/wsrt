@@ -17,7 +17,9 @@ const packageMetadata = createRequire(import.meta.url)("../package.json") as {
 	readonly name: string;
 	readonly version: string;
 };
+
 const owner = { id: packageMetadata.name, version: packageMetadata.version } as const;
+
 export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 	const readiness: ReadinessProvider<ViteAdapterOptions> = {
 		id: "vite",
@@ -203,6 +205,7 @@ function takeConfigArgument(
 	}
 	return { args: result };
 }
+
 async function findViteConfig(root: string): Promise<string | undefined> {
 	for (const name of [
 		"vite.config.ts",
@@ -219,17 +222,21 @@ async function findViteConfig(root: string): Promise<string | undefined> {
 		} catch {}
 	}
 }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value);
 }
+
 function viteExecutable(): string {
 	const require = createRequire(import.meta.url);
 	return path.resolve(path.dirname(require.resolve("vite")), "../../bin/vite.js");
 }
+
 function argumentValue(args: readonly string[], name: string): string | undefined {
 	const index = args.indexOf(name);
 	return index >= 0 ? args[index + 1] : undefined;
 }
+
 function ownedState(value: unknown): OwnedExecutionState | undefined {
 	if (
 		!isRecord(value) ||
@@ -241,6 +248,7 @@ function ownedState(value: unknown): OwnedExecutionState | undefined {
 		return;
 	return value as OwnedExecutionState;
 }
+
 async function consumeTelemetry(
 	reader: ExecutionTelemetryReader,
 	report: (event: import("@wsrt/capabilities").ExecutionTelemetryEvent) => void,

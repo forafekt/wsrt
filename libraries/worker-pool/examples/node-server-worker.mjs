@@ -2,7 +2,9 @@ import { createServer } from "node:http";
 import { defineWorkerTasks } from "../dist/worker.js";
 
 let server;
+
 let baseUrl;
+
 let requestCount = 0;
 
 function listen(server, port, host) {

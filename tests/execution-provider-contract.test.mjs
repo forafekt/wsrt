@@ -28,6 +28,7 @@ test("Vite satisfies the reusable execution-adapter contract", async () => {
 	]);
 	assert.notEqual(...result.concurrentExecutionIds);
 });
+
 test("Vite build adapters declare exit-based completion", () => {
 	const validation = viteAdapter.validate({ command: "build" });
 	assert.equal(viteAdapter.prepare(validation.options).completion, "exit");

@@ -52,6 +52,7 @@ export type WorkspaceEvent =
 			correlationId: string;
 			payload: unknown;
 	  };
+
 export type ArtifactRecord = {
 	id: string;
 	type: string;
@@ -68,6 +69,7 @@ export type ArtifactRecord = {
 	diagnostics?: readonly SystemDiagnostic[];
 	metadata: Readonly<Record<string, unknown>>;
 };
+
 export type OperationResult = {
 	operationId: string;
 	nodes: readonly string[];
@@ -75,11 +77,13 @@ export type OperationResult = {
 	status: "completed" | "partially-completed" | "failed" | "cancelled";
 	results: readonly NodeOperationResult[];
 };
+
 export type SubmittedOperation = {
 	operationId: string;
 	nodes: readonly string[];
 	status: "accepted";
 };
+
 export type NodeOperationResult = {
 	nodeId: string;
 	status:
@@ -93,7 +97,9 @@ export type NodeOperationResult = {
 	changed: boolean;
 	diagnostics: readonly SystemDiagnostic[];
 };
+
 export type HealthState = "unknown" | "checking" | "healthy" | "degraded" | "unhealthy";
+
 export type OperationSnapshot = {
 	id: string;
 	type: "start" | "stop" | "restart" | "task" | "dispose";
@@ -106,6 +112,7 @@ export type OperationSnapshot = {
 	diagnostics: readonly SystemDiagnostic[];
 	results: readonly NodeOperationResult[];
 };
+
 export type NodeSnapshot = {
 	id: string;
 	kind: SystemNode["kind"];
@@ -133,6 +140,7 @@ export type NodeSnapshot = {
 	currentRestartAttempt: number;
 	nextRestartAt?: string;
 };
+
 export type ControlPlaneSnapshot = {
 	revision: number;
 	generatedAt: string;
@@ -145,6 +153,7 @@ export type ControlPlaneSnapshot = {
 	plugins: readonly PluginSnapshot[];
 	providers: readonly { id: string; kind: "runtime" }[];
 };
+
 export type ControlPlaneOptions = {
 	root?: string;
 	config?: string;
@@ -154,6 +163,7 @@ export type ControlPlaneOptions = {
 	/** Overrides normalized configuration. Use `false` for an ephemeral control plane. */
 	persistence?: PersistenceProvider | false;
 };
+
 export class WsrtControlPlane {
 	readonly #events: WorkspaceEvent[] = [];
 	readonly #artifacts = new Map<string, ArtifactRecord>();
@@ -1607,14 +1617,17 @@ export class WsrtControlPlane {
 			throw new Error("Mutating control-plane operations are disabled");
 	}
 }
+
 function processShorthand(id: string): string | undefined {
 	const match = /^application:([^/]+)\/process:(.+)$/.exec(id);
 	return match ? `${match[1]}.${match[2]}` : undefined;
 }
+
 function required<T>(value: T | undefined, message: string): T {
 	if (value === undefined) throw new Error(message);
 	return value;
 }
+
 export async function createControlPlane(
 	options: ControlPlaneOptions = {},
 ): Promise<WsrtControlPlane> {

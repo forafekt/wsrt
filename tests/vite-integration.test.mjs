@@ -18,6 +18,7 @@ test("Vite CLI arguments are forwarded losslessly with or without separator", ()
 		["build", "--mode", "production"],
 	);
 });
+
 test("alias merging preserves user precedence by default", () => {
 	const aliases = mergeAliases(
 		{ "@fixture/ui": "/user", "user/*": "/owned" },
@@ -26,12 +27,14 @@ test("alias merging preserves user precedence by default", () => {
 	assert.equal(aliases[0].replacement, "/user");
 	assert.ok(aliases.some((item) => item.replacement === "/core"));
 });
+
 test("published entry points expose WSRT plugin, adapter, and native Vite plugin", () => {
 	const plugin = vitePlugin();
 	assert.equal(plugin.id, "@wsrt/plugin-vite");
 	assert.equal(plugin.contributions.adapters[0].id, viteAdapter.id);
 	assert.equal(wsrt().name, "wsrt:workspace");
 });
+
 test("configured Vite adapters carry plugin workspace options into a consumer config", async () => {
 	const adapter = createViteAdapter({
 		workspace: { discover: true, aliases: true, dependencies: true },

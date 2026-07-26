@@ -6,7 +6,9 @@ export function fromDenoEnv() {
 }
 
 let Deno: any;
+
 let global: any;
+
 if (typeof (globalThis as any).Deno !== "undefined") {
 	Deno = (globalThis as any).Deno;
 } else if (typeof window !== "undefined" && typeof (window as any).Deno !== "undefined") {

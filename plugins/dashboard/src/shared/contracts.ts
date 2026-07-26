@@ -9,6 +9,7 @@ export type DashboardSnapshot = Readonly<{
 	events: readonly WorkspaceEvent[];
 	configuration: unknown;
 }>;
+
 export type DashboardProtocolDescriptor = Readonly<{
 	transport: 1;
 	snapshot: 3;
@@ -16,6 +17,7 @@ export type DashboardProtocolDescriptor = Readonly<{
 	actions: 1;
 	events: 1;
 }>;
+
 export const DASHBOARD_PROTOCOL: DashboardProtocolDescriptor = Object.freeze({
 	transport: 1,
 	snapshot: 3,
@@ -23,6 +25,7 @@ export const DASHBOARD_PROTOCOL: DashboardProtocolDescriptor = Object.freeze({
 	actions: 1,
 	events: 1,
 });
+
 export type DashboardContributionView = Readonly<{
 	id: string;
 	kind:
@@ -51,6 +54,7 @@ export type DashboardContributionView = Readonly<{
 	data?: unknown;
 	error?: string;
 }>;
+
 export type DashboardRoute =
 	| "overview"
 	| "workspace"
@@ -70,14 +74,17 @@ export type DashboardRoute =
 	| "timeline"
 	| "settings"
 	| `ext:${string}`;
+
 export type DashboardOperationRequest = {
 	operation: "start" | "stop" | "restart" | "run";
 	ids: readonly string[];
 };
+
 export type DashboardCancellationResult = {
 	operationId: string;
 	cancelled: boolean;
 };
+
 export type DashboardProtocolError = Readonly<{
 	error: { code: string; message: string; status: number };
 }>;

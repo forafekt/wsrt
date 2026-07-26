@@ -10,11 +10,13 @@ export type WorkspaceDiagnostic = {
 	package?: string;
 	detail?: Readonly<Record<string, unknown>>;
 };
+
 export type WorkspaceFilter = {
 	include?: readonly string[];
 	exclude?: readonly string[];
 	test?: (value: WorkspacePackage, target?: WorkspacePackage) => boolean;
 };
+
 export type WorkspaceResolveOptions = {
 	root: string;
 	include?: readonly string[];
@@ -23,6 +25,7 @@ export type WorkspaceResolveOptions = {
 	aliases?: boolean;
 	dependencies?: boolean;
 };
+
 export type WorkspacePackage = {
 	name: string;
 	root: string;
@@ -36,11 +39,13 @@ export type WorkspacePackage = {
 	internalDependencies: readonly string[];
 	inferredDependencies: readonly string[];
 };
+
 export type WorkspaceEdge = {
 	from: string;
 	to: string;
 	type: "declared" | "inferred";
 };
+
 export type ResolvedWorkspace = {
 	root: string;
 	patterns: readonly string[];
@@ -49,6 +54,7 @@ export type ResolvedWorkspace = {
 	edges: readonly WorkspaceEdge[];
 	diagnostics: readonly WorkspaceDiagnostic[];
 };
+
 export type ProjectionOptions = {
 	tsconfig?: { files?: WorkspaceFilter; dependencies?: WorkspaceFilter } | false;
 	manifests?:
@@ -61,6 +67,7 @@ export type ProjectionOptions = {
 		  }
 		| false;
 };
+
 export type WorkspaceProjection = {
 	file: string;
 	kind: "tsconfig" | "manifest";
@@ -71,6 +78,7 @@ export type WorkspaceProjection = {
 };
 
 const defaultSources = ["src/index.ts", "src/index.tsx", "src/index.js", "src/index.jsx"];
+
 const dependencySections = [
 	"dependencies",
 	"devDependencies",
@@ -322,6 +330,7 @@ async function packageFiles(
 		})
 		.sort();
 }
+
 async function walk(dir: string, visit: (file: string) => Promise<void>): Promise<void> {
 	for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
 		if (["node_modules", ".git", "dist"].includes(entry.name)) continue;
@@ -330,6 +339,7 @@ async function walk(dir: string, visit: (file: string) => Promise<void>): Promis
 		else await visit(file);
 	}
 }
+
 async function sourceEntry(
 	root: string,
 	manifest: Record<string, unknown>,
@@ -350,6 +360,7 @@ async function sourceEntry(
 		} catch {}
 	}
 }
+
 function exportSource(value: unknown, development: boolean): string | undefined {
 	const entry = record(value)["."];
 	if (typeof entry === "string") return development ? undefined : entry;
@@ -357,12 +368,14 @@ function exportSource(value: unknown, development: boolean): string | undefined 
 	const candidates = development ? [map.source, map.development] : [map.import, map.default];
 	return candidates.find((item): item is string => typeof item === "string");
 }
+
 function packageAliases(name: string, manifest: Record<string, unknown>): string[] {
 	const aliases = Array.isArray(manifest.wsrtAliases)
 		? manifest.wsrtAliases.filter((item): item is string => typeof item === "string")
 		: [];
 	return [...new Set([name, ...aliases])].sort();
 }
+
 async function exportedSourceEntries(
 	root: string,
 	value: unknown,
@@ -405,6 +418,7 @@ async function exportedSourceEntries(
 	}
 	return result;
 }
+
 function dependencies(manifest: Record<string, unknown>): Record<string, string> {
 	const result: Record<string, string> = {};
 	for (const section of dependencySections)
@@ -412,6 +426,7 @@ function dependencies(manifest: Record<string, unknown>): Record<string, string>
 			if (typeof value === "string") result[name] = value;
 	return result;
 }
+
 async function inferDependencies(
 	item: WorkspacePackage,
 	names: Map<string, WorkspacePackage>,
@@ -431,6 +446,7 @@ async function inferDependencies(
 	});
 	return [...found].sort();
 }
+
 function matches(
 	value: WorkspacePackage,
 	filter?: WorkspaceFilter,
@@ -445,6 +461,7 @@ function matches(
 		(filter.test?.(value, target) ?? true)
 	);
 }
+
 function glob(value: string, pattern: string): boolean {
 	const escaped = pattern
 		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -454,6 +471,7 @@ function glob(value: string, pattern: string): boolean {
 		.replace(/\?/g, ".");
 	return new RegExp(`^${escaped}$`).test(value);
 }
+
 function projection(
 	file: string,
 	kind: WorkspaceProjection["kind"],
@@ -470,6 +488,7 @@ function projection(
 		diagnostics,
 	};
 }
+
 function generatedDiagnostics(
 	file: string,
 	current: Record<string, unknown>,
@@ -485,6 +504,7 @@ function generatedDiagnostics(
 			file,
 		}));
 }
+
 function parseJsonc(value: string): Record<string, unknown> {
 	return JSON.parse(
 		value
@@ -493,9 +513,11 @@ function parseJsonc(value: string): Record<string, unknown> {
 			.replace(/,\s*([}\]])/g, "$1"),
 	);
 }
+
 function stableJson(value: unknown): string {
 	return `${JSON.stringify(value, null, 2)}\n`;
 }
+
 function normalize(value: string): string {
 	try {
 		return JSON.stringify(parseJsonc(value));
@@ -503,26 +525,33 @@ function normalize(value: string): string {
 		return value;
 	}
 }
+
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value)
 		? (value as Record<string, unknown>)
 		: {};
 }
+
 function stringValue(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;
 }
+
 function slash(value: string): string {
 	return value.split(path.sep).join("/");
 }
+
 function relative(root: string, file: string): string {
 	return slash(path.relative(root, file));
 }
+
 function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
 function edgeSort(a: WorkspaceEdge, b: WorkspaceEdge): number {
 	return `${a.from}:${a.to}:${a.type}`.localeCompare(`${b.from}:${b.to}:${b.type}`);
 }
+
 async function readOptional(file: string): Promise<string | undefined> {
 	try {
 		return await fs.readFile(file, "utf8");

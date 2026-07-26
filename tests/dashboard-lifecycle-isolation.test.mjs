@@ -10,6 +10,7 @@ import { startDashboard } from "@wsrt/plugin-dashboard";
 import { NodeRuntimeProvider } from "../runtimes/node/dist/index.js";
 
 const fixture = path.resolve("tests/fixtures/lifecycle-isolation/parent.mjs");
+
 const dashboardClient = path.resolve("tests/fixtures/lifecycle-isolation/dashboard-client.mjs");
 
 test("dashboard transport stays responsive and stop releases the owned process tree", async () => {

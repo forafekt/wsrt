@@ -1,4 +1,5 @@
 export type ArtifactStatus = "pending" | "generating" | "ready" | "failed";
+
 export type ArtifactRecord = {
 	id: string;
 	type: string;
@@ -9,6 +10,7 @@ export type ArtifactRecord = {
 	hash?: string;
 	metadata: Readonly<Record<string, unknown>>;
 };
+
 export class ArtifactRegistry {
 	readonly #records = new Map<string, ArtifactRecord>();
 	register(record: ArtifactRecord): ArtifactRecord {

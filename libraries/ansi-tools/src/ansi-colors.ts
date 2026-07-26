@@ -82,5 +82,7 @@ const createColors = (enabled = isColorSupported) => {
 const colors = createColors() as ReturnType<typeof createColors> & {
 	createColors: typeof createColors;
 };
+
 colors.createColors = createColors;
+
 export { colors, createColors };

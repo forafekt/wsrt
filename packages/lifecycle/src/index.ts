@@ -22,7 +22,9 @@ export const lifecycleStates = [
 	"destroying",
 	"destroyed",
 ] as const;
+
 export type LifecycleState = (typeof lifecycleStates)[number];
+
 export type LifecycleEvent = {
 	id: string;
 	type: "lifecycle.transition";
@@ -32,16 +34,19 @@ export type LifecycleEvent = {
 	causationId?: string;
 	payload: { from: LifecycleState; to: LifecycleState; error?: string };
 };
+
 export type LifecycleHandler = {
 	start(context: LifecycleContext): Promise<void>;
 	stop(context: LifecycleContext): Promise<void>;
 	ready?(context: LifecycleContext): Promise<void>;
 };
+
 export type LifecycleContext = {
 	signal: AbortSignal;
 	nodeId: string;
 	correlationId: string;
 };
+
 export type LifecycleOptions = {
 	timeoutMs?: number;
 	retries?: number;

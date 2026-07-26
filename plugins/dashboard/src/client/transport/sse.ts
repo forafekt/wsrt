@@ -1,4 +1,5 @@
 import type { DashboardSnapshot } from "../../shared/contracts.js";
+
 export type SnapshotTransportOptions = {
 	snapshotUrl?: string;
 	eventsUrl?: string;
@@ -7,6 +8,7 @@ export type SnapshotTransportOptions = {
 	fetcher?: typeof fetch;
 	onProtocolError?: (message: string) => void;
 };
+
 export class SnapshotTransport {
 	#source?: EventSource;
 	#timer?: ReturnType<typeof setTimeout>;

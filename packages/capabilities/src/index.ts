@@ -8,6 +8,7 @@ export type SpawnRequest = {
 	/** Time allowed for graceful process-tree termination before escalation. */
 	terminationGraceMs?: number;
 };
+
 export type ProcessTerminationState =
 	| "running"
 	| "stop-requested"
@@ -15,6 +16,7 @@ export type ProcessTerminationState =
 	| "forcing"
 	| "stopped"
 	| "failed";
+
 export type ProcessHandle = {
 	pid: number;
 	running: boolean;
@@ -25,6 +27,7 @@ export type ProcessHandle = {
 	/** Gracefully terminates the owned process tree, escalates, and waits for exit. */
 	terminateTree(options?: { graceMs?: number; signal?: AbortSignal }): Promise<void>;
 };
+
 export type ArtifactCandidate = {
 	readonly path: string;
 	readonly name?: string;
@@ -34,6 +37,7 @@ export type ArtifactCandidate = {
 	readonly expected?: boolean;
 	readonly metadata?: Readonly<Record<string, unknown>>;
 };
+
 export type ExecutionTelemetryEvent =
 	| { readonly type: "execution.started"; readonly timestamp?: string }
 	| {
@@ -65,6 +69,7 @@ export type ExecutionTelemetryEvent =
 			readonly name: string;
 			readonly payload?: unknown;
 	  };
+
 export type ProviderInvocationContext = {
 	readonly pluginId: string;
 	readonly contributionId: string;
@@ -80,29 +85,36 @@ export type ProviderInvocationContext = {
 	readonly capabilities: CapabilityRegistry;
 	report(event: ExecutionTelemetryEvent): void;
 };
+
 export interface SpawnCapability {
 	spawn(request: SpawnRequest): ProcessHandle;
 }
+
 export interface FileSystemCapability {
 	readText(file: string): Promise<string>;
 	writeText(file: string, contents: string): Promise<void>;
 	exists(file: string): Promise<boolean>;
 }
+
 export interface EnvironmentCapability {
 	all(): Readonly<Record<string, string | undefined>>;
 	get(name: string): string | undefined;
 }
+
 export interface ProcessInformationCapability {
 	cwd(): string;
 	pid(): number;
 	platform(): string;
 }
+
 export interface HttpCapability {
 	fetch(input: string, init?: RequestInit): Promise<Response>;
 }
+
 export interface TimerCapability {
 	delay(milliseconds: number, signal?: AbortSignal): Promise<void>;
 }
+
 export interface LoggerCapability {
 	log(
 		level: "debug" | "info" | "warning" | "error",
@@ -110,6 +122,7 @@ export interface LoggerCapability {
 		attributes?: Readonly<Record<string, unknown>>,
 	): void;
 }
+
 export interface NetworkCapability {
 	connect(
 		host: string,
@@ -117,6 +130,7 @@ export interface NetworkCapability {
 		options?: { timeoutMs?: number; signal?: AbortSignal },
 	): Promise<void>;
 }
+
 export type CapabilityMap = {
 	spawn: SpawnCapability;
 	filesystem: FileSystemCapability;
@@ -127,6 +141,7 @@ export type CapabilityMap = {
 	timers: TimerCapability;
 	logger: LoggerCapability;
 };
+
 export class CapabilityRegistry {
 	readonly #values = new Map<keyof CapabilityMap, unknown>();
 	provide<K extends keyof CapabilityMap>(key: K, value: CapabilityMap[K]): this {
@@ -142,16 +157,19 @@ export class CapabilityRegistry {
 		return this.#values.has(key);
 	}
 }
+
 export interface RuntimeInstance {
 	readonly provider: string;
 	readonly capabilities: CapabilityRegistry;
 	dispose(): Promise<void>;
 }
+
 export interface RuntimeProvider {
 	readonly id: string;
 	detect(): Promise<{ available: boolean; version?: string }>;
 	create(): Promise<RuntimeInstance>;
 }
+
 export interface ExecutionAdapter<Options = unknown> {
 	readonly id: string;
 	validate(options: unknown): {
@@ -171,12 +189,14 @@ export interface ExecutionAdapter<Options = unknown> {
 		dispose?(): void | Promise<void>;
 	};
 }
+
 export interface ExecutionAdapterContext {
 	readonly nodeId: string;
 	readonly workspaceRoot: string;
 	readonly projectRoot: string;
 	readonly environment: Readonly<Record<string, string>>;
 }
+
 export interface ReadinessProvider<Options = unknown> {
 	readonly id: string;
 	validate(options: unknown): {
@@ -185,6 +205,7 @@ export interface ReadinessProvider<Options = unknown> {
 	};
 	wait(options: Options, context: ProviderInvocationContext): Promise<void>;
 }
+
 export interface HealthProvider<Options = unknown> {
 	readonly id: string;
 	validate(options: unknown): {
@@ -201,11 +222,14 @@ export interface HealthProvider<Options = unknown> {
 		metadata?: Readonly<Record<string, unknown>>;
 	}>;
 }
+
 export interface ArtifactProvider<Input = unknown> {
 	readonly id: string;
 	collect(input: Input, context: ProviderInvocationContext): Promise<readonly ArtifactCandidate[]>;
 }
+
 export type ProviderKind = "runtime" | "execution" | "readiness" | "health" | "artifact";
+
 export type ProviderRegistration = {
 	kind: ProviderKind;
 	id: string;
@@ -217,6 +241,7 @@ export type ProviderRegistration = {
 		| HealthProvider
 		| ArtifactProvider;
 };
+
 export class ProviderRegistry {
 	readonly #providers = new Map<string, ProviderRegistration>();
 	register(registration: ProviderRegistration): this {

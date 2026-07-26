@@ -7,5 +7,7 @@ const pool = createWorkerPool({
 });
 
 await pool.ready();
+
 console.log(await pool.run("add", { a: 1, b: 2 }));
+
 await pool.shutdown("graceful");

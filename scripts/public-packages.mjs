@@ -38,7 +38,9 @@ export const packageCatalog = Object.freeze(
 export const publicPackageRecords = Object.freeze(
 	packageCatalog.filter(({ classification }) => classification.startsWith("public-")),
 );
+
 export const publicPackages = Object.freeze(publicPackageRecords.map(({ name }) => name));
+
 export const privatePackages = Object.freeze(
 	packageCatalog
 		.filter(({ classification }) => classification === "private-tooling")

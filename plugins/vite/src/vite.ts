@@ -58,6 +58,7 @@ export function wsrt(options: VitePluginOptions & { bridge?: ViteBridge } = {}):
 		},
 	};
 }
+
 async function report(event: unknown): Promise<void> {
 	const file = process.env.WSRT_EXECUTION_TELEMETRY;
 	const executionId = process.env.WSRT_EXECUTION_ID;
@@ -77,6 +78,7 @@ async function report(event: unknown): Promise<void> {
 	);
 	await fs.appendFile(file, `${JSON.stringify(envelope)}\n`, { mode: 0o600 });
 }
+
 function isOwnedTelemetryPath(file: string, executionId: string): boolean {
 	try {
 		const directory = path.dirname(file);
@@ -87,6 +89,7 @@ function isOwnedTelemetryPath(file: string, executionId: string): boolean {
 		return false;
 	}
 }
+
 async function findWorkspaceRoot(start: string): Promise<string> {
 	let current = start;
 	while (true) {
@@ -100,4 +103,5 @@ async function findWorkspaceRoot(start: string): Promise<string> {
 		current = parent;
 	}
 }
+
 export default wsrt;

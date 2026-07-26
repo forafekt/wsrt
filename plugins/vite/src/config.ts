@@ -45,20 +45,24 @@ export async function composeViteConfig(
 		configFile: loaded?.path,
 	};
 }
+
 function hasNativePlugin(plugins: UserConfig["plugins"]): boolean {
 	return flatten(plugins).some(
 		(item) => item && typeof item === "object" && "name" in item && item.name === "wsrt:workspace",
 	);
 }
+
 function flatten(value: unknown): unknown[] {
 	return Array.isArray(value) ? value.flatMap(flatten) : value ? [value] : [];
 }
+
 export async function resolveUserConfig(
 	value: UserConfigExport,
 	env: ConfigEnv,
 ): Promise<UserConfig> {
 	return typeof value === "function" ? await value(env) : await value;
 }
+
 export function projectRoot(workspaceRoot: string, project?: string): string {
 	return path.resolve(workspaceRoot, project ?? ".");
 }

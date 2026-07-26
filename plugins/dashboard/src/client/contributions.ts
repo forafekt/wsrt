@@ -64,6 +64,7 @@ function appendNavigation(root: HTMLElement, item: DashboardContributionView) {
 	link.append(icon, label);
 	nav.append(link);
 }
+
 function appendStatus(root: HTMLElement, item: DashboardContributionView) {
 	const bar = root.querySelector(".statusbar");
 	if (!bar) return;
@@ -73,6 +74,7 @@ function appendStatus(root: HTMLElement, item: DashboardContributionView) {
 	value.textContent = `${item.title ?? item.id}${primitive(item.data) ? `: ${String(item.data)}` : ""}`;
 	bar.insertBefore(value, bar.querySelector(".status-spacer"));
 }
+
 function decorateGraph(root: HTMLElement, item: DashboardContributionView) {
 	const data = record(item.data);
 	const nodeId = typeof data?.nodeId === "string" ? data.nodeId : item.target;
@@ -87,6 +89,7 @@ function decorateGraph(root: HTMLElement, item: DashboardContributionView) {
 	title.textContent = `${item.title ?? item.id}${typeof data?.label === "string" ? `: ${data.label}` : ""}`;
 	if (!title.parentNode) node.prepend(title);
 }
+
 function appendSurface(root: HTMLElement, item: DashboardContributionView, inspector: boolean) {
 	const host = inspector ? root.querySelector(".inspector") : root.querySelector("main");
 	if (!host) return;
@@ -105,6 +108,7 @@ function appendSurface(root: HTMLElement, item: DashboardContributionView, inspe
 	}
 	section.append(contributionCard(item));
 }
+
 function contributionCard(item: DashboardContributionView) {
 	const card = document.createElement("article");
 	card.className = "contribution-card";
@@ -139,12 +143,14 @@ function contributionCard(item: DashboardContributionView) {
 	}
 	return card;
 }
+
 function contributionTitle(kind: DashboardContributionView["kind"]) {
 	return `${kind
 		.split("-")
 		.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
 		.join(" ")} extensions`;
 }
+
 function stringify(value: unknown) {
 	try {
 		return JSON.stringify(value, null, 2);
@@ -152,14 +158,17 @@ function stringify(value: unknown) {
 		return "Unserializable contribution data";
 	}
 }
+
 function primitive(value: unknown) {
 	return value == null || ["string", "number", "boolean"].includes(typeof value);
 }
+
 function record(value: unknown): Record<string, unknown> | undefined {
 	return value && typeof value === "object" && !Array.isArray(value)
 		? (value as Record<string, unknown>)
 		: undefined;
 }
+
 function cssEscape(value: string) {
 	return typeof CSS !== "undefined" && CSS.escape ? CSS.escape(value) : value.replace(/["\\]/g, "");
 }

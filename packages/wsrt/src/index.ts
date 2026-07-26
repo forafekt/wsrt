@@ -1,10 +1,3 @@
-export {
-	compileSystemGraph,
-	defineSystem,
-	discoverConfigFile,
-	loadSystemDefinition,
-	normalizeSystemDefinition,
-} from "@wsrt/config";
 export type {
 	ApplicationInput,
 	ArtifactInput,
@@ -21,8 +14,13 @@ export type {
 	TaskInput,
 	WorkspaceDefinitionInput,
 } from "@wsrt/config";
-
-export { createControlPlane, WsrtControlPlane } from "@wsrt/control-plane";
+export {
+	compileSystemGraph,
+	defineSystem,
+	discoverConfigFile,
+	loadSystemDefinition,
+	normalizeSystemDefinition,
+} from "@wsrt/config";
 export type {
 	ArtifactRecord,
 	ControlPlaneOptions,
@@ -34,15 +32,7 @@ export type {
 	OperationSnapshot,
 	WorkspaceEvent,
 } from "@wsrt/control-plane";
-
-export { NodeRuntimeProvider } from "@wsrt/runtime-node";
-export {
-	createRecord,
-	MigrationRegistry,
-	pluginStorage,
-	validatePersistenceKey,
-	validatePluginId,
-} from "@wsrt/persistence";
+export { createControlPlane, WsrtControlPlane } from "@wsrt/control-plane";
 export type {
 	PersistedEntry,
 	PersistedRecord,
@@ -53,8 +43,17 @@ export type {
 	RuntimeSession,
 	WorkspaceIdentity,
 } from "@wsrt/persistence";
+
 export {
-	filesystemPersistence,
+	createRecord,
+	MigrationRegistry,
+	pluginStorage,
+	validatePersistenceKey,
+	validatePluginId,
+} from "@wsrt/persistence";
+export {
 	FilesystemPersistenceProvider,
+	filesystemPersistence,
 } from "@wsrt/persistence-filesystem";
-export { memoryPersistence, MemoryPersistenceProvider } from "@wsrt/persistence-memory";
+export { MemoryPersistenceProvider, memoryPersistence } from "@wsrt/persistence-memory";
+export { NodeRuntimeProvider } from "@wsrt/runtime-node";

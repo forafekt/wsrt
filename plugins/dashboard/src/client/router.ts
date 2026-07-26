@@ -19,6 +19,7 @@ const routes = new Set<DashboardRoute>([
 	"timeline",
 	"settings",
 ]);
+
 export function matchDashboardRoute(pathname: string): DashboardRoute {
 	const base =
 		typeof document === "undefined"
@@ -32,6 +33,7 @@ export function matchDashboardRoute(pathname: string): DashboardRoute {
 			? (`ext:${value.slice(4)}` as DashboardRoute)
 			: "overview";
 }
+
 export class DashboardRouter {
 	constructor(readonly onRoute: (route: DashboardRoute) => void) {}
 	start() {

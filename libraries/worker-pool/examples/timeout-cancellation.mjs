@@ -9,6 +9,7 @@ const pool = createWorkerPool({
 await pool.ready();
 
 const controller = new AbortController();
+
 setTimeout(() => controller.abort(), 25);
 
 try {

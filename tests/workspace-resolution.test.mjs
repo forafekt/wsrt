@@ -49,6 +49,7 @@ async function fixture() {
 	}
 	return root;
 }
+
 test("workspace discovery resolves pnpm packages, sources, aliases, and inferred edges", async () => {
 	const root = await fixture();
 	const model = await resolveWorkspace({ root });
@@ -60,6 +61,7 @@ test("workspace discovery resolves pnpm packages, sources, aliases, and inferred
 	assert.equal(model.aliases["@fixture/ui/node"], path.join(root, "packages/ui/src/node.ts"));
 	assert.deepEqual(model.edges, [{ from: "@fixture/web", to: "@fixture/ui", type: "inferred" }]);
 });
+
 test("projections preserve user paths and synchronize idempotently", async () => {
 	const root = await fixture();
 	const model = await resolveWorkspace({ root });
@@ -79,6 +81,7 @@ test("projections preserve user paths and synchronize idempotently", async () =>
 	assert.deepEqual(tsconfig.compilerOptions.paths["user/*"], ["owned/*"]);
 	assert.ok(tsconfig.compilerOptions.paths["@fixture/ui"]);
 });
+
 test("duplicate package names are diagnosed", async () => {
 	const root = await fixture();
 	const file = path.join(root, "apps/web/package.json");

@@ -1,9 +1,12 @@
 export type EnvironmentValue = string | number | boolean | null | undefined;
+
 export type EnvironmentInput = Readonly<Record<string, EnvironmentValue>>;
+
 export type ResolvedEnvironment = {
 	values: Readonly<Record<string, string>>;
 	masked: readonly string[];
 };
+
 export function resolveEnvironment(
 	input: EnvironmentInput = {},
 	base: Readonly<Record<string, string | undefined>> = {},
@@ -17,6 +20,7 @@ export function resolveEnvironment(
 	}
 	return { values: Object.freeze(values), masked: Object.freeze(masked) };
 }
+
 export function isSensitiveEnvironmentKey(key: string): boolean {
 	return /(TOKEN|SECRET|PASSWORD|PRIVATE|CREDENTIAL|API_KEY)/i.test(key);
 }

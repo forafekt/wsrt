@@ -14,6 +14,7 @@ const packageMetadata = createRequire(import.meta.url)("../package.json") as {
 	readonly name: string;
 	readonly version: string;
 };
+
 export const version = packageMetadata.version;
 
 interface GlobalOptions {
@@ -417,6 +418,7 @@ async function discoverPluginCommands(
 	}
 	return { commands: contributions, session };
 }
+
 function pluginContext(plane: Awaited<ReturnType<typeof createControlPlane>>): PluginContext {
 	return Object.freeze({
 		root: plane.definition().root,
@@ -444,6 +446,7 @@ function pluginContext(plane: Awaited<ReturnType<typeof createControlPlane>>): P
 		services: Object.freeze({ controlPlane: plane, graph: plane.graph() }),
 	});
 }
+
 function argumentsAfterPath(argv: readonly string[], commandPath: string): string[] {
 	const parts = commandPath.split(/\s+/).filter(Boolean);
 	for (let index = 0; index <= argv.length - parts.length; index++)

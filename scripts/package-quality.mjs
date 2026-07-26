@@ -4,11 +4,17 @@ import { fileURLToPath } from "node:url";
 import { packageCatalog, publicPackages, releaseVersion } from "./public-packages.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
 const warning = "This package is part of WSRT, which is under active early development.";
+
 const errors = [];
+
 const names = new Set();
+
 const catalogByDirectory = new Map(packageCatalog.map((record) => [record.directory, record]));
+
 const catalogByName = new Map(packageCatalog.map((record) => [record.name, record]));
+
 const manifests = [];
 
 function visit(directory) {
@@ -26,6 +32,7 @@ function visit(directory) {
 		}
 	}
 }
+
 visit(root);
 
 for (const { directory, relativeDirectory, value } of manifests) {
@@ -114,12 +121,14 @@ for (const { directory, relativeDirectory, value } of manifests) {
 for (const record of packageCatalog) {
 	if (!names.has(record.name)) errors.push(`${record.name}: catalog entry has no manifest`);
 }
+
 for (const { value, relativeDirectory } of manifests) {
 	if (!catalogByName.has(value.name))
 		errors.push(`${relativeDirectory}: ${value.name} missing from catalog`);
 }
 
 const rootLicense = path.join(root, "LICENSE");
+
 if (!fs.existsSync(rootLicense)) {
 	errors.push(
 		"publication blocker: repository owner must select a license and add canonical root LICENSE",

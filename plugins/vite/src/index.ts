@@ -1,10 +1,15 @@
 import { viteAdapter } from "./adapter.js";
 
 export { createViteAdapter, viteAdapter } from "./adapter.js";
+
 export { mergeAliases, workspaceAliasEntries } from "./aliases.js";
+
 export { createViteBridge } from "./bridge.js";
+
 export { composeViteConfig } from "./config.js";
+
 export { default, default as vite } from "./plugin.js";
+
 export type {
 	AliasPrecedence,
 	ViteAdapterOptions,
@@ -32,6 +37,7 @@ export function viteContribution(options: import("./types.js").ViteAdapterOption
 					},
 	};
 }
+
 export function hasWsrtVitePlugin(plugins: unknown): boolean {
 	const flatten = (value: unknown): unknown[] =>
 		Array.isArray(value) ? value.flatMap(flatten) : value ? [value] : [];

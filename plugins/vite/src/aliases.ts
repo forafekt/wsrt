@@ -6,6 +6,7 @@ export function workspaceAliasEntries(aliases: Readonly<Record<string, string>>)
 		.sort(([a], [b]) => b.length - a.length)
 		.map(([find, replacement]) => ({ find: exact(find), replacement }));
 }
+
 export function mergeAliases(
 	user: AliasOptions | undefined,
 	workspace: Readonly<Record<string, string>>,
@@ -36,6 +37,7 @@ export function mergeAliases(
 		),
 	];
 }
+
 function exact(value: string): RegExp {
 	return new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
 }

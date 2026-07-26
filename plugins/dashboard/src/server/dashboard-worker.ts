@@ -12,10 +12,15 @@ type WireSnapshot = {
 };
 
 const port = parentPort;
+
 if (!port) throw new Error("Dashboard transport worker requires a parent port");
+
 let snapshot = workerData.snapshot as WireSnapshot;
+
 let sequence = 0;
+
 const subscribers = new Set<(value: WireSnapshot["controlPlane"]) => void>();
+
 const pending = new Map<number, { resolve(value: unknown): void; reject(cause: unknown): void }>();
 
 function sendCommand(command: unknown): Promise<unknown> {
@@ -75,6 +80,7 @@ const plane = {
 } as unknown as WsrtControlPlane;
 
 const handle = await startDashboardInProcess(plane, workerData.options as DashboardOptions);
+
 port.postMessage({
 	type: "ready",
 	handle: { url: handle.url, host: handle.host, port: handle.port, basePath: handle.basePath },

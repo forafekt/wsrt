@@ -1,15 +1,20 @@
 export type PersistenceKey = string;
+
 export type PersistenceContext = {
 	workspaceRoot: string;
 	workspaceId?: string;
 	sessionId?: string;
 };
+
 export type PersistedValue<T> = {
 	value: T;
 	updatedAt: string;
 };
+
 export type PersistedEntry = { key: PersistenceKey; updatedAt: string };
+
 export type PersistenceListOptions = { limit?: number };
+
 export type PersistenceAppendOptions = { flush?: boolean };
 
 export interface PersistenceProvider {
@@ -40,7 +45,9 @@ export type PersistedRecord<T> = {
 	updatedAt: string;
 	data: T;
 };
+
 export type WorkspaceIdentity = { id: string; createdAt: string; root: string };
+
 export type RuntimeSession = {
 	id: string;
 	workspaceId: string;
@@ -52,6 +59,7 @@ export type RuntimeSession = {
 };
 
 const SEGMENT = /^[A-Za-z0-9._:@-]+$/;
+
 export function validatePersistenceKey(key: string): string {
 	if (!key || key.startsWith("/") || key.endsWith("/") || key.includes("\\"))
 		throw new Error(`Invalid persistence key: ${JSON.stringify(key)}`);
@@ -60,6 +68,7 @@ export function validatePersistenceKey(key: string): string {
 		throw new Error(`Invalid persistence key: ${JSON.stringify(key)}`);
 	return key;
 }
+
 export function validatePluginId(id: string): string {
 	if (!SEGMENT.test(id) || id === "." || id === "..")
 		throw new Error(`Invalid plugin id: ${JSON.stringify(id)}`);
@@ -84,6 +93,7 @@ export function createRecord<T>(
 }
 
 export type RecordMigration = (record: PersistedRecord<unknown>) => PersistedRecord<unknown>;
+
 export class MigrationRegistry {
 	readonly #versions = new Map<string, Map<number, RecordMigration>>();
 	register(schema: string, version: number, migration: RecordMigration): this {
@@ -109,6 +119,7 @@ export class MigrationRegistry {
 		return record as PersistedRecord<T>;
 	}
 }
+
 function isRecord(value: unknown): value is PersistedRecord<unknown> {
 	if (!value || typeof value !== "object") return false;
 	const item = value as Partial<PersistedRecord<unknown>>;

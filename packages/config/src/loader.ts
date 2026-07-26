@@ -21,6 +21,7 @@ const names = [
 	"wsrt.yaml",
 	"wsrt.yml",
 ];
+
 export function discoverConfigFile(root: string, explicit?: string): string | undefined {
 	if (explicit) {
 		const file = path.resolve(root, explicit);
@@ -28,6 +29,7 @@ export function discoverConfigFile(root: string, explicit?: string): string | un
 	}
 	return names.map((name) => path.join(root, name)).find((file) => fs.existsSync(file));
 }
+
 export async function loadSystemDefinition(
 	root = process.cwd(),
 	explicit?: string,
@@ -67,6 +69,7 @@ export async function loadSystemDefinition(
 		};
 	}
 }
+
 async function read(file: string): Promise<WorkspaceDefinitionInput> {
 	if (/\.ya?ml$/.test(file))
 		return parseYaml(fs.readFileSync(file, "utf8")) as WorkspaceDefinitionInput;
@@ -91,6 +94,7 @@ async function read(file: string): Promise<WorkspaceDefinitionInput> {
 	}
 	return value(await import(pathToFileURL(file).href));
 }
+
 function value(input: unknown): WorkspaceDefinitionInput {
 	const candidate =
 		input && typeof input === "object" && "default" in input

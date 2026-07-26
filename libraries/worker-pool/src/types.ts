@@ -6,13 +6,17 @@ export type TaskDefinition<Input = unknown, Output = unknown> = {
 };
 
 export type TaskMap = Record<string, TaskDefinition>;
+
 export type TaskName<Tasks extends TaskMap> = Extract<keyof Tasks, string>;
+
 export type TaskInput<Tasks extends TaskMap, Name extends TaskName<Tasks>> = Tasks[Name]["input"];
+
 export type TaskOutput<Tasks extends TaskMap, Name extends TaskName<Tasks>> = Tasks[Name]["output"];
 
 export type JobState = "queued" | "running" | "completed" | "failed" | "cancelled" | "timeout";
 
 export type QueueFullPolicy = "reject" | "drop-oldest" | "drop-newest";
+
 export type ShutdownMode = "graceful" | "drain" | "force";
 
 export type RetryOptions = {

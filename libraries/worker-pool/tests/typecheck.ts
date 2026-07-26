@@ -16,9 +16,11 @@ const pool: WorkerPool<Tasks> = createWorkerPool<Tasks>({
 });
 
 const numberResult: Promise<number> = pool.run("add", { a: 1, b: 2 });
+
 void numberResult;
 
 const stringResult: Promise<string> = pool.run("hashFile", { path: "./file.txt" });
+
 void stringResult;
 
 // @ts-expect-error task input shape is enforced

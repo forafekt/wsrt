@@ -1,6 +1,8 @@
 import type { WsrtControlPlane } from "@wsrt/control-plane";
 import { dashboardSnapshot } from "../api.js";
+
 export type SseWriter = { write(chunk: string): void; end(): void };
+
 export function streamSnapshots(
 	plane: WsrtControlPlane,
 	writer: SseWriter,

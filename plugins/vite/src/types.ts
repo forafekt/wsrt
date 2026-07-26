@@ -1,6 +1,7 @@
 import type { ResolvedWorkspace, WorkspaceResolveOptions } from "@wsrt/workspace";
 
 export type AliasPrecedence = "user" | "wsrt";
+
 export type VitePluginOptions = {
 	workspace?: Omit<WorkspaceResolveOptions, "root"> & {
 		discover?: boolean;
@@ -9,6 +10,7 @@ export type VitePluginOptions = {
 	aliasPrecedence?: AliasPrecedence;
 	project?: string;
 };
+
 export type ViteAdapterOptions = {
 	root?: string;
 	command?: "dev" | "build" | "preview";
@@ -18,6 +20,7 @@ export type ViteAdapterOptions = {
 	port?: number;
 	strictPort?: boolean;
 };
+
 export type ViteBridge = {
 	workspaceRoot: string;
 	projectRoot: string;

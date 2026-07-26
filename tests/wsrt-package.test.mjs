@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import { NodeRuntimeProvider, WsrtControlPlane, createControlPlane, defineSystem } from "wsrt";
+import { createControlPlane, defineSystem, NodeRuntimeProvider, WsrtControlPlane } from "wsrt";
 import { version as cliVersion } from "../packages/cli/dist/cli.js";
 
 const manifest = JSON.parse(fs.readFileSync("packages/wsrt/package.json", "utf8"));
+
 const cliManifest = JSON.parse(fs.readFileSync("packages/cli/package.json", "utf8"));
 
 test("wsrt exposes the deliberate public distribution API", () => {

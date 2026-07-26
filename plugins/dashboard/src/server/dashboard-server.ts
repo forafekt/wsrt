@@ -24,6 +24,7 @@ export type DashboardHandle = {
 	disconnectClients(): void;
 	close(): Promise<void>;
 };
+
 const clientRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
 export async function startDashboard(
@@ -441,10 +442,12 @@ function nodeDetail(
 		}
 	);
 }
+
 function html(options: ReturnType<typeof normalizeDashboardOptions>) {
 	const base = options.basePath;
 	return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="wsrt-base-path" content="${escapeAttribute(base)}"><meta name="wsrt-mutations" content="${options.mutations}"><title>${escapeAttribute(options.title)}</title><link rel="stylesheet" href="${base}/assets/styles.css"></head><body><div id="app"><main class="boot"><span class="spinner"></span>Loading WSRT Dashboard…</main></div><script type="module" src="${base}/assets/client/main.js"></script></body></html>`;
 }
+
 function escapeAttribute(value: string) {
 	return value.replace(
 		/[&"<>]/g,
@@ -452,6 +455,7 @@ function escapeAttribute(value: string) {
 			({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" })[character] ?? character,
 	);
 }
+
 function json(response: ServerResponse, status: number, value: unknown, limit = 8 * 1024 * 1024) {
 	let body: string;
 	try {
@@ -473,9 +477,11 @@ function json(response: ServerResponse, status: number, value: unknown, limit = 
 		);
 	textResponse(response, status, "application/json; charset=utf-8", body);
 }
+
 function error(response: ServerResponse, status: number, code: string, message: string) {
 	json(response, status, { error: { code, message, status } });
 }
+
 function textResponse(response: ServerResponse, status: number, type: string, body: string) {
 	response.writeHead(status, {
 		"content-type": type,
@@ -484,6 +490,7 @@ function textResponse(response: ServerResponse, status: number, type: string, bo
 	});
 	response.end(body);
 }
+
 function listen(server: ReturnType<typeof createServer>, port: number, host: string) {
 	return new Promise<void>((resolve, reject) => {
 		const fail = (cause: Error) => {
@@ -499,12 +506,15 @@ function listen(server: ReturnType<typeof createServer>, port: number, host: str
 		server.listen(port, host);
 	});
 }
+
 function isAddressInUse(cause: unknown): boolean {
 	return !!cause && typeof cause === "object" && "code" in cause && cause.code === "EADDRINUSE";
 }
+
 function isLoopback(host: string) {
 	return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
+
 function openBrowser(url: string) {
 	const command =
 			process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open",

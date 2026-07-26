@@ -45,7 +45,9 @@ const groups: [string, [DashboardRoute, string, string][]][] = [
 		],
 	],
 ];
+
 type Theme = "light" | "dark" | "system";
+
 const setting = (key: string, fallback: string) => {
 	try {
 		return localStorage.getItem(`wsrt.${key}`) ?? fallback;
@@ -53,6 +55,7 @@ const setting = (key: string, fallback: string) => {
 		return fallback;
 	}
 };
+
 const save = (key: string, value: string) => {
 	try {
 		localStorage.setItem(`wsrt.${key}`, value);
@@ -446,10 +449,12 @@ function renderPalette(
 		.join("");
 	return `<div class="modal-backdrop" data-action="palette"><section class="command-menu" role="dialog" aria-modal="true" aria-label="Command palette"><label><span class="sr-only">Search commands</span><input id="palette-search" autocomplete="off" placeholder="Search nodes, plugins, operations, artifacts…"></label><div class="command-results"><h2>Workspace</h2>${commands}${nodes}${entities}${actions}</div><footer><kbd>↑↓</kbd> move <kbd>Enter</kbd> open <kbd>Esc</kbd> close</footer></section></div>`;
 }
+
 function filterPalette(root: HTMLElement, value: string) {
 	for (const item of root.querySelectorAll<HTMLElement>("[data-search]"))
 		item.hidden = !item.dataset.search?.includes(value.toLowerCase());
 }
+
 async function confirmOperation(root: HTMLElement, operation: string, id: string) {
 	const dialog = root.querySelector<HTMLDialogElement>("#confirm-dialog"),
 		title = dialog?.querySelector("#confirm-title"),

@@ -1,5 +1,7 @@
 import type { WsrtControlPlane } from "@wsrt/control-plane";
+
 export type McpRequest = { tool: string; input?: Record<string, unknown> };
+
 export async function runMcpTool(
 	controlPlane: WsrtControlPlane,
 	request: McpRequest,
@@ -78,6 +80,7 @@ export async function runMcpTool(
 			throw new Error(`Unknown MCP tool: ${request.tool}`);
 	}
 }
+
 export async function readMcpResource(
 	controlPlane: WsrtControlPlane,
 	id: string,
@@ -85,6 +88,7 @@ export async function readMcpResource(
 ): Promise<unknown> {
 	return runContribution(controlPlane, "resource", id, undefined, options.signal);
 }
+
 export async function getMcpPrompt(
 	controlPlane: WsrtControlPlane,
 	id: string,
@@ -93,6 +97,7 @@ export async function getMcpPrompt(
 ): Promise<unknown> {
 	return runContribution(controlPlane, "prompt", id, input, options.signal);
 }
+
 async function runContribution(
 	controlPlane: WsrtControlPlane,
 	kind: "resource" | "prompt",
@@ -117,10 +122,12 @@ async function runContribution(
 		contribution.run(input, context, signal ?? new AbortController().signal),
 	);
 }
+
 function mutation(options: { allowMutations?: boolean }) {
 	if (!options.allowMutations)
 		throw new Error("WSRT_MCP_PERMISSION_DENIED: MCP mutating operations are disabled");
 }
+
 function ids(input: Record<string, unknown>): string[] {
 	return Array.isArray(input.ids)
 		? input.ids.map(String)

@@ -16,6 +16,7 @@ export type DashboardState = Readonly<{
 	connected: boolean;
 	contributions: readonly DashboardContributionView[];
 }>;
+
 export type DashboardAction =
 	| { type: "snapshot"; snapshot: DashboardSnapshot }
 	| { type: "select-node"; id?: string }
@@ -29,6 +30,7 @@ export type DashboardAction =
 	| { type: "error"; value?: string }
 	| { type: "connected"; value: boolean }
 	| { type: "contributions"; value: readonly DashboardContributionView[] };
+
 export function reduceDashboardState(
 	state: DashboardState,
 	action: DashboardAction,
@@ -76,6 +78,7 @@ export function reduceDashboardState(
 		});
 	return Object.freeze({ ...state, connected: action.value });
 }
+
 export class DashboardStore {
 	#state: DashboardState = Object.freeze({
 		eventFilter: "",

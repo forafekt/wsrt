@@ -10,8 +10,8 @@ import Command, {
 import { processArgs } from "./deno.js";
 import type { OptionConfig } from "./option.js";
 import {
-	camelcaseOptionName,
 	CommandLineError,
+	camelcaseOptionName,
 	editDistance,
 	getArgParseOptions,
 	getFileName,

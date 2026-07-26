@@ -17,7 +17,6 @@ export default defineSystem({
 				open: false,
 			},
 		},
-		// { provider: "@wsrt/plugin-terraform", options: {} },
 	],
 	tasks: {
 		architecture: {

@@ -1,5 +1,6 @@
 // command.ts
 import type CommandLine from "./commandline.js";
+import { platformInfo } from "./deno.js";
 import Option, { type OptionConfig } from "./option.js";
 import {
 	CommandLineError,
@@ -8,7 +9,6 @@ import {
 	padRight,
 	removeBrackets,
 } from "./utils.js";
-import { platformInfo } from "./deno.js";
 
 interface CommandArg {
 	required: boolean;

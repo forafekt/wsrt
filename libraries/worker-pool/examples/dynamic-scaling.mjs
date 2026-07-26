@@ -14,5 +14,7 @@ const jobs = Array.from({ length: 20 }, () =>
 );
 
 await Promise.all(jobs);
+
 console.log(pool.metrics());
+
 await pool.shutdown("graceful");

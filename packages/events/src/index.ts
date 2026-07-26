@@ -9,6 +9,7 @@ export type StructuredEvent<Type extends string = string, Payload = unknown> = {
 	operationId?: string;
 	payload: Payload;
 };
+
 export type EventQuery = {
 	source?: string;
 	type?: string;
@@ -17,6 +18,7 @@ export type EventQuery = {
 	sinceSequence?: number;
 	since?: string;
 };
+
 export class EventJournal<Event extends StructuredEvent = StructuredEvent> extends EventTarget {
 	readonly #history: Event[] = [];
 	#sequence = 0;
@@ -64,4 +66,5 @@ export class EventJournal<Event extends StructuredEvent = StructuredEvent> exten
 		this.#history.length = 0;
 	}
 }
+
 export { EventJournal as EventStream };

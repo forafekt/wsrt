@@ -75,6 +75,7 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
 		if (this.#disposed) throw new Error("Memory persistence provider is disposed");
 	}
 }
+
 export function memoryPersistence(): MemoryPersistenceProvider {
 	return new MemoryPersistenceProvider();
 }

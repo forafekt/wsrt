@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createControlPlane } from "../packages/control-plane/dist/index.js";
 import {
 	createRecord,
 	MigrationRegistry,
@@ -11,7 +12,6 @@ import {
 } from "../packages/persistence/dist/index.js";
 import { FilesystemPersistenceProvider } from "../packages/persistence-filesystem/dist/index.js";
 import { MemoryPersistenceProvider } from "../packages/persistence-memory/dist/index.js";
-import { createControlPlane } from "../packages/control-plane/dist/index.js";
 
 test("memory persistence provides isolated values, journals, and plugin namespaces", async () => {
 	const provider = new MemoryPersistenceProvider();

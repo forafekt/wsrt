@@ -26,6 +26,7 @@ test("TS and YAML normalize equivalently and compile deterministic graph", async
 		await plane.dispose();
 	}
 });
+
 test("control plane runs artifact task and shares data with MCP and dashboard", async () => {
 	const generated = path.join(root, "generated/api-client.ts");
 	fs.rmSync(path.dirname(generated), { recursive: true, force: true });
@@ -42,6 +43,7 @@ test("control plane runs artifact task and shares data with MCP and dashboard", 
 		fs.rmSync(path.dirname(generated), { recursive: true, force: true });
 	}
 });
+
 test("real API/web dependency reaches readiness and stops cleanly", async () => {
 	const plane = await createControlPlane({ root });
 	try {
@@ -60,6 +62,7 @@ test("real API/web dependency reaches readiness and stops cleanly", async () => 
 		await plane.dispose();
 	}
 });
+
 test("composite application expands, starts, restarts a child, and stops all children", async () => {
 	const plane = await createControlPlane({ root });
 	try {
@@ -76,6 +79,7 @@ test("composite application expands, starts, restarts a child, and stops all chi
 		await plane.dispose();
 	}
 });
+
 test("Vite is an explicit command and readiness contribution", () => {
 	const contribution = viteContribution({ host: "127.0.0.1", port: 5199 });
 	assert.match(contribution.command.args[0], /vite\.js$/);
@@ -90,6 +94,7 @@ test("Vite is an explicit command and readiness contribution", () => {
 	assert.equal(contribution.healthcheck.url, "http://127.0.0.1:5199");
 	assert.equal(hasWsrtVitePlugin([wsrtVitePlugin()]), true);
 });
+
 function structure(value) {
 	return {
 		...value,

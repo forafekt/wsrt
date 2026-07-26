@@ -1,4 +1,5 @@
 import { defineSystem } from "@wsrt/config";
+
 export default defineSystem({
 	schemaVersion: "1",
 	name: "system-lifecycle",

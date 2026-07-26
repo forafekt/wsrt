@@ -25,6 +25,7 @@ const builtInTools = [
 	"workspace.state",
 	"workspace.stop",
 ] as const;
+
 const packageMetadata = createRequire(import.meta.url)("../package.json") as {
 	readonly name: string;
 	readonly version: string;
@@ -195,6 +196,7 @@ function toolResult(value: unknown) {
 		...(isRecord(value) ? { structuredContent: value } : {}),
 	};
 }
+
 function promptResult(value: unknown) {
 	if (isRecord(value) && Array.isArray(value.messages)) return value as never;
 	return {
@@ -206,17 +208,21 @@ function promptResult(value: unknown) {
 		],
 	};
 }
+
 function stringify(value: unknown): string {
 	return typeof value === "string" ? value : JSON.stringify(value ?? null);
 }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value);
 }
+
 function coded(code: string, message: string): Error {
 	const error = new Error(`${code}: ${message}`);
 	error.name = code;
 	return error;
 }
+
 function transportName(pluginId: string, contributionId: string): string {
 	return `${pluginId.replace(/[^A-Za-z0-9_.-]/g, "_")}.${contributionId.replace(/[^A-Za-z0-9_.-]/g, "_")}`;
 }

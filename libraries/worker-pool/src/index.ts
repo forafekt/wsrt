@@ -6,7 +6,9 @@ export {
 	WorkerPoolError,
 	WorkerTaskNotFoundError,
 } from "./errors.js";
+
 export { createWorkerPool, WorkerPoolImpl } from "./pool.js";
+
 export type {
 	JobOptions,
 	JobSnapshot,

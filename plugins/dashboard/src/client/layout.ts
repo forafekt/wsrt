@@ -1,6 +1,7 @@
 import type { DashboardState } from "./state/store.js";
 
 export type BottomPanelTab = "logs" | "events" | "timeline" | "operations" | "diagnostics";
+
 export type WorkbenchLayoutState = Readonly<{
 	version: 1;
 	sidebarWidth: number;
@@ -24,6 +25,7 @@ const defaults: WorkbenchLayoutState = Object.freeze({
 	bottomMaximized: false,
 	bottomTab: "logs",
 });
+
 const tabs: readonly BottomPanelTab[] = ["logs", "events", "timeline", "operations", "diagnostics"];
 
 export class WorkbenchLayout {
@@ -262,6 +264,7 @@ function rows<T>(values: readonly T[], project: (value: T) => readonly unknown[]
 		)
 		.join("")}</div>`;
 }
+
 function escapeText(value: unknown) {
 	return String(value ?? "").replace(
 		/[&<>"']/g,
@@ -270,6 +273,7 @@ function escapeText(value: unknown) {
 			character,
 	);
 }
+
 export function loadLayout(storage: Pick<Storage, "getItem"> = localStorage): WorkbenchLayoutState {
 	try {
 		const input = JSON.parse(storage.getItem("wsrt.layout.v1") ?? "null");
@@ -289,11 +293,13 @@ export function loadLayout(storage: Pick<Storage, "getItem"> = localStorage): Wo
 		return defaults;
 	}
 }
+
 function saveLayout(value: WorkbenchLayoutState) {
 	try {
 		localStorage.setItem("wsrt.layout.v1", JSON.stringify(value));
 	} catch {}
 }
+
 function clamp(value: unknown, min: number, max: number, fallback: number) {
 	return typeof value === "number" && Number.isFinite(value)
 		? Math.min(max, Math.max(min, value))

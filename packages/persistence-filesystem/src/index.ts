@@ -17,6 +17,7 @@ export type FilesystemPersistenceOptions = {
 	root?: string;
 	journals?: { maxFileSizeBytes?: number; maxFiles?: number; flushIntervalMs?: number };
 };
+
 type WorkspaceLock = {
 	instanceId: string;
 	sessionId: string;
@@ -24,6 +25,7 @@ type WorkspaceLock = {
 	hostname: string;
 	startedAt: string;
 };
+
 type StoredValue<T> = { updatedAt: string; value: T };
 
 export class FilesystemPersistenceProvider implements PersistenceProvider {
@@ -349,6 +351,7 @@ export function filesystemPersistence(
 ): FilesystemPersistenceProvider {
 	return new FilesystemPersistenceProvider(options);
 }
+
 async function atomicWrite(file: string, contents: string): Promise<void> {
 	const temporary = `${file}.tmp-${process.pid}-${crypto.randomUUID()}`;
 	let handle: fs.FileHandle | undefined;
@@ -364,6 +367,7 @@ async function atomicWrite(file: string, contents: string): Promise<void> {
 		await fs.unlink(temporary).catch(() => {});
 	}
 }
+
 async function walk(directory: string): Promise<string[]> {
 	const result: string[] = [];
 	for (const entry of await fs.readdir(directory, { withFileTypes: true }).catch(() => [])) {
@@ -374,20 +378,25 @@ async function walk(directory: string): Promise<string[]> {
 	}
 	return result;
 }
+
 function isWithin(root: string, target: string): boolean {
 	const relative = path.relative(root, target);
 	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
+
 function isNodeError(cause: unknown, code: string): cause is NodeJS.ErrnoException {
 	return cause instanceof Error && "code" in cause && cause.code === code;
 }
+
 function errorMessage(cause: unknown): string {
 	return cause instanceof Error ? cause.message : String(cause);
 }
+
 function required<T>(value: T | undefined): T {
 	if (value === undefined) throw new Error("Filesystem persistence provider is not initialized");
 	return value;
 }
+
 async function readJson<T>(file: string): Promise<T | undefined> {
 	try {
 		return JSON.parse(await fs.readFile(file, "utf8")) as T;
@@ -395,6 +404,7 @@ async function readJson<T>(file: string): Promise<T | undefined> {
 		return undefined;
 	}
 }
+
 function lockIsLive(lock: WorkspaceLock): boolean {
 	if (lock.hostname !== os.hostname()) return true;
 	try {

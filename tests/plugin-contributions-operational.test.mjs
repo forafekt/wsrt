@@ -4,6 +4,7 @@ import { getMcpPrompt, readMcpResource, runMcpTool } from "@wsrt/mcp";
 import { PluginSession } from "@wsrt/plugins";
 
 const owner = { id: "fixture", version: "1.0.0" };
+
 const context = Object.freeze({
 	root: "/workspace",
 	configuration: {},
