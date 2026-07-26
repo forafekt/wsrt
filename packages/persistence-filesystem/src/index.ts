@@ -115,10 +115,7 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 			});
 		});
 	}
-	async list(
-		prefix?: PersistenceKey,
-		options?: PersistenceListOptions,
-	): Promise<PersistedEntry[]> {
+	async list(prefix?: PersistenceKey, options?: PersistenceListOptions): Promise<PersistedEntry[]> {
 		this.#assert();
 		const valid = prefix ? validatePersistenceKey(prefix) : undefined;
 		const files = await walk(required(this.#root));
@@ -159,7 +156,8 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 				try {
 					values.push(JSON.parse(line) as T);
 				} catch {
-					if (index < lines.length - 1) throw new Error(`Malformed NDJSON record at line ${index + 1}`);
+					if (index < lines.length - 1)
+						throw new Error(`Malformed NDJSON record at line ${index + 1}`);
 					break;
 				}
 			}
@@ -223,9 +221,8 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 			"journals/logs.ndjson": "journal/logs",
 		};
 		if (aliases[relative]) return aliases[relative];
-		const match = /^(sessions|operations|plugins|artifacts|cache|runtime)\/(.+)\.(json|ndjson)$/.exec(
-			relative,
-		);
+		const match =
+			/^(sessions|operations|plugins|artifacts|cache|runtime)\/(.+)\.(json|ndjson)$/.exec(relative);
 		if (!match) return;
 		const family: Record<string, string> = {
 			sessions: "session",
@@ -249,7 +246,10 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 		});
 	}
 	async #rotate(file: string, incoming: number): Promise<void> {
-		const size = await fs.stat(file).then((value) => value.size).catch(() => 0);
+		const size = await fs
+			.stat(file)
+			.then((value) => value.size)
+			.catch(() => 0);
 		if (size + incoming <= this.#options.journals.maxFileSizeBytes) return;
 		for (let index = this.#options.journals.maxFiles - 1; index >= 1; index--) {
 			const source = index === 1 ? file : `${file}.${index - 1}`;
@@ -290,7 +290,11 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 		};
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
-				const handle = await fs.open(file, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+				const handle = await fs.open(
+					file,
+					constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
+					0o600,
+				);
 				await handle.writeFile(`${JSON.stringify(lock, null, 2)}\n`);
 				await handle.sync();
 				await handle.close();

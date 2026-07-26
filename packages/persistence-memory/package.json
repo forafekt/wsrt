@@ -4,12 +4,27 @@
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-	"files": ["dist", "README.md"],
-	"scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit" },
-	"dependencies": { "@wsrt/persistence": "workspace:*" },
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@wsrt/persistence": "workspace:*"
+	},
 	"description": "Deterministic in-memory WSRT persistence provider.",
 	"license": "ISC",
-	"publishConfig": { "access": "public" },
+	"publishConfig": {
+		"access": "public"
+	},
 	"sideEffects": false
 }

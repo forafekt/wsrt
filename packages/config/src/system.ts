@@ -264,8 +264,7 @@ export function normalizeSystemDefinition(
 						provider: input.persistence?.provider ?? "filesystem",
 						root: input.persistence?.root ?? ".wsrt",
 						journals: Object.freeze({
-							maxFileSizeBytes:
-								input.persistence?.journals?.maxFileSizeBytes ?? 20 * 1024 * 1024,
+							maxFileSizeBytes: input.persistence?.journals?.maxFileSizeBytes ?? 20 * 1024 * 1024,
 							maxFiles: input.persistence?.journals?.maxFiles ?? 5,
 							flushIntervalMs: input.persistence?.journals?.flushIntervalMs ?? 250,
 						}),

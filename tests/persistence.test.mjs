@@ -63,9 +63,7 @@ test("filesystem persistence writes atomically, orders journals, and releases lo
 			true,
 		);
 		await Promise.all(
-			Array.from({ length: 20 }, (_, revision) =>
-				provider.write("snapshot/latest", { revision }),
-			),
+			Array.from({ length: 20 }, (_, revision) => provider.write("snapshot/latest", { revision })),
 		);
 		assert.equal(typeof (await provider.read("snapshot/latest"))?.value.revision, "number");
 		assert.deepEqual(
@@ -89,9 +87,7 @@ test("filesystem persistence writes atomically, orders journals, and releases lo
 		);
 		await contender.dispose();
 		await provider.dispose();
-		await assert.rejects(() =>
-			fs.stat(path.join(workspace, ".wsrt", "locks", "workspace.lock")),
-		);
+		await assert.rejects(() => fs.stat(path.join(workspace, ".wsrt", "locks", "workspace.lock")));
 
 		const reopened = new FilesystemPersistenceProvider();
 		await reopened.initialize({ workspaceRoot: workspace, sessionId: "three" });

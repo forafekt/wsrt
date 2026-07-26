@@ -19,11 +19,7 @@ export interface PersistenceProvider {
 	write<T>(key: PersistenceKey, value: T): Promise<void>;
 	delete(key: PersistenceKey): Promise<void>;
 	list(prefix?: PersistenceKey, options?: PersistenceListOptions): Promise<PersistedEntry[]>;
-	append<T>(
-		key: PersistenceKey,
-		value: T,
-		options?: PersistenceAppendOptions,
-	): Promise<void>;
+	append<T>(key: PersistenceKey, value: T, options?: PersistenceAppendOptions): Promise<void>;
 	flush?(): Promise<void>;
 	dispose(): Promise<void>;
 }
@@ -142,9 +138,7 @@ export function pluginStorage(provider: PersistenceProvider, pluginId: string): 
 		},
 		async list(value?: string) {
 			const fullPrefix = value ? key(value) : prefix;
-			return (await provider.list(fullPrefix)).map((entry) =>
-				entry.key.slice(prefix.length + 1),
-			);
+			return (await provider.list(fullPrefix)).map((entry) => entry.key.slice(prefix.length + 1));
 		},
 	});
 }

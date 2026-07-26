@@ -37,10 +37,7 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
 		this.#values.delete(valid);
 		this.#journals.delete(valid);
 	}
-	async list(
-		prefix?: PersistenceKey,
-		options?: PersistenceListOptions,
-	): Promise<PersistedEntry[]> {
+	async list(prefix?: PersistenceKey, options?: PersistenceListOptions): Promise<PersistedEntry[]> {
 		this.#assert();
 		const valid = prefix ? validatePersistenceKey(prefix) : undefined;
 		return [...new Set([...this.#values.keys(), ...this.#journals.keys()])]
