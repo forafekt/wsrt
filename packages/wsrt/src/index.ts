@@ -13,13 +13,23 @@ export type {
 	SystemDiagnostic,
 	TaskInput,
 	WorkspaceDefinitionInput,
+	WsrtConfigFormat,
 } from "@wsrt/config";
 export {
 	compileSystemGraph,
+	configFileNames,
+	configFormatFromPath,
+	configFormats,
+	createSystemTemplate,
+	defaultConfigFileName,
 	defineSystem,
+	deriveConfigDestination,
 	discoverConfigFile,
+	isConfigFormat,
 	loadSystemDefinition,
 	normalizeSystemDefinition,
+	publicConfigSections,
+	serializeConfig,
 } from "@wsrt/config";
 export type {
 	ArtifactRecord,

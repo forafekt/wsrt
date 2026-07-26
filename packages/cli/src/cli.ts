@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import path from "node:path";
 import process from "node:process";
 import {
 	CommandLineError,
@@ -6,6 +7,7 @@ import {
 	createCli,
 	generateCompletions,
 } from "@wsrt/commandline";
+import type { WsrtConfigFormat } from "@wsrt/config";
 import type { createControlPlane } from "@wsrt/control-plane";
 import type { CliContribution, PluginContext, PluginSession } from "@wsrt/plugins";
 import { logger } from "./logger.js";
@@ -24,6 +26,14 @@ interface GlobalOptions {
 	help?: boolean;
 	version?: boolean;
 	"--"?: string[];
+}
+
+interface ConfigWriteOptions extends GlobalOptions {
+	format?: string;
+	output?: string;
+	to?: string;
+	from?: string;
+	force?: boolean;
 }
 
 const workspaceOptions = [
@@ -78,12 +88,49 @@ export function createWsrtCli(
 		version: cliVersion,
 		description: "Runtime-first workspace orchestration for local software systems.",
 		options: workspaceOptions,
-		examples: [
-			"  $ wsrt inspect",
-			"  $ wsrt run validate",
-			"  $ wsrt exec dashboard -- --port 5177",
-		],
+		// examples: [
+		// 	"  $ wsrt inspect",
+		// 	"  $ wsrt run validate",
+		// 	"  $ wsrt exec dashboard -- --port 5177",
+		// ],
 		commands: [
+			{
+				name: "init",
+				description: "Create a discoverable WSRT configuration (YAML by default)",
+				group: "Configuration",
+				options: [
+					{ name: "-f, --format <format>", description: "Output format (default: yaml)" },
+					{ name: "-o, --output <file>", description: "Output path (format is inferred)" },
+					{ name: "--force", description: "Overwrite an existing destination" },
+				],
+				examples: [
+					"  $ wsrt init",
+					"  $ wsrt init --format ts",
+					"  $ wsrt init --output config/wsrt.json",
+					"  $ wsrt init --force",
+				],
+				action: (options: ConfigWriteOptions) => initializeConfig(options),
+			},
+			{
+				name: "config convert [source]",
+				description:
+					"Convert a resolved, validated config (dynamic code and comments are not preserved)",
+				group: "Configuration",
+				options: [
+					{ name: "--from <file>", description: "Source configuration path" },
+					{ name: "--to <format>", description: "Destination format" },
+					{ name: "-o, --output <file>", description: "Explicit destination path" },
+					{ name: "--force", description: "Overwrite an existing destination" },
+				],
+				examples: [
+					"  $ wsrt config convert --to json",
+					"  $ wsrt config convert wsrt.yaml --to ts",
+					"  $ wsrt config convert --from wsrt.config.ts --output wsrt.yaml",
+					"  $ wsrt config convert --to yaml --force",
+				],
+				action: (source: string | undefined, options: ConfigWriteOptions) =>
+					convertConfig(source, options),
+			},
 			{
 				name: "",
 				description: "Inspect the workspace (default)",
@@ -378,6 +425,13 @@ export async function run(argv = process.argv, cliVersion = version): Promise<vo
 			await createWsrtCli([], undefined, cliVersion).parseAsync(bootstrapArgv);
 			return;
 		}
+		const utilityCommand =
+			bootstrapArguments[0] === "init" ||
+			(bootstrapArguments[0] === "config" && bootstrapArguments[1] === "convert");
+		if (utilityCommand) {
+			await createWsrtCli([], undefined, cliVersion).parseAsync(argv);
+			return;
+		}
 		const resolved = await discoverPluginCommands(argv);
 		session = resolved.session;
 		await createWsrtCli(resolved.commands, session, cliVersion).parseAsync(argv);
@@ -393,6 +447,109 @@ export async function run(argv = process.argv, cliVersion = version): Promise<vo
 			.catch((cause) =>
 				logger.error(`Error: ${cause instanceof Error ? cause.message : String(cause)}`),
 			);
+	}
+}
+
+async function initializeConfig(options: ConfigWriteOptions): Promise<void> {
+	const {
+		configFormatFromPath,
+		createSystemTemplate,
+		defaultConfigFileName,
+		isConfigFormat,
+		serializeConfig,
+	} = await import("@wsrt/config");
+	const root = path.resolve(options.root ?? process.cwd());
+	const requested = options.format?.toLowerCase();
+	if (requested && !isConfigFormat(requested))
+		throw new CommandLineError(`unsupported configuration format \`${requested}\``);
+	const inferred = options.output ? configFormatFromPath(options.output) : undefined;
+	if (options.output && !inferred)
+		throw new CommandLineError(
+			`cannot infer a supported configuration format from output path \`${options.output}\``,
+		);
+	if (requested && inferred && requested !== inferred)
+		throw new CommandLineError(
+			`format \`${requested}\` conflicts with output extension \`.${inferred}\``,
+		);
+	const format = (requested ?? inferred ?? "yaml") as WsrtConfigFormat;
+	const file = path.resolve(root, options.output ?? defaultConfigFileName(format));
+	await writeConfiguration(
+		file,
+		serializeConfig(createSystemTemplate(path.basename(root)), { format }),
+		!!options.force,
+	);
+	process.stdout.write(
+		`Created ${file} (${format}, full discoverable template${options.force ? ", overwrite enabled" : ""}).\n`,
+	);
+}
+
+async function convertConfig(
+	positionalSource: string | undefined,
+	options: ConfigWriteOptions,
+): Promise<void> {
+	const {
+		configFileNames,
+		configFormatFromPath,
+		deriveConfigDestination,
+		isConfigFormat,
+		loadSystemDefinition,
+		serializeConfig,
+	} = await import("@wsrt/config");
+	if (positionalSource && options.from)
+		throw new CommandLineError("source was supplied both positionally and with `--from`");
+	const root = path.resolve(options.root ?? process.cwd());
+	const sourceOption = options.from ?? positionalSource ?? options.config;
+	const loaded = await loadSystemDefinition(root, sourceOption);
+	if (!loaded.file || !loaded.input) {
+		const detail = loaded.diagnostics.map((item) => item.message).join("; ");
+		if (!sourceOption)
+			throw new CommandLineError(`${detail}. Searched: ${configFileNames.join(", ")}`);
+		throw new CommandLineError(`${detail}: ${path.resolve(root, sourceOption)}`);
+	}
+	const requested = options.to?.toLowerCase();
+	if (requested && !isConfigFormat(requested))
+		throw new CommandLineError(
+			`\`--to\` expects a supported format, received \`${options.to}\`; use \`--output\` for a path`,
+		);
+	const inferred = options.output ? configFormatFromPath(options.output) : undefined;
+	if (options.output && !inferred)
+		throw new CommandLineError(
+			`cannot infer a supported configuration format from output path \`${options.output}\``,
+		);
+	if (requested && inferred && requested !== inferred)
+		throw new CommandLineError(
+			`format \`${requested}\` conflicts with output extension \`.${inferred}\``,
+		);
+	const format = (requested ?? inferred) as WsrtConfigFormat | undefined;
+	if (!format) throw new CommandLineError("specify a destination with `--to` or `--output`");
+	const destination = path.resolve(
+		root,
+		options.output ?? deriveConfigDestination(loaded.file, format),
+	);
+	if (destination === path.resolve(loaded.file))
+		throw new CommandLineError(`source and destination resolve to the same file: ${destination}`);
+	await writeConfiguration(destination, serializeConfig(loaded.input, { format }), !!options.force);
+	const dynamic = /\.(?:[cm]?[jt]s)$/.test(loaded.file);
+	process.stdout.write(
+		`Converted ${loaded.file} to ${destination} (${format}); wrote the validated, normalized pipeline result${
+			dynamic
+				? " resolved from executable configuration; comments and source constructs were not preserved"
+				: "; comments were not preserved"
+		}.\n`,
+	);
+}
+
+async function writeConfiguration(file: string, contents: string, force: boolean): Promise<void> {
+	const fs = await import("node:fs/promises");
+	await fs.mkdir(path.dirname(file), { recursive: true });
+	try {
+		await fs.writeFile(file, contents, force ? undefined : { flag: "wx" });
+	} catch (cause) {
+		if (!force && cause && typeof cause === "object" && "code" in cause && cause.code === "EEXIST")
+			throw new CommandLineError(
+				`destination already exists: ${file}. Use \`--force\` to overwrite it.`,
+			);
+		throw cause;
 	}
 }
 

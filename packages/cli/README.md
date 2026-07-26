@@ -17,6 +17,35 @@ wsrt exec dashboard -- --port 5177
 wsrt completion zsh
 ```
 
+Create a discoverable starter configuration (YAML by default), or choose any
+supported YAML, JSON, TypeScript, or JavaScript extension:
+
+```sh
+wsrt init
+wsrt init --format ts
+wsrt init --output config/wsrt.json
+wsrt init --force
+```
+
+Existing files are protected unless `--force` is supplied. `--output` infers its
+format; a conflicting `--format` is rejected.
+
+Convert a discovered or explicit configuration through WSRT's normal loading,
+validation, and normalization pipeline:
+
+```sh
+wsrt config convert --to json
+wsrt config convert wsrt.yaml --to ts
+wsrt config convert --from wsrt.config.ts --output wsrt.yaml
+wsrt config convert --to yaml --force
+```
+
+Supported extensions are `.yaml`, `.yml`, `.json`, `.ts`, `.mts`, `.cts`, `.js`,
+`.mjs`, and `.cjs`. JavaScript and TypeScript sources execute through the normal
+trusted-local-config loader, so conversion captures their resolved value at that
+moment. Comments, imports, functions, and other source-level constructs are not
+preserved; values that cannot be represented safely cause a path-specific error.
+
 Global workspace options are accepted by every command:
 
 ```text

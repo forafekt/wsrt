@@ -11,23 +11,31 @@ import {
 	type WorkspaceDefinitionInput,
 } from "./system.js";
 
-const names = [
+export const configFileNames = Object.freeze([
 	"wsrt.config.ts",
+	"wsrt.config.mts",
+	"wsrt.config.cts",
 	"wsrt.config.js",
 	"wsrt.config.mjs",
 	"wsrt.config.cjs",
+	"wsrt.ts",
+	"wsrt.mts",
+	"wsrt.cts",
+	"wsrt.js",
+	"wsrt.mjs",
+	"wsrt.cjs",
 	"wsrt.json",
 	"wsrt.jsonc",
 	"wsrt.yaml",
 	"wsrt.yml",
-];
+] as const);
 
 export function discoverConfigFile(root: string, explicit?: string): string | undefined {
 	if (explicit) {
 		const file = path.resolve(root, explicit);
 		return fs.existsSync(file) ? file : undefined;
 	}
-	return names.map((name) => path.join(root, name)).find((file) => fs.existsSync(file));
+	return configFileNames.map((name) => path.join(root, name)).find((file) => fs.existsSync(file));
 }
 
 export async function loadSystemDefinition(
@@ -35,6 +43,7 @@ export async function loadSystemDefinition(
 	explicit?: string,
 ): Promise<{
 	definition?: NormalizedSystemDefinition;
+	input?: WorkspaceDefinitionInput;
 	diagnostics: SystemDiagnostic[];
 	file?: string;
 }> {
@@ -54,7 +63,7 @@ export async function loadSystemDefinition(
 	try {
 		const input = await read(file);
 		const result = normalizeSystemDefinition(input, { root: base, file });
-		return { ...result, file };
+		return { ...result, input: result.definition ? input : undefined, file };
 	} catch (cause) {
 		return {
 			file,
@@ -77,17 +86,25 @@ async function read(file: string): Promise<WorkspaceDefinitionInput> {
 	if (file.endsWith(".jsonc"))
 		return JSON.parse(fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""));
 	if (file.endsWith(".cjs")) return value(createRequire(import.meta.url)(file));
-	if (file.endsWith(".ts")) {
+	if (/\.(?:ts|mts|cts)$/.test(file)) {
+		const commonjs = file.endsWith(".cts");
 		const output = await transform(fs.readFileSync(file, "utf8"), {
 			loader: "ts",
-			format: "esm",
+			format: commonjs ? "cjs" : "esm",
 			platform: "node",
 			target: "node20",
 		});
-		const temporary = path.join(path.dirname(file), `.wsrt-${process.pid}-${Date.now()}.mjs`);
+		const temporary = path.join(
+			path.dirname(file),
+			`.wsrt-${process.pid}-${Date.now()}.${commonjs ? "cjs" : "mjs"}`,
+		);
 		fs.writeFileSync(temporary, output.code);
 		try {
-			return value(await import(pathToFileURL(temporary).href));
+			return value(
+				commonjs
+					? createRequire(import.meta.url)(temporary)
+					: await import(pathToFileURL(temporary).href),
+			);
 		} finally {
 			fs.rmSync(temporary, { force: true });
 		}

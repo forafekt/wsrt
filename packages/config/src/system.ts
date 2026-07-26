@@ -179,19 +179,28 @@ export type NormalizedSystemDefinition = {
 	sourceFile: string;
 };
 
-const coreKeys = new Set([
-	"schemaVersion",
-	"name",
-	"workspace",
-	"runtimes",
-	"applications",
-	"services",
-	"tasks",
-	"artifacts",
-	"environments",
-	"plugins",
-	"persistence",
-]);
+const publicConfigTemplate = Object.freeze({
+	schemaVersion: "1" as const,
+	name: "workspace",
+	workspace: {},
+	runtimes: {},
+	applications: {},
+	services: {},
+	tasks: {},
+	artifacts: {},
+	environments: {},
+	plugins: [],
+	persistence: {},
+});
+
+export const publicConfigSections = Object.freeze(Object.keys(publicConfigTemplate));
+
+const coreKeys = new Set<string>(publicConfigSections);
+
+/** Creates the discoverable starter from the same section metadata used by validation. */
+export function createSystemTemplate(name = "workspace"): WorkspaceDefinitionInput {
+	return { ...structuredClone(publicConfigTemplate), name };
+}
 
 export function defineSystem(input: WorkspaceDefinitionInput): WorkspaceDefinitionInput {
 	return input;

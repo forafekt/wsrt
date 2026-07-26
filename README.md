@@ -92,9 +92,18 @@ Implemented commands include `validate`, `inspect`, `graph`, `up`, `down`, `star
 
 ```sh
 pnpm build
+node packages/cli/dist/index.js init
+node packages/cli/dist/index.js config convert --to json
 node packages/cli/dist/index.js inspect --root examples/system-lifecycle
 node packages/cli/dist/index.js run contracts --root examples/system-lifecycle
 ```
+
+`wsrt init` writes a discoverable `wsrt.yaml` template by default. Use `--format`
+or `--output` for YAML, JSON, TypeScript, or JavaScript variants, and `--force`
+to replace an existing destination. `wsrt config convert` discovers the source
+with the standard config rules (or accepts a path/`--from`) and validates it
+before writing. Dynamic JS/TS sources are evaluated and converted from their
+resolved value; comments and source code are not preserved.
 
 MCP offers semantic graph, state, event, diagnostic, artifact, and lifecycle operations. Mutations require explicit permission. The dashboard package exposes read projections and lifecycle operations over the same control plane; it owns no orchestration state.
 
