@@ -13,6 +13,7 @@ export const configFormats = Object.freeze([
 	"mts",
 	"cts",
 ] as const);
+
 export type WsrtConfigFormat = (typeof configFormats)[number];
 
 export function isConfigFormat(value: string): value is WsrtConfigFormat {
