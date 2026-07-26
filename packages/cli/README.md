@@ -30,6 +30,12 @@ wsrt init --force
 Existing files are protected unless `--force` is supplied. `--output` infers its
 format; a conflicting `--format` is rejected.
 
+YAML, YML, and JSON starters use `null` for optional top-level sections. At that
+boundary `null` means “not configured” and normalizes like omission; required
+values such as `name`, and required fields inside declared items, remain
+non-nullable. YAML starters include a YAML language-server directive and JSON
+starters include `$schema`.
+
 Convert a discovered or explicit configuration through WSRT's normal loading,
 validation, and normalization pipeline:
 
@@ -45,6 +51,39 @@ Supported extensions are `.yaml`, `.yml`, `.json`, `.ts`, `.mts`, `.cts`, `.js`,
 trusted-local-config loader, so conversion captures their resolved value at that
 moment. Comments, imports, functions, and other source-level constructs are not
 preserved; values that cannot be represented safely cause a path-specific error.
+
+Configuration inspection has two deliberately different depths:
+
+```sh
+wsrt config validate
+wsrt config validate wsrt.yaml --json
+wsrt config test
+wsrt config test wsrt.config.ts --plan
+wsrt config test --check-commands
+```
+
+`validate` performs loading, structural and semantic normalization, reference
+checks, graph compilation, and cycle detection. It never resolves plugins or
+creates runtime resources. `test` additionally resolves plugin packages and
+runtime/adapter registrations, checks working directories, and builds deterministic
+startup and shutdown stages, then disposes resolved plugins. It does not create
+runtime instances or start nodes. Environment-dependent command checks are opt-in;
+port and network flags only inspect supported declarative targets and never send
+application requests.
+
+WSRT bundles a deterministic JSON Schema Draft 2020-12 artifact:
+
+```sh
+wsrt config schema
+wsrt config schema --stdout
+wsrt config schema --output .wsrt/wsrt.schema.json
+wsrt config schema --check
+```
+
+The artifact is owned by `@wsrt/config` at
+`packages/config/schema/wsrt.schema.json` and is publicly exported as
+`@wsrt/config/schema`. `$schema` is an accepted public editor-association property
+and is ignored during normalization.
 
 Global workspace options are accepted by every command:
 

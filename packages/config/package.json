@@ -8,16 +8,22 @@
 	"types": "./dist/index.d.ts",
 	"files": [
 		"dist",
+		"schema",
 		"README.md"
 	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
+		},
+		"./schema": {
+			"default": "./schema/wsrt.schema.json"
 		}
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.json",
+		"schema:generate": "node ../../scripts/generate-config-schema.mjs",
+		"schema:check": "node ../../scripts/generate-config-schema.mjs --check",
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {

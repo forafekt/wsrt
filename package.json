@@ -13,6 +13,8 @@
 		"release:pack": "node scripts/release-pack.mjs",
 		"release:publish": "node scripts/release-publish.mjs",
 		"version:sync": "node scripts/sync-package-versions.mjs",
+		"config:schema": "pnpm --filter @wsrt/config schema:generate",
+		"config:schema:check": "pnpm --filter @wsrt/config schema:check",
 		"external-consumer:test": "node scripts/external-consumer-test.mjs",
 		"check": "biome check .",
 		"check:fix": "biome check --write .",

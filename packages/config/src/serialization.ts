@@ -39,7 +39,7 @@ export function serializeConfig(
 ): string {
 	assertSerializable(config, options.format);
 	if (options.format === "yaml" || options.format === "yml")
-		return stringifyYaml(config, { indent: 2, lineWidth: 0 });
+		return stringifyYaml(config, { indent: 2, lineWidth: 0, nullStr: "" });
 	const body = JSON.stringify(config, null, 2);
 	if (options.format === "json") return `${body}\n`;
 	if (options.format === "cjs") return `"use strict";\n\nmodule.exports = ${body};\n`;

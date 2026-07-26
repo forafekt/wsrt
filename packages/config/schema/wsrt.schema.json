@@ -1,0 +1,794 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/@wsrt/config/schema/wsrt.schema.json",
+  "title": "WSRT Configuration",
+  "description": "Configuration schema for WSRT workspaces.",
+  "type": "object",
+  "required": [
+    "name"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor schema association; ignored during normalization."
+    },
+    "schemaVersion": {
+      "const": "1",
+      "default": "1",
+      "description": "WSRT public configuration schema version."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Workspace system name."
+    },
+    "workspace": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string",
+              "default": "."
+            },
+            "packageManager": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "runtimes": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/runtime"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "applications": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/application"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "services": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/executable"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tasks": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/task"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "artifacts": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "environments": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/environment"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "plugins": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "provider"
+                ],
+                "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
+                  "options": {}
+                },
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "required": [
+                  "id",
+                  "version"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "persistence": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "const": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "const": "filesystem",
+              "default": "filesystem"
+            },
+            "root": {
+              "type": "string",
+              "default": ".wsrt"
+            },
+            "journals": {
+              "type": "object",
+              "properties": {
+                "maxFileSizeBytes": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "maxFiles": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "flushIntervalMs": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "runtime": {
+      "type": "object",
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "options": {}
+      },
+      "additionalProperties": false
+    },
+    "executable": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Working directory relative to the workspace."
+        },
+        "runtime": {
+          "type": "string",
+          "description": "Configured runtime identifier."
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "shell": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "dependsOn": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "condition": {
+                    "enum": [
+                      "started",
+                      "ready",
+                      "healthy",
+                      "completed",
+                      "successful"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "healthcheck": {
+          "$ref": "#/$defs/healthcheck"
+        },
+        "restart": {
+          "$ref": "#/$defs/restart"
+        },
+        "critical": {
+          "type": "boolean",
+          "default": true
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "type": "object",
+          "required": [
+            "provider"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "options": {}
+          },
+          "additionalProperties": false
+        },
+        "adapter": {
+          "type": "string",
+          "deprecated": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "application": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Working directory relative to the workspace."
+        },
+        "runtime": {
+          "type": "string",
+          "description": "Configured runtime identifier."
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "shell": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "dependsOn": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "condition": {
+                    "enum": [
+                      "started",
+                      "ready",
+                      "healthy",
+                      "completed",
+                      "successful"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "healthcheck": {
+          "$ref": "#/$defs/healthcheck"
+        },
+        "restart": {
+          "$ref": "#/$defs/restart"
+        },
+        "critical": {
+          "type": "boolean",
+          "default": true
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "type": "object",
+          "required": [
+            "provider"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "options": {}
+          },
+          "additionalProperties": false
+        },
+        "adapter": {
+          "type": "string",
+          "deprecated": true
+        },
+        "processes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/executable"
+          }
+        },
+        "consumes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "task": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Working directory relative to the workspace."
+        },
+        "runtime": {
+          "type": "string",
+          "description": "Configured runtime identifier."
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "shell": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "dependsOn": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "condition": {
+                    "enum": [
+                      "started",
+                      "ready",
+                      "healthy",
+                      "completed",
+                      "successful"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "healthcheck": {
+          "$ref": "#/$defs/healthcheck"
+        },
+        "restart": {
+          "$ref": "#/$defs/restart"
+        },
+        "critical": {
+          "type": "boolean",
+          "default": true
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "type": "object",
+          "required": [
+            "provider"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "options": {}
+          },
+          "additionalProperties": false
+        },
+        "adapter": {
+          "type": "string",
+          "deprecated": true
+        },
+        "produces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "artifact",
+              "path"
+            ],
+            "properties": {
+              "artifact": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "directory": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "healthcheck": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "process"
+            },
+            "unhealthyThreshold": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "healthyThreshold": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "url"
+          ],
+          "properties": {
+            "type": {
+              "const": "http"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "intervalMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unhealthyThreshold": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "healthyThreshold": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "port"
+          ],
+          "properties": {
+            "type": {
+              "const": "tcp"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "intervalMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unhealthyThreshold": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "healthyThreshold": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "restart": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "policy"
+          ],
+          "properties": {
+            "policy": {
+              "const": "never"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "policy"
+          ],
+          "properties": {
+            "policy": {
+              "enum": [
+                "on-failure",
+                "always"
+              ]
+            },
+            "attempts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "delayMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "backoff": {
+              "enum": [
+                "fixed",
+                "exponential"
+              ]
+            },
+            "maximumDelayMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "restartOnUnhealthy": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "consumers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "location": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "activate": {
+          "type": "object",
+          "properties": {
+            "applications": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "services": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tasks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

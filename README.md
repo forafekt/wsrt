@@ -105,6 +105,20 @@ with the standard config rules (or accepts a path/`--from`) and validates it
 before writing. Dynamic JS/TS sources are evaluated and converted from their
 resolved value; comments and source code are not preserved.
 
+Static starter templates use `null` placeholders for optional public sections;
+these normalize like omitted values, while required fields remain non-nullable.
+`wsrt config validate` performs side-effect-free structural, semantic, and graph
+checks. `wsrt config test` additionally resolves providers, verifies local
+working directories, and compiles execution plans without creating runtimes or
+starting nodes. Use `--plan` to inspect stages and opt into environment-dependent
+checks explicitly.
+
+Editor support is provided by the deterministic Draft 2020-12 schema exported as
+`@wsrt/config/schema`. Inspect or export it with `wsrt config schema`; maintainers
+regenerate it with `pnpm config:schema` and enforce drift checks with
+`pnpm config:schema:check`. `$schema` is permitted for editor association and
+ignored by normalization.
+
 MCP offers semantic graph, state, event, diagnostic, artifact, and lifecycle operations. Mutations require explicit permission. The dashboard package exposes read projections and lifecycle operations over the same control plane; it owns no orchestration state.
 
 ## Example and extensions

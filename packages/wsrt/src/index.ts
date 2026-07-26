@@ -17,20 +17,25 @@ export type {
 } from "@wsrt/config";
 
 export {
+	checkWsrtConfigJsonSchema,
 	compileSystemGraph,
 	configFileNames,
 	configFormatFromPath,
 	configFormats,
+	createNullishSystemTemplate,
 	createSystemTemplate,
 	defaultConfigFileName,
 	defineSystem,
 	deriveConfigDestination,
 	discoverConfigFile,
+	generateWsrtConfigJsonSchema,
 	isConfigFormat,
 	loadSystemDefinition,
 	normalizeSystemDefinition,
 	publicConfigSections,
 	serializeConfig,
+	serializeWsrtConfigJsonSchema,
+	wsrtConfigSchemaId,
 } from "@wsrt/config";
 
 export type {

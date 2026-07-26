@@ -1,5 +1,13 @@
 export { configFileNames, discoverConfigFile, loadSystemDefinition } from "./loader.js";
 
+export type { JsonSchema } from "./schema.js";
+export {
+	checkWsrtConfigJsonSchema,
+	generateWsrtConfigJsonSchema,
+	serializeWsrtConfigJsonSchema,
+	wsrtConfigSchemaId,
+} from "./schema.js";
+
 export type { WsrtConfigFormat } from "./serialization.js";
 
 export {
@@ -30,8 +38,10 @@ export type {
 
 export {
 	compileSystemGraph,
+	createNullishSystemTemplate,
 	createSystemTemplate,
 	defineSystem,
 	normalizeSystemDefinition,
 	publicConfigSections,
+	WSRT_CONFIG_SCHEMA_URL,
 } from "./system.js";

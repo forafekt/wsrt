@@ -101,18 +101,20 @@ export type PluginObjectInput = {
 };
 
 export type WorkspaceDefinitionInput = {
+	$schema?: string;
 	schemaVersion?: "1";
 	name: string;
-	workspace?: { root?: string; packageManager?: string };
-	runtimes?: Record<string, { provider: string; version?: string; options?: unknown }>;
-	applications?: Record<string, ApplicationInput>;
-	services?: Record<string, ExecutableInput>;
-	tasks?: Record<string, TaskInput>;
-	artifacts?: Record<string, ArtifactInput>;
-	environments?: Record<string, EnvironmentInput>;
-	plugins?: Array<string | { provider: string; options?: unknown } | PluginObjectInput>;
+	workspace?: { root?: string; packageManager?: string } | null;
+	runtimes?: Record<string, { provider: string; version?: string; options?: unknown }> | null;
+	applications?: Record<string, ApplicationInput> | null;
+	services?: Record<string, ExecutableInput> | null;
+	tasks?: Record<string, TaskInput> | null;
+	artifacts?: Record<string, ArtifactInput> | null;
+	environments?: Record<string, EnvironmentInput> | null;
+	plugins?: Array<string | { provider: string; options?: unknown } | PluginObjectInput> | null;
 	persistence?:
 		| false
+		| null
 		| {
 				provider?: "filesystem";
 				root?: string;
@@ -179,7 +181,10 @@ export type NormalizedSystemDefinition = {
 	sourceFile: string;
 };
 
+export const WSRT_CONFIG_SCHEMA_URL = "https://unpkg.com/@wsrt/config/schema/wsrt.schema.json";
+
 const publicConfigTemplate = Object.freeze({
+	$schema: WSRT_CONFIG_SCHEMA_URL,
 	schemaVersion: "1" as const,
 	name: "workspace",
 	workspace: {},
@@ -202,6 +207,21 @@ export function createSystemTemplate(name = "workspace"): WorkspaceDefinitionInp
 	return { ...structuredClone(publicConfigTemplate), name };
 }
 
+export function createNullishSystemTemplate(name = "workspace"): WorkspaceDefinitionInput {
+	return Object.fromEntries(
+		Object.keys(publicConfigTemplate).map((key) => [
+			key,
+			key === "$schema"
+				? publicConfigTemplate.$schema
+				: key === "schemaVersion"
+					? "1"
+					: key === "name"
+						? name
+						: null,
+		]),
+	) as unknown as WorkspaceDefinitionInput;
+}
+
 export function defineSystem(input: WorkspaceDefinitionInput): WorkspaceDefinitionInput {
 	return input;
 }
@@ -214,6 +234,7 @@ export function normalizeSystemDefinition(
 	diagnostics: SystemDiagnostic[];
 } {
 	const diagnostics: SystemDiagnostic[] = [];
+	diagnostics.push(...validateInputShape(input, options.file));
 	for (const key of Object.keys(input))
 		if (!coreKeys.has(key))
 			diagnostics.push({
@@ -230,6 +251,7 @@ export function normalizeSystemDefinition(
 			message: "System name is required",
 			source: { file: options.file, path: "name" },
 		});
+	if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) return { diagnostics };
 	const root = path.resolve(options.root, input.workspace?.root ?? "."),
 		executables: NormalizedExecutable[] = [];
 	const add = (
@@ -302,6 +324,85 @@ export function normalizeSystemDefinition(
 	return diagnostics.some((d) => d.severity === "error")
 		? { diagnostics }
 		: { definition: Object.freeze(definition), diagnostics };
+}
+
+function validateInputShape(input: WorkspaceDefinitionInput, file: string): SystemDiagnostic[] {
+	const diagnostics: SystemDiagnostic[] = [];
+	const error = (configPath: string, message: string) =>
+		diagnostics.push({
+			code: "config.invalid_type",
+			severity: "error",
+			message,
+			source: { file, path: configPath },
+		});
+	if (!input || typeof input !== "object" || Array.isArray(input)) {
+		error("", "Configuration must be an object");
+		return diagnostics;
+	}
+	if (input.name !== undefined && (typeof input.name !== "string" || !input.name))
+		error("name", "System name must be a non-empty string");
+	if (input.schemaVersion !== undefined && input.schemaVersion !== "1")
+		error("schemaVersion", 'Schema version must be "1"');
+	for (const key of [
+		"workspace",
+		"runtimes",
+		"applications",
+		"services",
+		"tasks",
+		"artifacts",
+		"environments",
+	] as const) {
+		const value = input[key];
+		if (
+			value !== undefined &&
+			value !== null &&
+			(!value || typeof value !== "object" || Array.isArray(value))
+		)
+			error(key, `${key} must be an object or null`);
+	}
+	if (input.plugins !== undefined && input.plugins !== null && !Array.isArray(input.plugins))
+		error("plugins", "plugins must be an array or null");
+	for (const [name, value] of Object.entries(input.runtimes ?? {})) {
+		const base = `runtimes.${name}`;
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			error(base, "Runtime definition must be an object");
+			continue;
+		}
+		if (typeof value.provider !== "string" || !value.provider)
+			error(`${base}.provider`, "Runtime provider must be a non-empty string");
+	}
+	const executableGroups = [
+		["applications", input.applications],
+		["services", input.services],
+		["tasks", input.tasks],
+	] as const;
+	for (const [group, values] of executableGroups)
+		for (const [name, value] of Object.entries(values ?? {})) {
+			const base = `${group}.${name}`;
+			if (!value || typeof value !== "object" || Array.isArray(value)) {
+				error(base, "Executable definition must be an object");
+				continue;
+			}
+			if (
+				value.command &&
+				typeof value.command === "object" &&
+				(typeof value.command.command !== "string" || !value.command.command)
+			)
+				error(`${base}.command.command`, "Command must be a non-empty string");
+			if (value.restart) {
+				if (!["never", "on-failure", "always"].includes(value.restart.policy))
+					error(`${base}.restart.policy`, "Expected never, on-failure, or always");
+				if (
+					"backoff" in value.restart &&
+					value.restart.backoff !== undefined &&
+					!["fixed", "exponential"].includes(value.restart.backoff)
+				)
+					error(`${base}.restart.backoff`, "Expected fixed or exponential");
+			}
+			if (value.healthcheck && !["process", "http", "tcp"].includes(value.healthcheck.type))
+				error(`${base}.healthcheck.type`, "Expected process, http, or tcp");
+		}
+	return diagnostics;
 }
 
 function command(value?: CommandInput): NormalizedCommand | undefined {

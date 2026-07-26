@@ -4,9 +4,15 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import {
+	checkWsrtConfigJsonSchema,
 	configFormats,
+	createNullishSystemTemplate,
+	generateWsrtConfigJsonSchema,
 	loadSystemDefinition,
+	normalizeSystemDefinition,
 	serializeConfig,
+	serializeWsrtConfigJsonSchema,
+	WSRT_CONFIG_SCHEMA_URL,
 } from "../packages/config/dist/index.js";
 
 const executable = path.resolve("packages/cli/dist/index.js");
@@ -20,7 +26,8 @@ test("init generates every supported format from the canonical template", async 
 			const file = path.join(root, `wsrt.${format}`);
 			const loaded = await loadSystemDefinition(root, file);
 			assert.ok(loaded.definition, loaded.diagnostics.map((item) => item.message).join("\n"));
-			for (const key of [
+			const contents = await readFile(file, "utf8");
+			const optionalSections = [
 				"workspace",
 				"runtimes",
 				"applications",
@@ -30,8 +37,29 @@ test("init generates every supported format from the canonical template", async 
 				"environments",
 				"plugins",
 				"persistence",
-			])
-				assert.ok(key in loaded.input, `${format} template omitted ${key}`);
+			];
+			if (format === "yaml" || format === "yml") {
+				for (const key of optionalSections) {
+					assert.match(contents, new RegExp(`^${key}:$`, "m"));
+					assert.equal(loaded.input[key], null);
+				}
+				assert.doesNotMatch(contents, /: null$/m);
+				assert.match(
+					contents,
+					new RegExp(
+						`^# yaml-language-server: \\$schema=${WSRT_CONFIG_SCHEMA_URL.replaceAll(".", "\\.")}$`,
+						"m",
+					),
+				);
+				assert.equal(loaded.input.$schema, WSRT_CONFIG_SCHEMA_URL);
+			} else if (format === "json") {
+				for (const key of optionalSections) assert.equal(loaded.input[key], null);
+				assert.match(contents, /"workspace": null/);
+			} else {
+				for (const key of optionalSections)
+					assert.equal(key in loaded.input, false, `${format} template populated ${key}`);
+				assert.doesNotMatch(contents, /\bnull\b/);
+			}
 		}
 	} finally {
 		await rm(root, { force: true, recursive: true });
@@ -176,6 +204,172 @@ test("conversion rejects invalid, same-file, unsupported, and non-serializable v
 				),
 			/services\.api\.command.*functions/,
 		);
+	} finally {
+		await rm(root, { force: true, recursive: true });
+	}
+});
+
+test("nullish templates normalize like omitted sections and retain required values", () => {
+	const root = process.cwd();
+	const nullish = normalizeSystemDefinition(createNullishSystemTemplate("nullish"), {
+		root,
+		file: path.join(root, "nullish.yaml"),
+	});
+	const omitted = normalizeSystemDefinition(
+		{ schemaVersion: "1", name: "nullish" },
+		{
+			root,
+			file: path.join(root, "omitted.yaml"),
+		},
+	);
+	assert.ok(nullish.definition);
+	assert.ok(omitted.definition);
+	for (const key of ["runtimes", "executables", "artifacts", "environments", "plugins"])
+		assert.deepEqual(nullish.definition[key], omitted.definition[key]);
+	assert.equal(
+		normalizeSystemDefinition(
+			{ schemaVersion: "1", name: null, services: null },
+			{ root, file: "invalid.yaml" },
+		).definition,
+		undefined,
+	);
+	const explicit = normalizeSystemDefinition(
+		{ schemaVersion: "1", name: "nullish", persistence: null },
+		{ root, file: path.join(root, "nullish.yaml") },
+	);
+	assert.deepEqual(explicit.definition, nullish.definition);
+	assert.equal(
+		normalizeSystemDefinition(
+			{
+				schemaVersion: "1",
+				name: "invalid",
+				runtimes: { node: { provider: null } },
+			},
+			{ root, file: "invalid-required.yaml" },
+		).definition,
+		undefined,
+	);
+});
+
+test("YAML serialization consistently uses implicit nulls while JSON remains explicit", () => {
+	const input = { schemaVersion: "1", name: "converted", persistence: null };
+	assert.equal(
+		serializeConfig(input, { format: "yaml" }),
+		'schemaVersion: "1"\nname: converted\npersistence:\n',
+	);
+	assert.match(serializeConfig(input, { format: "json" }), /"persistence": null/);
+});
+
+test("config validate supports every loader, JSON diagnostics, cycles, and no execution", async () => {
+	const root = await temporaryDirectory();
+	try {
+		for (const format of configFormats) {
+			const output = `config.${format}`;
+			assert.equal((await cli("init", "--root", root, "--format", format, "-o", output)).code, 0);
+			const validated = await cli("config", "validate", "--root", root, output);
+			assert.equal(validated.code, 0, `${format}: ${validated.stderr}\n${validated.stdout}`);
+		}
+		await writeFile(
+			path.join(root, "invalid.yaml"),
+			"name: invalid\nservices:\n  api:\n    dependsOn: [web]\n  web:\n    dependsOn: [api]\n",
+		);
+		const invalid = await cli("config", "validate", "--root", root, "invalid.yaml", "--json");
+		assert.equal(invalid.code, 1);
+		const report = JSON.parse(invalid.stdout);
+		assert.equal(report.valid, false);
+		assert.ok(report.errors.some((error) => error.code === "graph.cycle"));
+
+		const marker = path.join(root, "started");
+		await writeFile(
+			path.join(root, "safe.mjs"),
+			`export default { name: "safe", services: { api: { command: ${JSON.stringify(
+				`node -e "require('node:fs').writeFileSync('${marker}', 'started')"`,
+			)} } } };\n`,
+		);
+		assert.equal((await cli("config", "validate", "--root", root, "safe.mjs")).code, 0);
+		await assert.rejects(readFile(marker), /ENOENT/);
+	} finally {
+		await rm(root, { force: true, recursive: true });
+	}
+});
+
+test("config test resolves and disposes providers, plans safely, and reports missing providers", async () => {
+	const root = await temporaryDirectory();
+	try {
+		const disposed = path.join(root, "disposed");
+		const started = path.join(root, "started");
+		await writeFile(
+			path.join(root, "plugin.mjs"),
+			`import fs from "node:fs"; export default { id: "test-plugin", version: "1.0.0", contributions: { runtimes: [{ id: "custom", create() { fs.writeFileSync(${JSON.stringify(started)}, "started"); } }] }, dispose() { fs.writeFileSync(${JSON.stringify(disposed)}, "disposed"); } };\n`,
+		);
+		await writeFile(
+			path.join(root, "wsrt.yaml"),
+			`name: tested\nplugins: [./plugin.mjs]\nruntimes:\n  custom:\n    provider: custom\nservices:\n  api:\n    runtime: custom\n    root: .\n`,
+		);
+		const result = await cli("config", "test", "--root", root, "--plan", "--json");
+		assert.equal(result.code, 0, result.stderr);
+		const report = JSON.parse(result.stdout);
+		assert.equal(report.valid, true);
+		assert.deepEqual(report.startupPlan, [["service:api"]]);
+		assert.equal(await readFile(disposed, "utf8"), "disposed");
+		await assert.rejects(readFile(started), /ENOENT/);
+
+		await writeFile(
+			path.join(root, "missing.yaml"),
+			"name: missing\nruntimes:\n  custom:\n    provider: unavailable\nservices:\n  api:\n    runtime: custom\n",
+		);
+		const missing = await cli("config", "test", "--root", root, "missing.yaml", "--json");
+		assert.equal(missing.code, 1);
+		assert.ok(
+			JSON.parse(missing.stdout).errors.some((error) => error.code === "runtime.provider_missing"),
+		);
+	} finally {
+		await rm(root, { force: true, recursive: true });
+	}
+});
+
+test("schema generation is deterministic, current, public-only, and exportable", async () => {
+	const first = serializeWsrtConfigJsonSchema(generateWsrtConfigJsonSchema());
+	const second = serializeWsrtConfigJsonSchema(generateWsrtConfigJsonSchema());
+	assert.equal(first, second);
+	assert.equal(
+		checkWsrtConfigJsonSchema(await readFile("packages/config/schema/wsrt.schema.json", "utf8")).ok,
+		true,
+	);
+	assert.equal(checkWsrtConfigJsonSchema("{}\n").ok, false);
+	const schema = JSON.parse(first);
+	for (const key of [
+		"$schema",
+		"schemaVersion",
+		"name",
+		"workspace",
+		"runtimes",
+		"applications",
+		"services",
+		"tasks",
+		"artifacts",
+		"environments",
+		"plugins",
+		"persistence",
+	])
+		assert.ok(key in schema.properties);
+	assert.equal("executables" in schema.properties, false);
+	assert.deepEqual(schema.properties.services.anyOf.at(-1), { type: "null" });
+	assert.equal(schema.$id, WSRT_CONFIG_SCHEMA_URL);
+
+	const root = await temporaryDirectory();
+	try {
+		const exported = await cli(
+			"config",
+			"schema",
+			"--root",
+			root,
+			"--output",
+			".wsrt/wsrt.schema.json",
+		);
+		assert.equal(exported.code, 0, exported.stderr);
+		assert.equal(await readFile(path.join(root, ".wsrt/wsrt.schema.json"), "utf8"), first);
+		assert.equal((await cli("config", "schema", "--check")).code, 0);
 	} finally {
 		await rm(root, { force: true, recursive: true });
 	}

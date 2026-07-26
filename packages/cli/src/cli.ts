@@ -34,7 +34,16 @@ interface ConfigWriteOptions extends GlobalOptions {
 	to?: string;
 	from?: string;
 	force?: boolean;
+	outputFormat?: string;
+	stdout?: boolean;
+	check?: boolean;
+	plan?: boolean;
+	checkCommands?: boolean;
+	checkPorts?: boolean;
+	checkNetwork?: boolean;
 }
+
+class ReportedConfigurationError extends Error {}
 
 const workspaceOptions = [
 	{
@@ -112,6 +121,42 @@ export function createWsrtCli(
 				action: (options: ConfigWriteOptions) => initializeConfig(options),
 			},
 			{
+				name: "config validate [source]",
+				description: "Validate configuration structure, semantics, and graph without runtimes",
+				group: "Configuration",
+				options: [
+					{ name: "--from <file>", description: "Source configuration path" },
+					{ name: "--output-format <format>", description: "Output format (text or json)" },
+				],
+				examples: [
+					"  $ wsrt config validate",
+					"  $ wsrt config validate wsrt.yaml",
+					"  $ wsrt config validate --from config/wsrt.json --json",
+				],
+				action: (source: string | undefined, options: ConfigWriteOptions) =>
+					validateConfigCommand(source, options),
+			},
+			{
+				name: "config test [source]",
+				description: "Resolve providers and execution plans without starting the workspace",
+				group: "Configuration",
+				options: [
+					{ name: "--from <file>", description: "Source configuration path" },
+					{ name: "--plan", description: "Print startup and shutdown stages" },
+					{ name: "--check-commands", description: "Check command availability using PATH" },
+					{ name: "--check-ports", description: "Check configured ports where supported" },
+					{ name: "--check-network", description: "Check remote references where supported" },
+					{ name: "--output-format <format>", description: "Output format (text or json)" },
+				],
+				examples: [
+					"  $ wsrt config test",
+					"  $ wsrt config test wsrt.config.ts --plan",
+					"  $ wsrt config test --check-commands --json",
+				],
+				action: (source: string | undefined, options: ConfigWriteOptions) =>
+					testConfigCommand(source, options),
+			},
+			{
 				name: "config convert [source]",
 				description:
 					"Convert a resolved, validated config (dynamic code and comments are not preserved)",
@@ -130,6 +175,23 @@ export function createWsrtCli(
 				],
 				action: (source: string | undefined, options: ConfigWriteOptions) =>
 					convertConfig(source, options),
+			},
+			{
+				name: "config schema",
+				description: "Inspect, export, or verify the bundled WSRT JSON Schema",
+				group: "Configuration",
+				options: [
+					{ name: "-o, --output <file>", description: "Write the schema to a file" },
+					{ name: "--stdout", description: "Write the complete schema to standard output" },
+					{ name: "--check", description: "Fail if the bundled schema has drifted" },
+				],
+				examples: [
+					"  $ wsrt config schema",
+					"  $ wsrt config schema --output .wsrt/wsrt.schema.json",
+					"  $ wsrt config schema --stdout",
+					"  $ wsrt config schema --check",
+				],
+				action: (options: ConfigWriteOptions) => configSchemaCommand(options),
 			},
 			{
 				name: "",
@@ -427,7 +489,8 @@ export async function run(argv = process.argv, cliVersion = version): Promise<vo
 		}
 		const utilityCommand =
 			bootstrapArguments[0] === "init" ||
-			(bootstrapArguments[0] === "config" && bootstrapArguments[1] === "convert");
+			(bootstrapArguments[0] === "config" &&
+				["convert", "validate", "test", "schema"].includes(bootstrapArguments[1] ?? ""));
 		if (utilityCommand) {
 			await createWsrtCli([], undefined, cliVersion).parseAsync(argv);
 			return;
@@ -437,6 +500,7 @@ export async function run(argv = process.argv, cliVersion = version): Promise<vo
 		await createWsrtCli(resolved.commands, session, cliVersion).parseAsync(argv);
 	} catch (cause) {
 		process.exitCode = 1;
+		if (cause instanceof ReportedConfigurationError) return;
 		const message = cause instanceof Error ? cause.message : String(cause);
 		if (argv.includes("--json"))
 			process.stderr.write(`${JSON.stringify({ error: { code: errorCode(cause), message } })}\n`);
@@ -453,10 +517,11 @@ export async function run(argv = process.argv, cliVersion = version): Promise<vo
 async function initializeConfig(options: ConfigWriteOptions): Promise<void> {
 	const {
 		configFormatFromPath,
-		createSystemTemplate,
+		createNullishSystemTemplate,
 		defaultConfigFileName,
 		isConfigFormat,
 		serializeConfig,
+		WSRT_CONFIG_SCHEMA_URL,
 	} = await import("@wsrt/config");
 	const root = path.resolve(options.root ?? process.cwd());
 	const requested = options.format?.toLowerCase();
@@ -473,13 +538,296 @@ async function initializeConfig(options: ConfigWriteOptions): Promise<void> {
 		);
 	const format = (requested ?? inferred ?? "yaml") as WsrtConfigFormat;
 	const file = path.resolve(root, options.output ?? defaultConfigFileName(format));
-	await writeConfiguration(
-		file,
-		serializeConfig(createSystemTemplate(path.basename(root)), { format }),
-		!!options.force,
+	const staticTemplate = ["yaml", "yml", "json"].includes(format);
+	let contents = serializeConfig(
+		staticTemplate
+			? createNullishSystemTemplate(path.basename(root))
+			: {
+					$schema: WSRT_CONFIG_SCHEMA_URL,
+					schemaVersion: "1",
+					name: path.basename(root),
+				},
+		{ format },
 	);
+	if (format === "yaml" || format === "yml")
+		contents = `# yaml-language-server: $schema=${WSRT_CONFIG_SCHEMA_URL}\n\n${contents}`;
+	await writeConfiguration(file, contents, !!options.force);
 	process.stdout.write(
 		`Created ${file} (${format}, full discoverable template${options.force ? ", overwrite enabled" : ""}).\n`,
+	);
+}
+
+async function validateConfigCommand(
+	positionalSource: string | undefined,
+	options: ConfigWriteOptions,
+): Promise<void> {
+	const report = await inspectConfiguration(positionalSource, options, false);
+	printConfigurationReport(report, options, false);
+	if (!report.valid) throw new ReportedConfigurationError("Configuration is invalid");
+}
+
+async function testConfigCommand(
+	positionalSource: string | undefined,
+	options: ConfigWriteOptions,
+): Promise<void> {
+	const report = await inspectConfiguration(positionalSource, options, true);
+	printConfigurationReport(report, options, true);
+	if (!report.valid) throw new ReportedConfigurationError("Configuration test failed");
+}
+
+type ConfigurationReport = {
+	valid: boolean;
+	source: string;
+	format?: string;
+	errors: Array<{
+		code: string;
+		path: string[];
+		message: string;
+		line?: number;
+		column?: number;
+	}>;
+	warnings: Array<{ code: string; path: string[]; message: string }>;
+	counts?: Record<string, number>;
+	plugins?: string[];
+	providers?: { runtimes: string[]; adapters: string[] };
+	startupPlan?: readonly (readonly string[])[];
+	shutdownPlan?: readonly (readonly string[])[];
+	checks?: Record<string, string>;
+};
+
+async function inspectConfiguration(
+	positionalSource: string | undefined,
+	options: ConfigWriteOptions,
+	deep: boolean,
+): Promise<ConfigurationReport> {
+	const { compileSystemGraph, configFormatFromPath, loadSystemDefinition } = await import(
+		"@wsrt/config"
+	);
+	if (positionalSource && options.from)
+		throw new CommandLineError("source was supplied both positionally and with `--from`");
+	const root = path.resolve(options.root ?? process.cwd());
+	const source = options.from ?? positionalSource ?? options.config;
+	const loaded = await loadSystemDefinition(root, source);
+	const report: ConfigurationReport = {
+		valid: false,
+		source: loaded.file ?? path.resolve(root, source ?? ""),
+		format: loaded.file ? configFormatFromPath(loaded.file) : undefined,
+		errors: loaded.diagnostics
+			.filter((item) => item.severity === "error")
+			.map((item) => ({
+				code: item.code,
+				path: item.source.path ? item.source.path.split(".") : [],
+				message: item.message,
+				line: item.source.line,
+				column: item.source.column,
+			})),
+		warnings: loaded.diagnostics
+			.filter((item) => item.severity === "warning")
+			.map((item) => ({
+				code: item.code,
+				path: item.source.path ? item.source.path.split(".") : [],
+				message: item.message,
+			})),
+	};
+	if (!loaded.definition) return report;
+	let graph: ReturnType<typeof compileSystemGraph> | undefined;
+	try {
+		graph = compileSystemGraph(loaded.definition);
+		for (const issue of graph.validate())
+			report.errors.push({
+				code: `graph.${issue.code}`,
+				path: [...issue.path],
+				message: issue.message,
+			});
+	} catch (cause) {
+		report.errors.push({
+			code: "graph.compile_failed",
+			path: [],
+			message: cause instanceof Error ? cause.message : String(cause),
+		});
+	}
+	const counts: Record<string, number> = {};
+	if (graph) for (const node of graph.nodes()) counts[node.kind] = (counts[node.kind] ?? 0) + 1;
+	report.counts = counts;
+	if (!deep || report.errors.length || !graph) {
+		report.valid = report.errors.length === 0;
+		return report;
+	}
+
+	const fs = await import("node:fs/promises");
+	const { resolveWorkspacePluginsReport } = await import("@wsrt/plugins");
+	const resolved = await resolveWorkspacePluginsReport(
+		loaded.definition.plugins,
+		loaded.definition.root,
+	);
+	report.plugins = resolved.plugins.map((plugin) => plugin.id).sort();
+	for (const diagnostic of resolved.diagnostics)
+		report.errors.push({
+			code: diagnostic.code,
+			path: ["plugins", diagnostic.plugin],
+			message: diagnostic.message,
+		});
+	const runtimeProviders = new Set(["node"]);
+	const adapters = new Set<string>();
+	for (const plugin of resolved.plugins) {
+		for (const provider of plugin.contributions?.runtimes ?? []) runtimeProviders.add(provider.id);
+		for (const adapter of plugin.contributions?.adapters ?? []) adapters.add(adapter.id);
+		const configured = loaded.definition.plugins.find(
+			(item) => typeof item !== "string" && "provider" in item && item.provider === plugin.id,
+		);
+		for (const contribution of plugin.contributions?.configuration ?? [])
+			for (const diagnostic of contribution.validate(
+				typeof configured === "object" && "options" in configured ? configured.options : undefined,
+			))
+				(diagnostic.severity === "warning" ? report.warnings : report.errors).push({
+					code: diagnostic.code,
+					path: ["plugins", plugin.id],
+					message: diagnostic.message,
+				});
+	}
+	report.providers = {
+		runtimes: [...runtimeProviders].sort(),
+		adapters: [...adapters].sort(),
+	};
+	for (const [runtime, definition] of Object.entries(loaded.definition.runtimes))
+		if (!runtimeProviders.has(definition.provider))
+			report.errors.push({
+				code: "runtime.provider_missing",
+				path: ["runtimes", runtime, "provider"],
+				message: `Runtime provider not available: ${definition.provider}`,
+			});
+	for (const executable of loaded.definition.executables) {
+		if (executable.provider && !adapters.has(executable.provider.provider))
+			report.errors.push({
+				code: "adapter.provider_missing",
+				path: [...executable.source.path.split("."), "provider"],
+				message: `Execution adapter not available: ${executable.provider.provider}`,
+			});
+		try {
+			const stat = await fs.stat(executable.root);
+			if (!stat.isDirectory()) throw new Error("not a directory");
+		} catch {
+			report.errors.push({
+				code: "executable.root_missing",
+				path: [...executable.source.path.split("."), "root"],
+				message: `Working directory does not exist: ${executable.root}`,
+			});
+		}
+		if (options.checkCommands && executable.command) {
+			const available = await commandExists(executable.command.command, executable.root);
+			if (!available)
+				report.errors.push({
+					code: "executable.command_missing",
+					path: [...executable.source.path.split("."), "command"],
+					message: `Command is not available: ${executable.command.command}`,
+				});
+		}
+	}
+	const ids = loaded.definition.executables.map((item) => item.id);
+	report.startupPlan = graph.plan(ids).stages;
+	report.shutdownPlan = graph.shutdownPlan(ids).stages;
+	report.checks = {
+		commands: options.checkCommands ? "checked" : "skipped (opt in with --check-commands)",
+		ports: options.checkPorts
+			? "no declarative bind ports to check"
+			: "skipped (opt in with --check-ports)",
+		network: options.checkNetwork
+			? "no remote configuration sources to check"
+			: "skipped (opt in with --check-network)",
+	};
+	for (const plugin of [...resolved.plugins].reverse()) await plugin.dispose?.();
+	report.valid = report.errors.length === 0;
+	return report;
+}
+
+async function commandExists(command: string, root: string): Promise<boolean> {
+	const fs = await import("node:fs/promises");
+	if (path.isAbsolute(command) || command.includes(path.sep))
+		return fs
+			.access(path.resolve(root, command))
+			.then(() => true)
+			.catch(() => false);
+	for (const directory of (process.env.PATH ?? "").split(path.delimiter))
+		if (
+			await fs
+				.access(path.join(directory, command))
+				.then(() => true)
+				.catch(() => false)
+		)
+			return true;
+	return false;
+}
+
+function printConfigurationReport(
+	report: ConfigurationReport,
+	options: ConfigWriteOptions,
+	test: boolean,
+): void {
+	const outputFormat = options.json ? "json" : (options.outputFormat ?? "text");
+	if (!["text", "json"].includes(outputFormat))
+		throw new CommandLineError("output format must be `text` or `json`");
+	if (outputFormat === "json") {
+		process.stdout.write(`${JSON.stringify(report)}\n`);
+		return;
+	}
+	if (!report.valid) {
+		process.stdout.write(
+			`${test ? "Configuration test failed" : "Invalid WSRT configuration"}.\n\nSource: ${report.source}\n${report.errors
+				.map(
+					(error) =>
+						`Path: ${error.path.join(".") || "<root>"}\nError: ${error.message}${error.line ? `\nLocation: ${error.line}:${error.column ?? 1}` : ""}`,
+				)
+				.join("\n\n")}\n`,
+		);
+		return;
+	}
+	const counts = Object.entries(report.counts ?? {})
+		.map(([kind, count]) => `${kind[0].toUpperCase()}${kind.slice(1)}: ${count}`)
+		.join("\n");
+	process.stdout.write(
+		`${test ? "Configuration test passed" : "Configuration is valid"}.\n\nSource: ${report.source}\nFormat: ${report.format ?? "unknown"}\n${counts}\nWarnings: ${report.warnings.length}\n`,
+	);
+	if (test && options.plan)
+		process.stdout.write(
+			`\nStartup plan:\n${formatPlan(report.startupPlan ?? [])}\n\nShutdown plan:\n${formatPlan(report.shutdownPlan ?? [])}\n`,
+		);
+}
+
+function formatPlan(stages: readonly (readonly string[])[]): string {
+	return stages
+		.map(
+			(stage, index) =>
+				`  Stage ${index + 1}${stage.length > 1 ? ", parallel" : ""}:\n${stage.map((id) => `    - ${id}`).join("\n")}`,
+		)
+		.join("\n\n");
+}
+
+async function configSchemaCommand(options: ConfigWriteOptions): Promise<void> {
+	const fs = await import("node:fs/promises");
+	const { checkWsrtConfigJsonSchema, serializeWsrtConfigJsonSchema, wsrtConfigSchemaId } =
+		await import("@wsrt/config");
+	const contents = serializeWsrtConfigJsonSchema();
+	const { fileURLToPath } = await import("node:url");
+	const bundled = fileURLToPath(import.meta.resolve("@wsrt/config/schema"));
+	if (options.check) {
+		const existing = await fs.readFile(bundled, "utf8").catch(() => "");
+		if (!checkWsrtConfigJsonSchema(existing).ok)
+			throw new CommandLineError(`bundled configuration schema is stale: ${bundled}`);
+		process.stdout.write(`Configuration schema is current: ${bundled}\n`);
+		return;
+	}
+	if (options.output) {
+		const destination = path.resolve(options.root ?? process.cwd(), options.output);
+		await writeConfiguration(destination, contents, true);
+		process.stdout.write(`Wrote WSRT configuration schema to ${destination}\n`);
+		return;
+	}
+	if (options.stdout) {
+		process.stdout.write(contents);
+		return;
+	}
+	process.stdout.write(
+		`WSRT Configuration Schema\nID: ${wsrtConfigSchemaId}\nInstalled: ${bundled}\nDraft: 2020-12\n`,
 	);
 }
 

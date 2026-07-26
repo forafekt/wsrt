@@ -69,6 +69,30 @@ try {
 	run("inspect", "--json");
 	run("workspace", "inspect", "--json");
 	run("plugins", "--json");
+	const installedSchema = path.join(
+		consumer,
+		"node_modules",
+		"@wsrt",
+		"config",
+		"schema",
+		"wsrt.schema.json",
+	);
+	if (!fs.existsSync(installedSchema))
+		throw new Error("Packed @wsrt/config package omitted schema/wsrt.schema.json");
+	const schemaUrl = JSON.parse(fs.readFileSync(installedSchema, "utf8")).$id;
+	const resolvedSchema = execFileSync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"-e",
+			"process.stdout.write(import.meta.resolve('@wsrt/config/schema'))",
+		],
+		{ cwd: consumer, encoding: "utf8" },
+	).trim();
+	if (resolvedSchema !== `file://${installedSchema}`)
+		throw new Error(`Packed schema export resolved to ${resolvedSchema}`);
+	if (schemaUrl !== "https://unpkg.com/@wsrt/config/schema/wsrt.schema.json")
+		throw new Error(`Packed schema has unexpected canonical URL: ${schemaUrl}`);
 	run("run", "hello", "--json");
 	run("run", "webBuild", "--json");
 	run("exec", "vite", "build");
