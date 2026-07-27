@@ -7,6 +7,7 @@ export const wsrtConfigSchemaId = WSRT_CONFIG_SCHEMA_URL;
 const nullable = (schema: Record<string, unknown>) => ({
 	anyOf: [schema, { type: "null" }],
 });
+
 const record = (reference: string) => ({
 	type: "object",
 	additionalProperties: { $ref: reference },

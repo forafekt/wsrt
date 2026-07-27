@@ -10,14 +10,14 @@ WSRT describes a software system and executes its lifecycle. Configuration is no
                  ↓
           @wsrt/lifecycle
                  ↓
-        @wsrt/control-plane
+        @wsrt/control-plane ← @wsrt/persistence
           ↓       ↓       ↓
         CLI      MCP    dashboard API
 ```
 
-Package ownership is explicit: graph owns nodes and plans; config owns input, normalization, diagnostics, and graph compilation; capabilities owns portable runtime contracts; runtime-node implements them; lifecycle owns transitions and scheduling; control-plane coordinates processes, readiness, events, diagnostics, and artifacts. User interfaces only call the control plane.
+Package ownership is explicit: graph owns nodes and plans; config owns input, normalization, diagnostics, and graph compilation; capabilities owns portable runtime contracts; runtime-node implements them; lifecycle owns transitions and scheduling; persistence owns storage contracts and versioned records; persistence-filesystem and persistence-memory implement those contracts; control-plane coordinates processes, readiness, events, diagnostics, persistence, and artifacts. User interfaces only call the control plane.
 
-Readiness gates dependant startup; health continuously observes a node only after readiness succeeds. The Node runtime supplies HTTP, TCP, process, timer, filesystem and spawn capabilities. The control plane owns monitoring, restart scheduling, cancellation, snapshots, operations and artifact provenance. Durable state, deployments, distributed operation, and non-Node runtimes remain intentionally out of scope.
+Readiness gates dependant startup; health continuously observes a node only after readiness succeeds. The Node runtime supplies HTTP, TCP, process, timer, filesystem and spawn capabilities. The control plane owns monitoring, restart scheduling, cancellation, snapshots, operations and artifact provenance. Persistence is workspace-local and optional; remote persistence, deployments, distributed operation, and published non-Node runtimes remain intentionally out of scope.
 
 Health transitions are centralized: a new node is `unknown`, monitor startup makes it `checking`, the first failure makes it `degraded`, and the configured failure threshold makes it `unhealthy`. A success while unhealthy makes it `degraded`; the configured consecutive-success threshold makes it `healthy`. Expected stop returns health to `unknown`; unexpected exit makes it `unhealthy`. Pending restart remains unhealthy until the new instance passes checks. Generation guards discard stale check completions.
 

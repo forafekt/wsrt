@@ -19,6 +19,9 @@ Every manifest is classified in `scripts/public-packages.mjs` as `public-fixed`,
 | `@wsrt/plugin-vite` | Yes | Plugin users | Alpha | `.`, `./vite` | capabilities, plugins, runtime-node, workspace, Vite | Integration and native Vite entry |
 | `@wsrt/plugin-dashboard` | Yes | Plugin users | Alpha | `.` | control-plane, plugins | Binds to loopback by default |
 | `@wsrt/mcp` | Yes | Advanced | Alpha | `.` | MCP SDK, control-plane, zod | Transport supplied by consumer |
+| `@wsrt/persistence` | Yes | Advanced/provider authors | Alpha | `.` | none | Runtime-neutral records, migrations, and provider contracts |
+| `@wsrt/persistence-filesystem` | Yes | User-facing | Alpha | `.` | persistence | Default atomic workspace-local provider |
+| `@wsrt/persistence-memory` | Yes | Tests/ephemeral use | Alpha | `.` | persistence | Deterministic in-memory provider |
 | `@wsrt/graph` | Yes | Advanced/internal-facing | Provisional | `.` | none | Required public dependency of config/control-plane |
 | `@wsrt/lifecycle` | Yes | Advanced/internal-facing | Provisional | `.` | graph | Required public dependency of control-plane |
 | `@wsrt/commandline` | Yes | Advanced/internal-facing | Provisional | `.` | argparse, event-targets | CLI dependency closure |

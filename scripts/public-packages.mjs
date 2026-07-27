@@ -18,6 +18,9 @@ export const packageCatalog = Object.freeze(
 		["@wsrt/graph", "packages/graph", "public-fixed"],
 		["@wsrt/lifecycle", "packages/lifecycle", "public-fixed"],
 		["@wsrt/mcp", "packages/mcp", "public-fixed"],
+		["@wsrt/persistence", "packages/persistence", "public-fixed"],
+		["@wsrt/persistence-filesystem", "packages/persistence-filesystem", "public-fixed"],
+		["@wsrt/persistence-memory", "packages/persistence-memory", "public-fixed"],
 		["@wsrt/plugin-dashboard", "plugins/dashboard", "public-fixed"],
 		["@wsrt/plugin-vite", "plugins/vite", "public-fixed"],
 		["@wsrt/plugins", "packages/plugins", "public-fixed"],
@@ -31,6 +34,7 @@ export const packageCatalog = Object.freeze(
 		["@wsrt/worker-pool", "libraries/worker-pool", "private-tooling"],
 		["wsrt-workspace", ".", "private-tooling"],
 		["wsrt-external-consumer-fixture", "tests/fixtures/external-consumer", "fixture"],
+		["@fixture/lib", "tests/fixtures/external-consumer/apps/lib", "fixture"],
 		["@fixture/web", "tests/fixtures/external-consumer/apps/web", "fixture"],
 	].map(([name, directory, classification]) => ({ name, directory, classification })),
 );

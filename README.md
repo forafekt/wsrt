@@ -1,185 +1,277 @@
 # WSRT
 
-WSRT persists workspace-local identity, sessions, snapshots, operation history, and
-bounded event journals under `.wsrt/` by default. Add this directory to the
-workspace's `.gitignore`:
+WSRT runs the moving parts of a local software system as one dependency-aware
+runtime.
 
-```gitignore
-.wsrt/
-```
-
-Set `persistence: false` in the workspace definition for an ephemeral run, or pass
-a persistence provider instance to the control plane. Tests should normally use
-`memoryPersistence()`.
+Define your applications, services, workers, and tasks in one file. WSRT starts
+them in the right order, waits until they are ready, monitors them, and shuts
+them down cleanly.
 
 > [!WARNING]
-> **WSRT is currently in active early development (pre-alpha).**
+> **WSRT is alpha software intended for experimentation and feedback.**
 >
-> The architecture is evolving rapidly and **breaking changes are expected**. APIs, configuration formats, package names, plugins, and runtime behavior may change without notice.
->
-> **It is not recommended for production use or new projects yet.**
-> If you'd like to follow the project's progress, experiment with the architecture, or contribute feedback, you're very welcome—but please expect things to change frequently.
+> APIs and configuration may change, documentation is still evolving, and some
+> features are incomplete. WSRT is not yet recommended for production
+> workloads. Its first npm prerelease has not been published.
 
+## What is WSRT?
 
-WSRT is a runtime-centric lifecycle platform for local software systems. One definition describes applications, services, processes, tasks, artifacts, environments, dependencies, runtimes, and plugins. WSRT normalizes that definition, compiles it into a graph, and operates it through one control plane.
+A modern application is rarely one process. Local development might require an
+API, a frontend dev server, a worker, a database proxy, and a contract-generation
+step. Shell scripts can launch them, but they do not provide one reliable view of
+readiness, health, dependencies, restarts, and cleanup.
 
-Use WSRT when a project needs dependency-aware startup, readiness, task execution, artifact tracking, or several user interfaces over the same runtime state. Do not use it as a container orchestrator, deployment platform, or replacement for a package manager.
+WSRT turns that collection of processes into a local runtime:
 
-It differs from a task runner such as Turborepo or Nx by owning long-running process lifecycle, readiness, health, and runtime state; those tools remain better suited to cached repository task graphs. It differs from Docker Compose because it operates local processes and plugins rather than defining container deployment. WSRT can sit alongside all three.
+- one configuration describes the system
+- dependencies determine startup and shutdown order
+- readiness controls when dependants may start
+- health checks report whether running services remain healthy
+- the CLI, dashboard, and integrations operate on the same state
 
-## Alpha quick start
+WSRT manages local processes. It is not a container orchestrator or deployment
+platform.
 
-The initial npm release is being prepared and has not been published. After publication, most users should install the batteries-included `next` prerelease:
+## Why WSRT?
 
-```bash
-pnpm add -D wsrt@next
-pnpm exec wsrt --help
-```
+Use WSRT when your project has several long-running processes whose lifecycles
+are related:
 
-Create a typed definition with the distribution's existing configuration API:
+- a frontend that must wait for an API
+- an Electron application with a web UI and local backend
+- workers that depend on supporting services
+- multiple APIs or development servers
+- local database emulators and proxies
+- setup, code-generation, or build tasks
 
-```ts
-import { defineSystem } from "wsrt";
+Instead of maintaining separate startup scripts and remembering which process
+owns which terminal, describe the relationships once and operate the system as a
+whole.
 
-export default defineSystem({ schemaVersion: "1", name: "example", tasks: {} });
-```
+WSRT is probably not a good fit when:
 
-Then run `pnpm exec wsrt validate`, `pnpm exec wsrt workspace inspect`, and a finite task before adopting services. Advanced consumers and integration authors can instead install only the modular building blocks they need:
+- one `npm run dev` command already does everything you need
+- the workload must be deployed or scheduled across machines
+- containers are the authoritative runtime boundary
+- the main problem is build caching rather than process lifecycle
+- production-grade stability or long-term API compatibility is required today
 
-```bash
-pnpm add @wsrt/control-plane @wsrt/capabilities
-```
+## Features
 
-The `wsrt` package is a thin Node.js distribution over those independently publishable `@wsrt/*` packages. Optional plugins remain separate and must be installed and configured explicitly. See [first use](./docs/FIRST_USE.md) and the [package publication matrix](./docs/PUBLICATION.md). The CLI, Node runtime, config, workspace inspection, Vite integration, plugin contracts, dashboard, and MCP are alpha. Low-level graph/lifecycle/CLI dependencies are provisional. Rust npm distribution, durable state, deployment, and distributed operation are not supported.
+- YAML, JSON, JavaScript, and TypeScript configuration
+- dependency-aware startup and reverse-order shutdown
+- readiness and continuous health checks
+- configurable restart policies
+- graceful termination with forced-kill fallback
+- finite task execution and artifact tracking
+- immutable, revisioned runtime snapshots
+- bounded events and operation history
+- optional workspace-local filesystem persistence
+- extensible runtime and plugin contributions
+- CLI, local dashboard, and MCP interfaces over one control plane
 
-## System definition
+## Example
 
-WSRT loads `wsrt.config.ts`, JavaScript module formats, JSON/JSONC, or YAML. All formats become the same normalized model.
+This workspace has an API and a frontend. The frontend starts only after the API
+is healthy.
 
 ```yaml
 schemaVersion: "1"
 name: example
+
 services:
   api:
     root: apps/api
-    command: { command: node, args: [server.mjs] }
-    healthcheck: { type: http, url: http://127.0.0.1:4000/health }
+    command:
+      command: node
+      args: [server.mjs]
+    healthcheck:
+      type: http
+      url: http://127.0.0.1:4000/health
+
 applications:
   web:
-    command: { command: vite, args: [dev] }
-    dependsOn: { api: { condition: healthy } }
+    root: apps/web
+    command:
+      command: vite
+      args: [dev]
+    dependsOn:
+      api:
+        condition: healthy
+
 tasks:
-  contracts: { command: { command: node, args: [scripts/generate.mjs] } }
-artifacts:
-  api-client: { type: typescript-client, producer: contracts, consumers: [web] }
+  check:
+    command:
+      command: pnpm
+      args: [test]
 ```
 
-Unknown core properties and missing runtime, dependency, producer, or consumer references are diagnostics rather than silently accepted data.
+Save the file as `wsrt.yaml`, validate it, and start the long-running nodes:
 
-## Architecture
-
-`wsrt` composes the standard Node.js experience without taking ownership away from the modular packages. `@wsrt/config` normalizes definitions and compiles `@wsrt/graph`. The graph owns stable nodes, containment, dependencies, traversal, cycle detection, and deterministic startup/shutdown plans. `@wsrt/lifecycle` executes those plans with explicit transitions, parallel safe stages, retries, cancellation, readiness, and structured events.
-
-Portable contracts live in `@wsrt/capabilities`; `@wsrt/runtime-node` implements filesystem, environment, process, spawn, HTTP, networking, timers, and logging capabilities. `@wsrt/control-plane` coordinates runtimes, lifecycle, processes, events, diagnostics, and first-class artifacts. CLI and MCP depend only on core contracts. Optional plugins depend inward on those contracts; core packages never import concrete plugins. The Rust provider remains source-only and is not part of the initial npm release.
-
-Vite is an explicit plugin contribution, not a runtime. It translates Vite options into command and readiness configuration. Composite applications expand into application and child process graph nodes; the control plane owns their execution.
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for dependency rules and domain terminology.
-
-## CLI
-
-Implemented commands include `validate`, `inspect`, `graph`, `up`, `down`, `start`, `stop`, `restart`, `run`, `exec`, and `artifacts`.
-
-```sh
-pnpm build
-node packages/cli/dist/index.js init
-node packages/cli/dist/index.js config convert --to json
-node packages/cli/dist/index.js inspect --root examples/system-lifecycle
-node packages/cli/dist/index.js run contracts --root examples/system-lifecycle
+```bash
+wsrt config validate
+wsrt up
 ```
 
-`wsrt init` writes a discoverable `wsrt.yaml` template by default. Use `--format`
-or `--output` for YAML, JSON, TypeScript, or JavaScript variants, and `--force`
-to replace an existing destination. `wsrt config convert` discovers the source
-with the standard config rules (or accepts a path/`--from`) and validates it
-before writing. Dynamic JS/TS sources are evaluated and converted from their
-resolved value; comments and source code are not preserved.
+WSRT waits for the API health endpoint before starting the frontend. When the
+system is stopped, dependants are terminated before their dependencies.
 
-Static starter templates use `null` placeholders for optional public sections;
-these normalize like omitted values, while required fields remain non-nullable.
-`wsrt config validate` performs side-effect-free structural, semantic, and graph
-checks. `wsrt config test` additionally resolves providers, verifies local
-working directories, and compiles execution plans without creating runtimes or
-starting nodes. Use `--plan` to inspect stages and opt into environment-dependent
-checks explicitly.
+## Getting started
 
-Editor support is provided by the deterministic Draft 2020-12 schema exported as
-`@wsrt/config/schema`. Inspect or export it with `wsrt config schema`; maintainers
-regenerate it with `pnpm config:schema` and enforce drift checks with
-`pnpm config:schema:check`. `$schema` is permitted for editor association and
-ignored by normalization.
+The npm prerelease is still being prepared. Once published, the intended
+installation is:
 
-MCP offers semantic graph, state, event, diagnostic, artifact, and lifecycle operations. Mutations require explicit permission. The dashboard package exposes read projections and lifecycle operations over the same control plane; it owns no orchestration state.
-
-## Example and extensions
-
-`examples/system-lifecycle` contains equivalent TypeScript and YAML definitions, two HTTP processes with readiness ordering, a composite application, a finite task, and a generated artifact.
-
-Runtime providers implement focused capability contracts. Plugins declare deterministic contributions. Integrations must not mutate control-plane internals or create independent lifecycle state.
-
-## Current limitations
-
-Node is the only published runtime. Rust can be built from a source checkout and explicitly registered for experiments, but no npm binary is distributed. State is in memory. Deployments, distributed operation, and durable state are deferred. See [`runtimes/rust/README.md`](./runtimes/rust/README.md) for source-build details.
-
-## Development
-
-```sh
-pnpm install
-pnpm lint
-pnpm check:architecture
-pnpm typecheck
-pnpm build
-pnpm test
-```
-## Operational workflow
-
-```sh
-pnpm install
-pnpm build
-node packages/cli/dist/index.js run validate
+```bash
+pnpm add -D wsrt@next
+pnpm exec wsrt init
+pnpm exec wsrt config validate
+pnpm exec wsrt up
 ```
 
-The root configuration dogfoods architecture checking, lint, type-checking, building and tests without recursively invoking WSRT. `wsrt status`, `health`, `operations`, `events` and `artifacts` read the authoritative snapshot; `start`, `stop`, `restart`, `run` and `cancel` create or control revisioned operations.
-
-Readiness and health are intentionally separate. Readiness admits dependants during startup. Health checks continue after startup and drive `checking`, `healthy`, `degraded` and `unhealthy` states, process-exit reporting, and configured restart policy. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the transition and backoff rules.
-
-Declared task outputs are invalidated before execution, verified inside the workspace, hashed with SHA-256 and recorded with size and timestamps. A failed or missing output remains invalid/failed even if an older file still exists.
-# Dashboard
-
-`@wsrt/plugin-dashboard` is the local control-plane interface. The root configuration registers it explicitly with host `127.0.0.1`, port `5177`, base path `/__wsrt`, and browser opening disabled. Dashboard startup does not implicitly start system nodes.
-
-Prerequisites and root startup:
+For development from this repository:
 
 ```bash
 pnpm install
 pnpm build
-pnpm dashboard
+node packages/cli/dist/index.js --help
 ```
 
-The command prints `WSRT Dashboard: http://127.0.0.1:5177/__wsrt`. You can also run:
+Common commands:
 
 ```bash
-pnpm add -D @wsrt/plugin-dashboard
-pnpm run wsrt exec --list
-pnpm run wsrt exec dashboard --config ./examples/system-lifecycle/wsrt.config.ts
-pnpm run wsrt exec dashboard -- --host 127.0.0.1 --port 5177 --base-path /__wsrt
-pnpm run wsrt exec dashboard -- --read-only --no-open
+wsrt init                    # Create a starter wsrt.yaml
+wsrt config validate         # Validate configuration without starting runtimes
+wsrt up                      # Start all long-running nodes
+wsrt status                  # Show lifecycle and health state
+wsrt inspect                 # Show the complete control-plane snapshot
+wsrt start service:api       # Start a node and its dependencies
+wsrt stop service:api        # Stop a node and its dependants
+wsrt run check               # Run a finite task
+wsrt down                    # Stop the workspace
 ```
 
-Configure the package explicitly with `plugins: [{ provider: "@wsrt/plugin-dashboard", options: { host: "127.0.0.1", port: 5177, basePath: "/__wsrt" } }]`.
+Use `wsrt --help` or `wsrt <command> --help` for the complete command reference.
 
-`wsrt run <task>` runs a finite graph task. `wsrt exec <executable>` runs an executable contribution from the explicitly configured plugin set. Arguments after `--` are validated by that plugin. Press Ctrl+C for graceful disposal.
+## Why not just…?
 
-Programmatic use is available through `startDashboard(plane, options)`; the returned `{ url, host, port, basePath, close }` handle owns only the dashboard server. See `plugins/dashboard/README.md`.
+### npm scripts
 
-Troubleshooting: a strict occupied port reports the bind failure; choose another port or use `--no-strict-port`. Custom base paths must begin with `/`. Failure to open a browser is only a warning—open the printed URL manually. A config-not-found error occurs before binding. Stopped nodes are expected until a dashboard action or `wsrt up` starts them. In restricted sandboxes, loopback listen may fail with `EPERM`; build and non-network tests remain usable.
+npm scripts are excellent entry points for individual commands. WSRT can run
+those same commands while adding dependency ordering, readiness, health,
+restart behavior, shared state, and coordinated shutdown.
+
+### Turborepo, Nx, and task runners
+
+Repository task runners are designed around build graphs, caching, and efficient
+finite work. WSRT focuses on the live runtime graph: processes that stay running,
+become ready, change health, restart, and must be cleaned up. A project can use a
+task runner for builds and WSRT for its local runtime.
+
+### Docker Compose
+
+Docker Compose is the natural choice when containers define the environment.
+WSRT operates local processes and framework integrations without making
+containers the runtime boundary. It can also launch commands that interact with
+an existing Compose environment.
+
+### PM2
+
+PM2 is a mature process manager, especially for supervising Node.js
+applications. WSRT models a broader local system with typed dependencies,
+readiness conditions, finite tasks, artifacts, plugins, and several control
+interfaces. For production Node.js process management, PM2 is the established
+choice.
+
+## How it works
+
+```text
+Configuration
+      ↓
+Normalization and validation
+      ↓
+Dependency graph
+      ↓
+Lifecycle plan
+      ↓
+Runtime execution
+      ↓
+Events, snapshots, CLI, and dashboard
+```
+
+Configuration is normalized into one system model and compiled into a graph.
+The lifecycle engine derives deterministic start and stop plans. A control plane
+then owns runtime processes, health, operations, events, and snapshots so every
+interface observes the same state.
+
+For deeper technical context, see [Architecture](./ARCHITECTURE.md).
+
+## Plugins and integrations
+
+Plugins extend WSRT without moving integration-specific behavior into the core.
+The dashboard is an optional plugin, and the Vite integration contributes Vite
+execution and readiness behavior. An MCP package exposes control-plane
+inspection and permitted operations to MCP clients.
+
+Plugins are loaded explicitly from workspace configuration. See
+[Extensions](./EXTENSIONS.md) and the individual
+[plugin documentation](./plugins).
+Future integrations are expected to use the same explicit plugin boundaries;
+they are not included in the current feature set.
+
+## Design principles
+
+- **Local-first:** manage the processes used to develop and operate a project
+  locally.
+- **Runtime-centric:** model running software, not only build commands.
+- **Explicit dependencies:** make startup and shutdown relationships visible.
+- **Deterministic lifecycle:** derive predictable plans from one graph.
+- **One source of runtime state:** keep CLI, dashboard, and integrations in
+  agreement.
+- **Plugin boundaries:** integrations extend the system without becoming hidden
+  core dependencies.
+- **Framework agnostic:** execute declared runtimes without requiring one
+  application framework.
+
+## Current status
+
+The Node.js runtime, configuration loaders, graph validation, lifecycle engine,
+process supervision, persistence providers, CLI, dashboard, Vite integration,
+and MCP interface are implemented and covered by integration tests. They are
+ready for source-based experimentation, not production adoption.
+
+The following areas remain provisional:
+
+- public APIs and configuration compatibility
+- package names and plugin contracts before the first release
+- macOS and Windows release validation
+- dashboard behavior and presentation
+- operational recovery across unusual process failures
+
+Rust runtime support is available for source-checkout experiments but is not
+part of the planned first npm prerelease. Remote orchestration, deployment,
+distributed state, and cloud persistence are not implemented.
+
+## Documentation
+
+- [First use](./docs/FIRST_USE.md)
+- [Architecture](./ARCHITECTURE.md)
+- [Extensions and plugins](./EXTENSIONS.md)
+- [Package publication status](./docs/PUBLICATION.md)
+- [Security](./docs/SECURITY.md)
+- [System lifecycle example](./examples/system-lifecycle)
+
+Package-specific READMEs document public APIs and ownership without duplicating
+the project overview.
+
+## Contributing
+
+WSRT is early enough that bug reports, use-case feedback, documentation
+corrections, and focused patches are especially useful. Before submitting a
+change, run:
+
+```bash
+pnpm validate
+```
+
+Keep changes incremental, preserve package and plugin boundaries, and include
+tests for lifecycle or compatibility behavior.

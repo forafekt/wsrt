@@ -18,7 +18,8 @@
 			"!**/.cache",
 			"!**/target",
 			"!**/generated",
-			"!**/*.generated.*"
+			"!**/*.generated.*",
+			"!packages/config/schema/wsrt.schema.json"
 		]
 	},
 	"formatter": {

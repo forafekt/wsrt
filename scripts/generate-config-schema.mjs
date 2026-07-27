@@ -7,7 +7,9 @@ import {
 } from "../packages/config/dist/index.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
 const file = path.join(root, "packages/config/schema/wsrt.schema.json");
+
 if (process.argv.includes("--check")) {
 	const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
 	if (!checkWsrtConfigJsonSchema(existing).ok)

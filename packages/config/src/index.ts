@@ -1,6 +1,7 @@
 export { configFileNames, discoverConfigFile, loadSystemDefinition } from "./loader.js";
 
 export type { JsonSchema } from "./schema.js";
+
 export {
 	checkWsrtConfigJsonSchema,
 	generateWsrtConfigJsonSchema,

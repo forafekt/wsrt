@@ -19,9 +19,28 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"description": "Runtime-neutral persistence contracts and records for WSRT.",
+	"private": false,
 	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "packages/persistence"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"persistence",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
 	"publishConfig": {
-		"access": "public"
+		"access": "public",
+		"provenance": true
 	},
 	"sideEffects": false
 }

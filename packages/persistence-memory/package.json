@@ -22,9 +22,28 @@
 		"@wsrt/persistence": "workspace:*"
 	},
 	"description": "Deterministic in-memory WSRT persistence provider.",
+	"private": false,
 	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "packages/persistence-memory"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"persistence",
+		"testing"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
 	"publishConfig": {
-		"access": "public"
+		"access": "public",
+		"provenance": true
 	},
 	"sideEffects": false
 }
