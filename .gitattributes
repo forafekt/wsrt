@@ -1,0 +1,6 @@
+# Store and check out every text file with LF, so formatting, generated-file
+# drift checks, and hashed artifacts do not depend on the checkout platform.
+* text eol=lf
+
+# `* text` above disables binary auto-detection, so binaries must opt out.
+*.png binary
