@@ -1,4 +1,9 @@
-import type { DependencyCondition, SystemGraph } from "@wsrt/graph";
+import {
+	type DependencyCondition,
+	defaultDependencyCondition,
+	type SystemEdge,
+	type SystemGraph,
+} from "@wsrt/graph";
 
 export const lifecycleStates = [
 	"discovered",
@@ -51,15 +56,60 @@ export type LifecycleOptions = {
 	timeoutMs?: number;
 	retries?: number;
 	onEvent?: (event: LifecycleEvent) => void;
+	/**
+	 * Resolves once `nodeId` is observed healthy. Health is owned by the control
+	 * plane, so `healthy` dependencies degrade to `ready` when this is absent.
+	 */
+	awaitHealthy?: (nodeId: string, signal: AbortSignal) => Promise<void>;
+	/** Bound on a `healthy` wait, which no other timeout covers. */
+	healthyTimeoutMs?: number;
 };
+
+/** Raised when a node never started because a dependency condition was not met. */
+export class LifecycleBlockedError extends Error {
+	constructor(
+		readonly nodeId: string,
+		readonly dependencyId: string,
+		readonly condition: DependencyCondition,
+		cause: unknown,
+	) {
+		super(
+			`${nodeId} is blocked: dependency ${dependencyId} did not reach "${condition}": ${
+				cause instanceof Error ? cause.message : String(cause)
+			}`,
+			{ cause },
+		);
+		this.name = "LifecycleBlockedError";
+	}
+}
+
+type Milestone = {
+	readonly promise: Promise<void>;
+	resolve(): void;
+	reject(cause: unknown): void;
+};
+
+type NodeMilestones = { readonly running: Milestone; readonly ready: Milestone };
+
+function milestone(): Milestone {
+	let resolve: () => void = () => {};
+	let reject: (cause: unknown) => void = () => {};
+	const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise;
+		reject = rejectPromise;
+	});
+	// A milestone may be observed by no dependant at all; never leave it unhandled.
+	void promise.catch(() => {});
+	return { promise, resolve, reject };
+}
 
 const transitions: Partial<Record<LifecycleState, readonly LifecycleState[]>> = {
 	discovered: ["resolving", "resolved", "invalid"],
-	resolved: ["validating", "preparing", "starting"],
+	resolved: ["validating", "preparing", "starting", "blocked"],
 	validating: ["resolved", "invalid"],
 	preparing: ["prepared", "failed"],
-	prepared: ["starting"],
-	blocked: ["starting", "stopping", "failed"],
+	prepared: ["starting", "blocked"],
+	blocked: ["starting", "stopping", "failed", "blocked"],
 	starting: ["running", "ready", "failed"],
 	running: ["ready", "healthy", "degraded", "unhealthy", "stopping", "failed"],
 	ready: ["healthy", "degraded", "unhealthy", "stopping", "failed"],
@@ -67,14 +117,15 @@ const transitions: Partial<Record<LifecycleState, readonly LifecycleState[]>> = 
 	degraded: ["healthy", "unhealthy", "stopping", "failed"],
 	unhealthy: ["healthy", "degraded", "stopping", "failed"],
 	stopping: ["stopped", "failed"],
-	stopped: ["starting", "destroying"],
-	failed: ["starting", "stopping", "destroying"],
+	stopped: ["starting", "destroying", "blocked"],
+	failed: ["starting", "stopping", "destroying", "blocked"],
 	destroying: ["destroyed", "failed"],
 };
 
 export class LifecycleEngine {
 	readonly #states = new Map<string, LifecycleState>();
 	readonly #handlers = new Map<string, LifecycleHandler>();
+	readonly #milestones = new Map<string, NodeMilestones>();
 	constructor(
 		readonly graph: SystemGraph,
 		readonly options: LifecycleOptions = {},
@@ -103,13 +154,36 @@ export class LifecycleEngine {
 		if (state !== "failed")
 			this.#transition(nodeId, "failed", correlationId, new Error("Process exited unexpectedly"));
 	}
+	/**
+	 * Starts `ids`, gating every node on the condition declared by each of its
+	 * dependency edges rather than on a shared stage barrier. Independent nodes
+	 * therefore proceed as soon as their own dependencies are satisfied.
+	 */
 	async start(
 		ids: Iterable<string> = this.#handlers.keys(),
 		signal = new AbortController().signal,
 	): Promise<void> {
-		const selected = [...ids];
-		for (const stage of this.graph.plan(selected).stages)
-			await Promise.all(stage.map((id) => this.#startOne(id, signal)));
+		const selected = new Set(ids);
+		// Scheduling is dependency-driven, but planning still owns cycle detection.
+		this.graph.plan([...selected]);
+		const pending = new Map<string, Promise<void>>();
+		const begin = (id: string): Promise<void> => {
+			let started = pending.get(id);
+			if (!started) {
+				started = this.#startOne(id, selected, signal, begin);
+				pending.set(id, started);
+				void started.catch(() => {});
+			}
+			return started;
+		};
+		const settled = await Promise.allSettled([...selected].map((id) => begin(id)));
+		const failures = settled.flatMap((result) =>
+			result.status === "rejected" ? [result.reason] : [],
+		);
+		if (!failures.length) return;
+		throw failures.length === 1
+			? failures[0]
+			: new AggregateError(failures, failures.map(describe).join("; "));
 	}
 	async stop(
 		ids: Iterable<string> = this.#handlers.keys(),
@@ -119,20 +193,83 @@ export class LifecycleEngine {
 		for (const stage of this.graph.shutdownPlan(selected).stages)
 			await Promise.all(stage.map((id) => this.#stopOne(id, signal)));
 	}
-	async #startOne(id: string, signal: AbortSignal): Promise<void> {
+	/** Waits for one dependency edge to satisfy its declared condition. */
+	async #awaitDependency(
+		edge: SystemEdge,
+		signal: AbortSignal,
+		begin: (id: string) => Promise<void>,
+	): Promise<void> {
+		const condition = edge.condition ?? defaultDependencyCondition;
+		const completion = begin(edge.to);
+		try {
+			// `completed` observes termination only; a failed dependency still admits.
+			if (condition === "completed") return void (await completion.catch(() => {}));
+			const milestones = this.#milestonesOf(edge.to);
+			if (condition === "started") return await milestones.running.promise;
+			// `ready` and `successful` are both the dependency's own readiness gate:
+			// a service that passed readiness, or a task that exited successfully.
+			await milestones.ready.promise;
+			if (condition !== "healthy" || !this.options.awaitHealthy) return;
+			await withTimeout(
+				this.options.awaitHealthy(edge.to, signal),
+				this.options.healthyTimeoutMs ?? 30_000,
+				signal,
+			);
+		} catch (cause) {
+			throw new LifecycleBlockedError(edge.from, edge.to, condition, cause);
+		}
+	}
+	#milestonesOf(id: string): NodeMilestones {
+		const existing = this.#milestones.get(id);
+		if (existing) return existing;
+		const created = { running: milestone(), ready: milestone() };
+		this.#milestones.set(id, created);
+		return created;
+	}
+	async #startOne(
+		id: string,
+		selected: ReadonlySet<string>,
+		signal: AbortSignal,
+		begin: (id: string) => Promise<void>,
+	): Promise<void> {
 		const handler = this.#handlers.get(id);
 		if (!handler) return;
+		// Publish this attempt's milestones before awaiting, so dependants that
+		// resolve `begin(id)` synchronously observe the current run.
+		const milestones = { running: milestone(), ready: milestone() };
+		this.#milestones.set(id, milestones);
+		const edges = this.graph
+			.dependencyEdges(id)
+			.filter((edge) => selected.has(edge.to) && this.#handlers.has(edge.to));
+		try {
+			await Promise.all(edges.map((edge) => this.#awaitDependency(edge, signal, begin)));
+		} catch (cause) {
+			const blocked =
+				cause instanceof LifecycleBlockedError && cause.nodeId === id
+					? cause
+					: new LifecycleBlockedError(id, "unknown", defaultDependencyCondition, cause);
+			const correlationId = crypto.randomUUID();
+			if (transitions[this.state(id)]?.includes("blocked"))
+				this.#transition(id, "blocked", correlationId, blocked);
+			milestones.running.reject(blocked);
+			milestones.ready.reject(blocked);
+			throw blocked;
+		}
 		const correlationId = crypto.randomUUID();
 		this.#transition(id, "starting", correlationId);
 		try {
 			await this.#attempt(() => handler.start({ signal, nodeId: id, correlationId }), signal);
 			this.#transition(id, "running", correlationId);
+			milestones.running.resolve();
 			if (handler.ready) {
 				const ready = handler.ready;
 				await this.#attempt(() => ready({ signal, nodeId: id, correlationId }), signal);
 				this.#transition(id, "ready", correlationId);
 			}
+			milestones.ready.resolve();
 		} catch (cause) {
+			milestones.running.reject(cause);
+			milestones.ready.reject(cause);
 			let failure = cause;
 			// A start may already own resources even when readiness or the operation is cancelled.
 			// Roll it back with a fresh signal so cancellation cannot prevent cleanup.
@@ -161,6 +298,7 @@ export class LifecycleEngine {
 		try {
 			await this.#attempt(() => handler.stop({ signal, nodeId: id, correlationId }), signal);
 			this.#transition(id, "stopped", correlationId);
+			this.#milestones.delete(id);
 		} catch (cause) {
 			if (this.state(id) !== "failed") this.#transition(id, "failed", correlationId, cause);
 			throw cause;
@@ -198,6 +336,10 @@ export class LifecycleEngine {
 	}
 }
 
+function describe(cause: unknown): string {
+	return cause instanceof Error ? cause.message : String(cause);
+}
+
 async function withTimeout<T>(
 	promise: Promise<T>,
 	timeoutMs: number,
@@ -227,5 +369,7 @@ async function withTimeout<T>(
 		signal.removeEventListener("abort", abort);
 	}
 }
+
+export { defaultDependencyCondition };
 
 export type { DependencyCondition };

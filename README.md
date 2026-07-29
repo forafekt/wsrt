@@ -116,6 +116,25 @@ wsrt up
 WSRT waits for the API health endpoint before starting the frontend. When the
 system is stopped, dependants are terminated before their dependencies.
 
+### Dependency conditions
+
+Each dependency declares how far its dependency must progress before the
+dependant may start. Nodes wait per dependency, so unrelated work is not held
+back by a shared stage.
+
+| Condition    | The dependant starts once the dependency                     |
+| ------------ | ------------------------------------------------------------ |
+| `started`    | has been launched, without waiting for readiness             |
+| `ready`      | has passed its readiness check (the default)                  |
+| `healthy`    | has additionally reached `healthy` under its health checks    |
+| `successful` | is a task that finished successfully                          |
+| `completed`  | is a task that finished, successfully or not                  |
+
+Omitting `condition` means `ready`. A dependant whose condition is never met is
+reported as `blocked` rather than started. Conditions that cannot be satisfied —
+`successful` or `completed` on a long-running node, `healthy` on a task — are
+configuration errors and are reported by `wsrt config validate`.
+
 ## Getting started
 
 The npm prerelease is still being prepared. Once published, the intended

@@ -66,6 +66,10 @@ export class WsrtControlPlane {
 		Omit<NodeSnapshot, "id" | "kind" | "state" | "health" | "runtime" | "pid">
 	>();
 	readonly #monitors = new Map<string, AbortController>();
+	readonly #healthWaiters = new Map<
+		string,
+		Set<{ resolve(): void; reject(cause: unknown): void }>
+	>();
 	readonly #generations = new Map<string, number>();
 	readonly #restartControllers = new Map<string, AbortController>();
 	readonly #operationControllers = new Map<string, AbortController>();
@@ -166,6 +170,7 @@ export class WsrtControlPlane {
 				this.#persistEvent(event);
 				this.#changed();
 			},
+			awaitHealthy: (nodeId, signal) => this.#awaitHealthy(nodeId, signal),
 		});
 		for (const executable of loaded.definition.executables)
 			this.#engine.register(executable.id, this.#handler(executable));
@@ -445,6 +450,8 @@ export class WsrtControlPlane {
 		for (const controller of this.#monitors.values()) controller.abort();
 		for (const controller of this.#restartControllers.values())
 			controller.abort(new DOMException("Control plane disposed", "AbortError"));
+		for (const id of [...this.#healthWaiters.keys()])
+			this.#settleHealthWaiters(id, new DOMException("Control plane disposed", "AbortError"));
 		this.#monitors.clear();
 		if (this.#engine) await this.#engine.stop(this.#executableIds()).catch(() => {});
 		await Promise.all([...this.#runtimes.values()].map((runtime) => runtime.dispose()));
@@ -804,7 +811,48 @@ export class WsrtControlPlane {
 		this.#monitors.get(id)?.abort();
 		this.#monitors.delete(id);
 	}
+	/**
+	 * Resolves once `nodeId` is observed healthy, backing `dependsOn.condition:
+	 * healthy`. Health is control-plane state, so the lifecycle asks rather than
+	 * observing it directly.
+	 */
+	#awaitHealthy(nodeId: string, signal: AbortSignal): Promise<void> {
+		if ((this.#health.get(nodeId) ?? "unknown") === "healthy") return Promise.resolve();
+		if (this.#disposed)
+			return Promise.reject(
+				new Error(`Control plane was disposed while waiting for ${nodeId} to become healthy`),
+			);
+		return new Promise<void>((resolve, reject) => {
+			const waiters = this.#healthWaiters.get(nodeId) ?? new Set();
+			this.#healthWaiters.set(nodeId, waiters);
+			const release = () => {
+				waiters.delete(waiter);
+				if (!waiters.size) this.#healthWaiters.delete(nodeId);
+				signal.removeEventListener("abort", abort);
+			};
+			const waiter = {
+				resolve: () => {
+					release();
+					resolve();
+				},
+				reject: (cause: unknown) => {
+					release();
+					reject(cause);
+				},
+			};
+			const abort = () =>
+				waiter.reject(signal.reason ?? new DOMException("Operation cancelled", "AbortError"));
+			waiters.add(waiter);
+			if (signal.aborted) abort();
+			else signal.addEventListener("abort", abort, { once: true });
+		});
+	}
+	#settleHealthWaiters(id: string, cause?: unknown): void {
+		for (const waiter of [...(this.#healthWaiters.get(id) ?? [])])
+			cause === undefined ? waiter.resolve() : waiter.reject(cause);
+	}
 	#setHealth(id: string, health: HealthState) {
+		if (health === "healthy") this.#settleHealthWaiters(id);
 		const old = this.#health.get(id) ?? "unknown";
 		if (old === health) return;
 		this.#health.set(id, health);
@@ -843,6 +891,10 @@ export class WsrtControlPlane {
 		try {
 			this.#engine?.processExited(item.id, expected, correlationId);
 		} catch {}
+		this.#settleHealthWaiters(
+			item.id,
+			new Error(`Process ${item.name} exited before becoming healthy`),
+		);
 		this.#setHealth(item.id, expected ? "unknown" : "unhealthy");
 		this.#event(
 			expected ? "node.process.exited" : "node.process.unexpected-exit",
@@ -1309,7 +1361,11 @@ export class WsrtControlPlane {
 					affected.map((nodeId) =>
 						Object.freeze({
 							nodeId,
-							status: cancelled ? ("cancelled" as const) : ("failed" as const),
+							status: cancelled
+								? ("cancelled" as const)
+								: this.getNodeState(nodeId) === "blocked"
+									? ("blocked" as const)
+									: ("failed" as const),
 							changed: false,
 							diagnostics: Object.freeze([diagnostic]),
 						}),

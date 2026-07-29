@@ -286,7 +286,8 @@
                       "healthy",
                       "completed",
                       "successful"
-                    ]
+                    ],
+                    "default": "ready"
                   }
                 },
                 "additionalProperties": false
@@ -389,7 +390,8 @@
                       "healthy",
                       "completed",
                       "successful"
-                    ]
+                    ],
+                    "default": "ready"
                   }
                 },
                 "additionalProperties": false
@@ -504,7 +506,8 @@
                       "healthy",
                       "completed",
                       "successful"
-                    ]
+                    ],
+                    "default": "ready"
                   }
                 },
                 "additionalProperties": false

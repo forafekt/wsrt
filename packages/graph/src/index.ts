@@ -43,6 +43,12 @@ export type SystemEdgeKind = (typeof edgeKinds)[number];
 
 export type DependencyCondition = "started" | "ready" | "healthy" | "completed" | "successful";
 
+/**
+ * Condition applied to a dependency that declares none. Readiness is the
+ * conservative default: a dependant starts once its dependency is usable.
+ */
+export const defaultDependencyCondition: DependencyCondition = "ready";
+
 export type SystemEdge = {
 	from: string;
 	to: string;
@@ -92,6 +98,10 @@ export class SystemGraph {
 	}
 	dependencies(id: string): readonly SystemNode[] {
 		return this.neighbors(id, "out", "depends-on");
+	}
+	/** Dependency edges of `id`, preserving the declared condition each one gates on. */
+	dependencyEdges(id: string): readonly SystemEdge[] {
+		return this.#edges.filter((edge) => edge.kind === "depends-on" && edge.from === id);
 	}
 	consumers(id: string): readonly SystemNode[] {
 		return this.neighbors(id, "in", "depends-on");
