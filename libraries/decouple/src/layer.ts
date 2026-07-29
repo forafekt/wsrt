@@ -1,4 +1,4 @@
-import type { ConfigSource } from "./decouple.ts";
+import type { ConfigSource } from "./decouple.js";
 
 export function layer(...sources: ConfigSource[]): ConfigSource {
 	return () => {

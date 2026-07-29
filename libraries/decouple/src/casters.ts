@@ -1,4 +1,4 @@
-import { DecoupleError } from "./errors.ts";
+import { DecoupleError } from "./errors.js";
 
 export interface CastFn<T> {
 	(value: string): T;

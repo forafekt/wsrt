@@ -1,5 +1,5 @@
-import type { DecoupledConfig } from "./decouple.ts";
-import type { DecoupledVar } from "./var.ts";
+import type { DecoupledConfig } from "./decouple.js";
+import type { DecoupledVar } from "./var.js";
 
 export type Schema<T> = {
 	[K in keyof T]: (v: DecoupledVar) => T[K];

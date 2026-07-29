@@ -1,5 +1,5 @@
-import type { ConfigSource } from "./decouple.ts";
-import { DecoupleError } from "./errors.ts";
+import type { ConfigSource } from "./decouple.js";
+import { DecoupleError } from "./errors.js";
 
 export function layerStrict(...sources: ConfigSource[]): ConfigSource {
 	return () => {

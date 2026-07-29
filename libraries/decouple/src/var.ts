@@ -1,5 +1,5 @@
-import { type CastFn, casters } from "./casters.ts";
-import { DecoupleError } from "./errors.ts";
+import { type CastFn, casters } from "./casters.js";
+import { DecoupleError } from "./errors.js";
 
 export class DecoupledVar {
 	constructor(

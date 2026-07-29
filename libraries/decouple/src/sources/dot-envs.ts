@@ -1,4 +1,4 @@
-import { fromDotEnv } from "./dot-env.ts";
+import { fromDotEnv } from "./dot-env.js";
 
 export function unstable_fromDotEnvs(
 	mode: string,
@@ -42,21 +42,21 @@ function getEnvFilesForMode(mode: string, envDir: string | false): string[] {
 	return [];
 }
 
-function _resolveEnvPrefix({ envPrefix = "wsrt_" }: { envPrefix?: string | string[] }): string[] {
-	envPrefix = typeof envPrefix === "string" ? envPrefix.split(",") : envPrefix;
-	if (envPrefix.includes("")) {
-		throw new Error(
-			`envPrefix option contains value '', which could lead unexpected exposure of sensitive information.`,
-		);
-	}
-	if (envPrefix.some((prefix) => /\s/.test(prefix))) {
-		// eslint-disable-next-line no-console
-		console.warn(
-			`[wsrt] Warning: envPrefix option contains values with whitespace, which does not work in practice.`,
-		);
-	}
-	return envPrefix;
-}
+// function _resolveEnvPrefix({ envPrefix = "wsrt_" }: { envPrefix?: string | string[] }): string[] {
+// 	envPrefix = typeof envPrefix === "string" ? envPrefix.split(",") : envPrefix;
+// 	if (envPrefix.includes("")) {
+// 		throw new Error(
+// 			`envPrefix option contains value '', which could lead unexpected exposure of sensitive information.`,
+// 		);
+// 	}
+// 	if (envPrefix.some((prefix) => /\s/.test(prefix))) {
+// 		// eslint-disable-next-line no-console
+// 		console.warn(
+// 			`[wsrt] Warning: envPrefix option contains values with whitespace, which does not work in practice.`,
+// 		);
+// 	}
+// 	return envPrefix;
+// }
 
 // TODO: Move to utils
 function join(base: string, ...paths: string[]): string {

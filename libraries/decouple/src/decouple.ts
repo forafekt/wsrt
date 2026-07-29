@@ -1,6 +1,6 @@
-import { DecoupleError } from "./errors.ts";
-import { layer } from "./layer.ts";
-import { DecoupledVar } from "./var.ts";
+import { DecoupleError } from "./errors.js";
+import { layer } from "./layer.js";
+import { DecoupledVar } from "./var.js";
 
 export type ConfigValues = Record<string, string | undefined>;
 

@@ -1,4 +1,4 @@
-import { DecoupleError } from "../errors.ts";
+import { DecoupleError } from "../errors.js";
 
 export function unstable_fromJsonFile(path: string | undefined) {
 	let cache: Record<string, string> | null = null;

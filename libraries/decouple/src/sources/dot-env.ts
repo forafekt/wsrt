@@ -1,4 +1,5 @@
-import { DecoupleError } from "../errors.ts";
+import * as fs from "node:fs";
+import { DecoupleError } from "../errors.js";
 
 export function fromDotEnv(path = ".env") {
 	let cache: Record<string, string> | null = null;
@@ -8,10 +9,10 @@ export function fromDotEnv(path = ".env") {
 
 		try {
 			// TODO: later to migrate to WSRT auto runtime detection, for now we will assume Deno is available in the environment
-			if (typeof Deno === "undefined") {
-				throw new Error("Deno is not available in this environment.");
-			}
-			const text = Deno.readTextFileSync(path);
+			// if (typeof Deno === "undefined") {
+			// 	throw new Error("Deno is not available in this environment.");
+			// }
+			const text = fs.readFileSync(path, "utf-8");
 			const lines = text.split("\n");
 
 			const values: Record<string, string> = {};
@@ -39,7 +40,7 @@ export function fromDotEnv(path = ".env") {
 			cache = values;
 			return values;
 		} catch (err) {
-			if (err instanceof Deno.errors.NotFound) {
+			if (err instanceof Error && (err as any).code === "ENOENT") {
 				cache = {};
 				return cache;
 			}
@@ -49,12 +50,12 @@ export function fromDotEnv(path = ".env") {
 	};
 }
 
-let Deno: any;
+// let Deno: any;
 
-if (typeof (globalThis as any).Deno !== "undefined") {
-	Deno = (globalThis as any).Deno;
-} else if (typeof window !== "undefined" && typeof (window as any).Deno !== "undefined") {
-	Deno = (window as any).Deno;
-} else if (typeof global !== "undefined" && typeof (global as any).Deno !== "undefined") {
-	Deno = (global as any).Deno;
-}
+// if (typeof (globalThis as any).Deno !== "undefined") {
+// 	Deno = (globalThis as any).Deno;
+// } else if (typeof window !== "undefined" && typeof (window as any).Deno !== "undefined") {
+// 	Deno = (window as any).Deno;
+// } else if (typeof global !== "undefined" && typeof (global as any).Deno !== "undefined") {
+// 	Deno = (global as any).Deno;
+// }
