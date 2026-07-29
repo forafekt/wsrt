@@ -1,3 +1,5 @@
+import { EventEmitter, type EventEmitterOptions } from "@wsrt/event-targets";
+
 export type StructuredEvent<Type extends string = string, Payload = unknown> = {
 	id: string;
 	sequence?: number;
@@ -19,12 +21,23 @@ export type EventQuery = {
 	since?: string;
 };
 
-export class EventJournal<Event extends StructuredEvent = StructuredEvent> extends EventTarget {
+export interface EventJournalOptions extends EventEmitterOptions {
+	/**
+	 * The maximum number of events to retain in the journal.
+	 * When the maximum size is reached, the oldest events will be discarded.
+	 */
+	maximumSize?: number;
+}
+
+export class EventJournal<Event extends StructuredEvent = StructuredEvent> extends EventEmitter {
 	readonly #history: Event[] = [];
 	#sequence = 0;
-	constructor(readonly maximumSize = 1_000) {
-		super();
+	maximumSize: number;
+	constructor(options: EventJournalOptions = {}) {
+		super(options);
+		const maximumSize = options.maximumSize ?? options.maxListeners ?? 1_000;
 		if (maximumSize < 1) throw new Error("Event journal maximum size must be positive");
+		this.maximumSize = maximumSize;
 	}
 	publish(input: Event): Event {
 		const event = Object.freeze({
