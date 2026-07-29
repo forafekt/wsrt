@@ -1,5 +1,5 @@
 import path from "node:path";
-import { type DependencyCondition, SystemGraph } from "@wsrt/graph";
+import { type DependencyCondition, defaultDependencyCondition, SystemGraph } from "@wsrt/graph";
 
 export type SourceReference = {
 	file: string;
@@ -419,10 +419,11 @@ function dependencies(
 	value?: ExecutableInput["dependsOn"],
 ): { id: string; condition: DependencyCondition }[] {
 	if (!value) return [];
-	if (Array.isArray(value)) return value.map((id) => ({ id, condition: "started" }));
+	if (Array.isArray(value))
+		return value.map((id) => ({ id, condition: defaultDependencyCondition }));
 	return Object.entries(value).map(([id, item]) => ({
 		id,
-		condition: item.condition ?? "started",
+		condition: item.condition ?? defaultDependencyCondition,
 	}));
 }
 
@@ -444,14 +445,39 @@ function references(definition: NormalizedSystemDefinition): SystemDiagnostic[] 
 				item.source,
 				`${item.source.path}.runtime`,
 			);
-		for (const dep of item.dependencies)
-			if (!names.has(dep.id))
+		for (const dep of item.dependencies) {
+			const target = definition.executables.find((candidate) => candidate.name === dep.id);
+			if (!target) {
 				push(
 					"config.dependency_missing",
 					`Unknown dependency "${dep.id}"`,
 					item.source,
 					`${item.source.path}.dependsOn.${dep.id}`,
 				);
+				continue;
+			}
+			const conditionPath = `${item.source.path}.dependsOn.${dep.id}.condition`;
+			// Only finite work terminates, and only long-running work reports health.
+			if (
+				(dep.condition === "completed" || dep.condition === "successful") &&
+				target.kind !== "task"
+			)
+				result.push({
+					code: "config.dependency_condition_unsatisfiable",
+					severity: "error",
+					message: `Condition "${dep.condition}" requires a task; "${dep.id}" is a ${target.kind} and never terminates`,
+					source: { ...item.source, path: conditionPath },
+					suggestion: 'Use "ready" or "healthy" for long-running dependencies.',
+				});
+			if (dep.condition === "healthy" && target.kind === "task")
+				result.push({
+					code: "config.dependency_condition_unsatisfiable",
+					severity: "error",
+					message: `Condition "healthy" requires a long-running node; task "${dep.id}" never reports health`,
+					source: { ...item.source, path: conditionPath },
+					suggestion: 'Use "successful" to wait for the task to succeed.',
+				});
+		}
 		if (item.kind === "task") {
 			const seen = new Set<string>();
 			for (const [index, output] of item.outputs.entries()) {

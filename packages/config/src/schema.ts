@@ -43,6 +43,7 @@ export function generateWsrtConfigJsonSchema(): JsonSchema {
 						properties: {
 							condition: {
 								enum: ["started", "ready", "healthy", "completed", "successful"],
+								default: "ready",
 							},
 						},
 						additionalProperties: false,
