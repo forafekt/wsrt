@@ -1,4 +1,4 @@
-import { EventEmitter, type EventEmitterOptions } from "@wsrt/event-targets";
+import { EventEmitter, type EventEmitterOptions, RuntimeEvent } from "@wsrt/event-targets";
 
 export type StructuredEvent<Type extends string = string, Payload = unknown> = {
 	id: string;
@@ -47,7 +47,7 @@ export class EventJournal<Event extends StructuredEvent = StructuredEvent> exten
 		this.#history.push(event);
 		if (this.#history.length > this.maximumSize)
 			this.#history.splice(0, this.#history.length - this.maximumSize);
-		this.dispatchEvent(new CustomEvent(event.type, { detail: event }));
+		this.dispatchEvent(new RuntimeEvent(event.type, { detail: event }));
 		return event;
 	}
 	subscribe<Type extends Event["type"]>(
