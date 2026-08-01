@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { NormalizedExecutable, NormalizedSystemDefinition } from "@wsrt/config";
+import type { NormalizedSystemDefinition } from "@wsrt/config";
 import type { ExecutionPlan, SystemNode } from "@wsrt/graph";
 import type { LifecycleState } from "@wsrt/lifecycle";
 import { type PersistenceProvider, pluginStorage } from "@wsrt/persistence";
@@ -25,8 +25,8 @@ import type {
 import { required } from "./utils.js";
 
 export class WsrtControlPlane {
-	readonly #state = new ControlPlaneState();
-	readonly #selector = new GraphSelector(this.#state);
+	readonly #state: ControlPlaneState;
+	readonly #selector: GraphSelector;
 	readonly #snapshot: SnapshotManager;
 	readonly #persistence: PersistenceManager;
 	readonly #events: EventJournal;
@@ -36,9 +36,13 @@ export class WsrtControlPlane {
 	readonly #completion: CompletionService;
 	readonly #plugins: PluginManager;
 	readonly #execution: ExecutionManager;
-	readonly #artifacts = new ArtifactManager(this.#state);
+	readonly #artifacts: ArtifactManager;
 
 	constructor(readonly options: ControlPlaneOptions = {}) {
+		this.#state = new ControlPlaneState();
+
+		this.#selector = new GraphSelector(this.#state);
+
 		this.#snapshot = new SnapshotManager(
 			this.#state,
 			(id) => this.getNodeState(id),
@@ -69,15 +73,27 @@ export class WsrtControlPlane {
 			},
 		);
 
-		this.#execution = new ExecutionManager(
-			this.#state,
-			this.#events,
-			this.#health,
-			this.#artifacts,
-			this.#plugins,
-			() => this.#snapshot.changed(),
-			() => this.#pluginContext(),
-		);
+		this.#artifacts = new ArtifactManager({
+			state: this.#state,
+			events: this.#events,
+			changed: () => this.#snapshot.changed(),
+			pluginContext: () => this.#pluginContext(),
+			providerContext: (item, contributionId, signal) =>
+				this.#execution.providerContext(item, contributionId, signal),
+			operationId: (id) => this.#state.nodeOperations.get(id) ?? id,
+		});
+
+		this.#execution = new ExecutionManager({
+			artifacts: this.#artifacts,
+			state: this.#state,
+			events: this.#events,
+			health: this.#health,
+			changed: () => this.#snapshot.changed(),
+			pluginContext: () => this.#pluginContext(),
+			restartNode: async (id) => {
+				await this.restart([id]);
+			},
+		});
 
 		this.#loader = new ControlPlaneLoader(
 			this.#state,
@@ -154,10 +170,6 @@ export class WsrtControlPlane {
 		return this.#operations.cancel(id);
 	}
 
-	// pluginContributions<Kind extends keyof PluginContributions>(kind: Kind) {
-	// 	return required(this.#state.pluginSession, "Control plane is not loaded").contributions(kind);
-	// }
-
 	pluginContributions<Kind extends keyof PluginContributions>(kind: Kind) {
 		return this.#plugins.contributions(kind);
 	}
@@ -223,16 +235,23 @@ export class WsrtControlPlane {
 		operationId: string = crypto.randomUUID(),
 	): SubmittedOperation {
 		this.#state.submittedOperationIds.push(operationId);
-		const execution =
-			type === "start"
-				? this.start(ids)
-				: type === "stop"
-					? this.stop(ids)
-					: type === "restart"
-						? this.restart(ids)
-						: this.runTask(required(ids[0], "Task operation requires one task"));
+		const execution = this.getExecution(type, ids);
 		void execution.catch(() => {});
+
 		return { operationId, nodes: ids, status: "accepted" };
+	}
+
+	async getExecution(type: "start" | "stop" | "restart" | "task", ids: readonly string[]) {
+		const executions = {
+			start: this.start(ids),
+			stop: this.stop(ids),
+			restart: this.restart(ids),
+			task: this.runTask(required(ids[0], "Task operation requires one task")),
+		};
+
+		const execution: Promise<OperationResult> = executions[type];
+
+		return execution;
 	}
 
 	hasActiveProcesses(): boolean {
@@ -251,13 +270,6 @@ export class WsrtControlPlane {
 		await this.#state.pluginSession?.dispose(this.#pluginContext());
 		this.#snapshot.clear();
 		await this.#persistence.dispose();
-	}
-
-	// TODO: Move the original #handler implementation into an ExecutionManager.
-	#handler(_item: NormalizedExecutable) {
-		// Move the original #handler implementation into an ExecutionManager.
-		// It should receive ArtifactManager and HealthManager as collaborators.
-		throw new Error("ExecutionManager wiring required");
 	}
 
 	#pluginContext(): PluginContext {

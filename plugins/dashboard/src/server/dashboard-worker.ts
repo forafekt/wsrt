@@ -31,7 +31,7 @@ function sendCommand(command: unknown): Promise<unknown> {
 	});
 }
 
-const plane = {
+const planeMod = {
 	snapshot: () => snapshot.controlPlane,
 	definition: () => snapshot.configuration,
 	graph: () => ({ toJSON: () => snapshot.graph }),
@@ -79,7 +79,11 @@ const plane = {
 	},
 } as unknown as WsrtControlPlane;
 
-const handle = await startDashboardInProcess(plane, workerData.options as DashboardOptions);
+// const plane = await createControlPlane();
+
+// Object.assign(plane, planeMod);
+
+const handle = await startDashboardInProcess(planeMod, workerData.options as DashboardOptions);
 
 port.postMessage({
 	type: "ready",

@@ -14,6 +14,7 @@ export function dashboardSnapshot(plane: WsrtControlPlane) {
 			payload: boundedValue(event.payload),
 		})),
 		configuration: safeSerializable(plane.definition()),
+		contributions: safeSerializable(plane.pluginContributions("dashboard")),
 	};
 }
 

@@ -10,6 +10,13 @@ export class GraphSelector {
 		const match = definition.executables.find(
 			(item) => item.id === value || item.name === value || processShorthand(item.id) === value,
 		);
+
+		console.log({
+			value,
+			kind,
+			definition,
+			match,
+		});
 		if (!match || (kind && match.kind !== kind))
 			throw new Error(`Unknown ${kind ?? "executable"}: ${value}`);
 		return match.id;

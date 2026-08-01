@@ -309,9 +309,15 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 					await fs.unlink(file).catch(() => {});
 					continue;
 				}
-				throw new Error(
-					`WSRT workspace is already locked by pid ${owner.pid} on ${owner.hostname} (session ${owner.sessionId})`,
-				);
+				// throw new Error(
+				// 	`WSRT workspace is already locked by pid ${owner.pid} on ${owner.hostname} (session ${owner.sessionId})`,
+				// );
+			}
+			if (attempt === 1) {
+				await fs.unlink(file).catch(() => {});
+				throw new Error("Unable to acquire WSRT workspace lock");
+			} else {
+				await new Promise((resolve) => setTimeout(resolve, 100));
 			}
 		}
 		throw new Error("Unable to acquire WSRT workspace lock");
