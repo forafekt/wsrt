@@ -43,7 +43,6 @@ export class ControlPlaneState {
 	readonly manualStops = new Set<string>();
 	readonly nodeOperations = new Map<string, string>();
 	readonly operationControllers = new Map<string, AbortController>();
-	readonly submittedOperationIds: string[] = [];
 
 	disposed = false;
 	revision = 0;

@@ -31,6 +31,32 @@ Startup and readiness failures run cleanup with an independent signal, so cancel
 cannot suppress rollback. Health monitors and restart timers are cancelled before
 termination, and intentional stops are excluded from restart policy.
 
-Transports that need an immediate acknowledgement can call `submit()`. It returns the
-authoritative operation ID after registration while execution continues in the control
-plane; snapshots and subscriptions expose progress and structured terminal failures.
+There is one composition root: `createControlPlane(options)`. The CLI, dashboard host,
+MCP transport, and programmatic consumers all receive that same control plane. The
+dashboard worker is only a serialized transport/view proxy; it does not construct a
+second control plane or implement lifecycle policy.
+
+Commands have explicit semantics and accepted entity kinds:
+
+```ts
+plane.submit({ type: "node.start", nodeIds: ["application:desktop"] });
+await plane.execute({ type: "task.run", taskId: "task:build" });
+await plane.execute({ type: "operation.cancel", operationId });
+```
+
+`node.start`, `node.stop`, and `node.restart` accept configured executable nodes.
+`task.run` accepts only tasks. Canonical IDs take precedence; shorthand/name matches
+must be unique, and kind mismatches are structured domain errors. Selection never
+guesses execution intent.
+
+Transports that need an immediate acknowledgement call `submit(command)`. Validation
+and operation registration happen before the acknowledgement; execution continues in
+the control plane and snapshots expose progress or terminal failure. `execute(command)`
+awaits the same command path.
+
+The retained implementation components have non-overlapping ownership: the loader
+composes definitions, plugins, providers, graph, and lifecycle engine; the selector only
+resolves graph identities; the lifecycle engine orders transitions; the execution
+manager owns runtime handles and cleanup; the operation manager owns conflicts,
+cancellation, and operation records; artifact and health managers own their respective
+state machines; snapshot, event, and persistence managers publish and store state.

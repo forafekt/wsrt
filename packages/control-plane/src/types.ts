@@ -47,6 +47,48 @@ export type SubmittedOperation = {
 	status: "accepted";
 };
 
+export type ControlPlaneCommand =
+	| { type: "node.start"; nodeIds: readonly string[] }
+	| { type: "node.stop"; nodeIds: readonly string[] }
+	| { type: "node.restart"; nodeIds: readonly string[] }
+	| { type: "task.run"; taskId: string }
+	| { type: "operation.cancel"; operationId: string };
+
+export type ControlPlaneCommandResult =
+	| OperationResult
+	| { operationId: string; cancelled: boolean };
+
+export type SerializedControlPlaneError = Readonly<{
+	code: string;
+	message: string;
+	details?: Readonly<Record<string, unknown>>;
+}>;
+
+export class ControlPlaneError extends Error {
+	readonly name = "ControlPlaneError";
+
+	constructor(
+		readonly code: string,
+		message: string,
+		readonly details?: Readonly<Record<string, unknown>>,
+	) {
+		super(message);
+	}
+}
+
+export function serializeControlPlaneError(cause: unknown): SerializedControlPlaneError {
+	if (cause instanceof ControlPlaneError)
+		return {
+			code: cause.code,
+			message: cause.message,
+			...(cause.details ? { details: cause.details } : {}),
+		};
+	return {
+		code: "control_plane.internal",
+		message: cause instanceof Error ? cause.message : String(cause),
+	};
+}
+
 export type NodeOperationResult = {
 	nodeId: string;
 	status:

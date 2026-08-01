@@ -1,5 +1,5 @@
 import { parentPort, workerData } from "node:worker_threads";
-import type { WsrtControlPlane } from "@wsrt/control-plane";
+import type { ControlPlaneCommand, WsrtControlPlane } from "@wsrt/control-plane";
 import type { DashboardOptions } from "../plugin/index.js";
 import { startDashboardInProcess } from "./dashboard-server.js";
 
@@ -31,7 +31,9 @@ function sendCommand(command: unknown): Promise<unknown> {
 	});
 }
 
-const planeMod = {
+// Read-only snapshot projection plus correlated command transport. The authoritative
+// control plane remains in the parent thread so this worker cannot duplicate lifecycle state.
+const dashboardTransportClient = {
 	snapshot: () => snapshot.controlPlane,
 	definition: () => snapshot.configuration,
 	graph: () => ({ toJSON: () => snapshot.graph }),
@@ -68,22 +70,18 @@ const planeMod = {
 		listener(snapshot.controlPlane);
 		return () => subscribers.delete(listener);
 	},
-	submit(type: string, nodeIds: string[]) {
-		const operationId = crypto.randomUUID();
-		void sendCommand({ type, operationId, nodeIds }).catch(() => {});
-		return { operationId, nodes: nodeIds, status: "accepted" };
+	submit(command: Exclude<ControlPlaneCommand, { type: "operation.cancel" }>) {
+		return sendCommand(command);
 	},
-	cancelOperation(operationId: string) {
-		void sendCommand({ type: "cancel", operationId }).catch(() => {});
-		return true;
+	execute(command: ControlPlaneCommand) {
+		return sendCommand(command);
 	},
 } as unknown as WsrtControlPlane;
 
-// const plane = await createControlPlane();
-
-// Object.assign(plane, planeMod);
-
-const handle = await startDashboardInProcess(planeMod, workerData.options as DashboardOptions);
+const handle = await startDashboardInProcess(
+	dashboardTransportClient,
+	workerData.options as DashboardOptions,
+);
 
 port.postMessage({
 	type: "ready",
@@ -98,7 +96,11 @@ port.on("message", async (message) => {
 		const waiter = pending.get(message.id);
 		if (!waiter) return;
 		pending.delete(message.id);
-		message.error ? waiter.reject(new Error(message.error)) : waiter.resolve(message.value);
+		if (message.error) {
+			const error = new Error(message.error.message);
+			Object.assign(error, message.error);
+			waiter.reject(error);
+		} else waiter.resolve(message.value);
 	} else if (message.type === "control") {
 		try {
 			if (message.action === "disconnect") handle.disconnectClients();

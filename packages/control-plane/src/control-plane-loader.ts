@@ -14,6 +14,9 @@ export class ControlPlaneLoader {
 		private readonly persistence: PersistenceManager,
 		private readonly events: EventJournal,
 		private readonly pluginContext: () => PluginContext,
+		private readonly initializeArtifacts: (
+			definition: NonNullable<ControlPlaneState["definition"]>,
+		) => void,
 		private readonly handlerFor: (item: NormalizedExecutable) => LifecycleHandler,
 		private readonly awaitHealthy: (id: string, signal: AbortSignal) => Promise<void>,
 	) {}
@@ -27,6 +30,7 @@ export class ControlPlaneLoader {
 		}
 
 		this.state.definition = loaded.definition;
+		this.initializeArtifacts(loaded.definition);
 
 		await this.persistence.initialize();
 
@@ -41,6 +45,26 @@ export class ControlPlaneLoader {
 		this.state.pluginSession = this.options.pluginSession ?? new PluginSession(report.plugins);
 
 		await this.state.pluginSession.runStage("discover", this.pluginContext());
+		for (const contribution of this.state.pluginSession.contributions("configuration")) {
+			const reference = loaded.definition.plugins.find(
+				(item) =>
+					typeof item !== "string" && "provider" in item && item.provider === contribution.id,
+			);
+			for (const diagnostic of contribution.validate(
+				typeof reference === "object" && "options" in reference ? reference.options : undefined,
+			))
+				this.state.diagnostics.push({
+					code: diagnostic.code,
+					severity: diagnostic.severity,
+					message: diagnostic.message,
+					source: {
+						file: loaded.definition.sourceFile,
+						path: diagnostic.plugin ? `plugins.${diagnostic.plugin}` : "plugins",
+					},
+				});
+		}
+		if (this.state.diagnostics.some((item) => item.severity === "error"))
+			throw new Error(this.state.diagnostics.map((item) => item.message).join("\n"));
 		await this.state.pluginSession.runStage("configure", this.pluginContext());
 
 		for (const contribution of this.state.pluginSession.contributions("workspace")) {
@@ -56,6 +80,18 @@ export class ControlPlaneLoader {
 		}
 
 		await this.state.pluginSession.runStage("graph", this.pluginContext());
+		for (const issue of this.state.graph.validate())
+			this.state.diagnostics.push({
+				code: `graph.${issue.code}`,
+				severity: "error",
+				message: issue.message,
+				source: {
+					file: loaded.definition.sourceFile,
+					path: issue.path.join("."),
+				},
+			});
+		if (this.state.diagnostics.some((item) => item.severity === "error"))
+			throw new Error(this.state.diagnostics.map((item) => item.message).join("\n"));
 
 		for (const plugin of this.state.pluginSession.list()) {
 			for (const adapter of plugin.contributions?.adapters ?? []) {

@@ -34,11 +34,12 @@ export class OperationManager {
 		requested: readonly string[],
 		affected: readonly string[],
 		execute: (signal: AbortSignal) => Promise<void>,
+		operationId?: string,
 	): Promise<OperationResult> {
 		const conflict = affected.map((node) => this.state.nodeOperations.get(node)).find(Boolean);
 		if (conflict) throw new Error(`WSRT_OPERATION_CONFLICT: operation ${conflict} is running`);
 
-		const id = this.state.submittedOperationIds.shift() ?? crypto.randomUUID();
+		const id = operationId ?? crypto.randomUUID();
 		let operation: OperationSnapshot = Object.freeze({
 			id,
 			type,

@@ -4,7 +4,7 @@ import { createServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import type { WsrtControlPlane } from "@wsrt/control-plane";
+import { serializeControlPlaneError, type WsrtControlPlane } from "@wsrt/control-plane";
 import {
 	dashboardCancelOperation,
 	dashboardOperation,
@@ -44,24 +44,17 @@ export async function startDashboard(
 				if (message.type === "ready") resolve(message.handle);
 				if (message.type === "command") {
 					try {
-						const value = await (message.command.type === "cancel"
-							? {
-									operationId: message.command.operationId,
-									cancelled: plane.cancelOperation(message.command.operationId),
-								}
+						const value = await (message.command.type === "operation.cancel"
+							? plane.execute(message.command)
 							: message.command.type === "contribution"
 								? awaitContribution(plane, message.command.contributionId)
-								: plane.submit(
-										message.command.type,
-										message.command.nodeIds,
-										message.command.operationId,
-									));
+								: plane.submit(message.command));
 						worker.postMessage({ type: "command-result", id: message.id, value });
 					} catch (cause) {
 						worker.postMessage({
 							type: "command-result",
 							id: message.id,
-							error: cause instanceof Error ? cause.message : String(cause),
+							error: serializeControlPlaneError(cause),
 						});
 					}
 				}
@@ -212,12 +205,8 @@ type WorkerMessage =
 			type: "command";
 			id: number;
 			command:
-				| {
-						type: "start" | "stop" | "restart" | "task";
-						operationId: string;
-						nodeIds: string[];
-				  }
-				| { type: "cancel"; operationId: string }
+				| Exclude<import("@wsrt/control-plane").ControlPlaneCommand, { type: "operation.cancel" }>
+				| { type: "operation.cancel"; operationId: string }
 				| { type: "contribution"; contributionId: string };
 	  }
 	| { type: "response"; id: number; error?: string };
@@ -397,25 +386,30 @@ async function api(
 			return json(
 				response,
 				202,
-				dashboardOperation(plane, action as "start" | "stop" | "restart", [id]),
+				await dashboardOperation(plane, {
+					type: `node.${action}` as "node.start" | "node.stop" | "node.restart",
+					nodeIds: [id],
+				}),
 				options.maxActionResponseBytes,
 			);
 		} catch (cause) {
-			return error(response, 409, "dashboard.operation_failed", String(cause));
+			const failure = serializeControlPlaneError(cause);
+			return error(response, 409, failure.code, failure.message);
 		}
 	if (resource === "tasks" && id && action === "run")
 		try {
 			return json(
 				response,
 				202,
-				dashboardOperation(plane, "run", [id]),
+				await dashboardOperation(plane, { type: "task.run", taskId: id }),
 				options.maxActionResponseBytes,
 			);
 		} catch (cause) {
-			return error(response, 409, "dashboard.operation_failed", String(cause));
+			const failure = serializeControlPlaneError(cause);
+			return error(response, 409, failure.code, failure.message);
 		}
 	if (resource === "operations" && id && action === "cancel") {
-		const value = dashboardCancelOperation(plane, id);
+		const value = await dashboardCancelOperation(plane, id);
 		return value.cancelled
 			? json(response, 202, value, options.maxActionResponseBytes)
 			: error(response, 409, "dashboard.not_cancellable", "Operation is not active");

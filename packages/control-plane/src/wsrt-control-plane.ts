@@ -17,6 +17,8 @@ import { PersistenceManager } from "./persistence-manager.js";
 import { PluginManager } from "./plugin-manager.js";
 import { SnapshotManager } from "./snapshot-manager.js";
 import type {
+	ControlPlaneCommand,
+	ControlPlaneCommandResult,
 	ControlPlaneOptions,
 	ControlPlaneSnapshot,
 	OperationResult,
@@ -101,6 +103,7 @@ export class WsrtControlPlane {
 			this.#persistence,
 			this.#events,
 			() => this.#pluginContext(),
+			(definition) => this.#artifacts.initialize(definition),
 			(item) => this.#execution.handler(item),
 			(id, signal) => this.#health.awaitHealthy(id, signal),
 		);
@@ -184,44 +187,84 @@ export class WsrtControlPlane {
 
 	async start(ids?: readonly string[]): Promise<OperationResult> {
 		this.#assertMutable();
-		const targets = ids?.map((id) => this.#selector.resolve(id)) ?? this.#selector.longRunningIds();
+		const targets =
+			ids?.map((id) => this.#selector.resolveNode(id).id) ?? this.#selector.longRunningIds();
+		return this.#start(targets);
+	}
+
+	#start(targets: readonly string[], operationId?: string): Promise<OperationResult> {
 		const selected = this.#selector.closure(targets);
-		return this.#operations.run("start", targets, selected, (signal) =>
-			required(this.#state.engine, "Control plane is not loaded").start(selected, signal),
+		return this.#operations.run(
+			"start",
+			targets,
+			selected,
+			(signal) =>
+				required(this.#state.engine, "Control plane is not loaded").start(selected, signal),
+			operationId,
 		);
 	}
 
 	async stop(ids?: readonly string[]): Promise<OperationResult> {
 		this.#assertMutable();
-		const targets = ids?.map((id) => this.#selector.resolve(id)) ?? this.#selector.executableIds();
+		const targets =
+			ids?.map((id) => this.#selector.resolveNode(id).id) ?? this.#selector.executableIds();
+		return this.#stop(targets);
+	}
+
+	#stop(targets: readonly string[], operationId?: string): Promise<OperationResult> {
 		const selected = this.#selector.dependants(targets);
 		for (const node of selected) {
 			this.#state.manualStops.add(node);
 			this.#health.cancelRestart(node, "manual stop");
 			this.#health.stopMonitor(node);
 		}
-		return this.#operations.run("stop", targets, selected, (signal) =>
-			required(this.#state.engine, "Control plane is not loaded").stop(selected, signal),
+		return this.#operations.run(
+			"stop",
+			targets,
+			selected,
+			(signal) =>
+				required(this.#state.engine, "Control plane is not loaded").stop(selected, signal),
+			operationId,
 		);
 	}
 
 	async restart(ids: readonly string[]): Promise<OperationResult> {
-		const targets = ids.map((id) => this.#selector.resolve(id));
+		const targets = ids.map((id) => this.#selector.resolveNode(id).id);
+		return this.#restart(targets);
+	}
+
+	#restart(targets: readonly string[], operationId?: string): Promise<OperationResult> {
 		const selected = this.#selector.dependants(targets);
-		return this.#operations.run("restart", targets, selected, async (signal) => {
-			const engine = required(this.#state.engine, "Control plane is not loaded");
-			await engine.stop(selected, signal);
-			await engine.start(this.#selector.closure(targets), signal);
-		});
+		return this.#operations.run(
+			"restart",
+			targets,
+			selected,
+			async (signal) => {
+				const engine = required(this.#state.engine, "Control plane is not loaded");
+				await engine.stop(selected, signal);
+				await engine.start(this.#selector.closure(targets), signal);
+			},
+			operationId,
+		);
 	}
 
 	async runTask(id: string): Promise<OperationResult> {
-		const resolved = this.#selector.resolve(id, "task");
-		return this.#operations.run("task", [resolved], this.#selector.closure([resolved]), (signal) =>
-			required(this.#state.engine, "Control plane is not loaded").start(
-				this.#selector.closure([resolved]),
-				signal,
-			),
+		const resolved = this.#selector.resolveTask(id).id;
+		return this.#runTask(resolved);
+	}
+
+	#runTask(resolved: string, operationId?: string): Promise<OperationResult> {
+		return this.#operations.run(
+			"task",
+			[resolved],
+			this.#selector.closure([resolved]),
+			async (signal) => {
+				const engine = required(this.#state.engine, "Control plane is not loaded");
+				if (!["resolved", "stopped", "failed"].includes(engine.state(resolved)))
+					await engine.stop([resolved], signal);
+				await engine.start(this.#selector.closure([resolved]), signal);
+			},
+			operationId,
 		);
 	}
 
@@ -229,29 +272,51 @@ export class WsrtControlPlane {
 		return this.#completion.complete(input);
 	}
 
-	submit(
-		type: "start" | "stop" | "restart" | "task",
-		ids: readonly string[],
-		operationId: string = crypto.randomUUID(),
-	): SubmittedOperation {
-		this.#state.submittedOperationIds.push(operationId);
-		const execution = this.getExecution(type, ids);
-		void execution.catch(() => {});
-
-		return { operationId, nodes: ids, status: "accepted" };
+	submit(command: Exclude<ControlPlaneCommand, { type: "operation.cancel" }>): SubmittedOperation {
+		const operationId = crypto.randomUUID();
+		const nodes = this.#validateCommand(command);
+		void this.#execute(command, operationId).catch(() => {});
+		return { operationId, nodes, status: "accepted" };
 	}
 
-	async getExecution(type: "start" | "stop" | "restart" | "task", ids: readonly string[]) {
-		const executions = {
-			start: this.start(ids),
-			stop: this.stop(ids),
-			restart: this.restart(ids),
-			task: this.runTask(required(ids[0], "Task operation requires one task")),
-		};
+	execute(command: {
+		type: "operation.cancel";
+		operationId: string;
+	}): Promise<{ operationId: string; cancelled: boolean }>;
+	execute(
+		command: Exclude<ControlPlaneCommand, { type: "operation.cancel" }>,
+	): Promise<OperationResult>;
+	async execute(command: ControlPlaneCommand): Promise<ControlPlaneCommandResult> {
+		if (command.type === "operation.cancel")
+			return {
+				operationId: command.operationId,
+				cancelled: this.cancelOperation(command.operationId),
+			};
+		this.#validateCommand(command);
+		return await this.#execute(command);
+	}
 
-		const execution: Promise<OperationResult> = executions[type];
+	#validateCommand(command: Exclude<ControlPlaneCommand, { type: "operation.cancel" }>): string[] {
+		if (command.type === "task.run") return [this.#selector.resolveTask(command.taskId).id];
+		return command.nodeIds.map((id) => this.#selector.resolveNode(id).id);
+	}
 
-		return execution;
+	#execute(
+		command: Exclude<ControlPlaneCommand, { type: "operation.cancel" }>,
+		operationId?: string,
+	): Promise<OperationResult> {
+		this.#assertMutable();
+		const nodes = this.#validateCommand(command);
+		switch (command.type) {
+			case "node.start":
+				return this.#start(nodes, operationId);
+			case "node.stop":
+				return this.#stop(nodes, operationId);
+			case "node.restart":
+				return this.#restart(nodes, operationId);
+			case "task.run":
+				return this.#runTask(required(nodes[0], "Task command requires one task"), operationId);
+		}
 	}
 
 	hasActiveProcesses(): boolean {

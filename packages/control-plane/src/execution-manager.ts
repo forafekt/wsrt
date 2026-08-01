@@ -367,7 +367,7 @@ export class ExecutionManager {
 		this.options.health.stopMonitor(item.id);
 
 		const manual = state.manualStops.has(item.id);
-		const expected = manual || state.disposed;
+		const expected = manual || state.disposed || state.engine?.state(item.id) === "stopping";
 		const previous = this.details(item.id);
 		const correlationId = crypto.randomUUID();
 

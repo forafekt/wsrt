@@ -1,25 +1,45 @@
 import type { NormalizedExecutable } from "@wsrt/config";
 import type { ControlPlaneState } from "./control-plane-state.js";
+import { ControlPlaneError } from "./types.js";
 import { processShorthand, required } from "./utils.js";
 
 export class GraphSelector {
 	constructor(private readonly state: ControlPlaneState) {}
 
-	resolve(value: string, kind?: NormalizedExecutable["kind"]): string {
+	resolveExecutable(value: string): NormalizedExecutable {
 		const definition = required(this.state.definition, "Control plane is not loaded");
-		const match = definition.executables.find(
-			(item) => item.id === value || item.name === value || processShorthand(item.id) === value,
+		const canonical = definition.executables.find((item) => item.id === value);
+		if (canonical) return canonical;
+		const matches = definition.executables.filter(
+			(item) => item.name === value || processShorthand(item.id) === value,
 		);
+		if (matches.length === 1) return required(matches[0], "Selector match disappeared");
+		if (matches.length > 1)
+			throw new ControlPlaneError(
+				"selector.ambiguous",
+				`Ambiguous executable ${JSON.stringify(value)}; use one of: ${matches.map((item) => item.id).join(", ")}`,
+				{ value, alternatives: matches.map((item) => item.id) },
+			);
+		throw new ControlPlaneError(
+			"selector.not_found",
+			`Unknown executable ${JSON.stringify(value)}`,
+			{ value, alternatives: definition.executables.map((item) => item.id) },
+		);
+	}
 
-		console.log({
-			value,
-			kind,
-			definition,
-			match,
-		});
-		if (!match || (kind && match.kind !== kind))
-			throw new Error(`Unknown ${kind ?? "executable"}: ${value}`);
-		return match.id;
+	resolveNode(value: string): NormalizedExecutable {
+		return this.resolveExecutable(value);
+	}
+
+	resolveTask(value: string): NormalizedExecutable {
+		const match = this.resolveExecutable(value);
+		if (match.kind !== "task")
+			throw new ControlPlaneError(
+				"selector.kind_mismatch",
+				`Expected task ${JSON.stringify(value)}, but ${match.id} is an ${match.kind}`,
+				{ value, expectedKind: "task", actualKind: match.kind, resolvedId: match.id },
+			);
+		return match;
 	}
 
 	executableIds(): string[] {

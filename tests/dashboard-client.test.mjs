@@ -256,6 +256,7 @@ test("SSE snapshots suppress duplicate revisions and clean up", () => {
 		definition: () => ({}),
 		graph: () => ({ toJSON: () => ({}) }),
 		listEvents: () => [],
+		pluginContributions: () => [],
 	};
 	const chunks = [];
 	const close = streamSnapshots(plane, {
@@ -286,6 +287,7 @@ test("SSE oversized snapshots produce one complete typed protocol error frame", 
 		definition: () => ({ large: "x".repeat(4_000) }),
 		graph: () => ({ toJSON: () => ({}) }),
 		listEvents: () => [],
+		pluginContributions: () => [],
 	};
 	const capture = (limit) => {
 		const chunks = [];
