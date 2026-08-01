@@ -2,6 +2,14 @@
 
 WSRT describes a software system and executes its lifecycle. Configuration is normalized once, compiled into a `SystemGraph`, and operated through `@wsrt/control-plane`.
 
+## Authoritative workspace session
+
+A configured workspace has at most one authoritative runtime session. The detached local workspace host is the only shared-session component that calls `createControlPlane`; it therefore owns the persistence lock, lifecycle engine, operation identities, managed processes, events, and snapshots. CLI and dashboard processes discover the canonical real path, derive its stable workspace identity, validate a versioned discovery record and handshake, and communicate over a Unix-domain socket or Windows named pipe using bounded length-prefixed JSON frames.
+
+First-client startup is elected by atomic directory creation. The winner launches the host; other clients observe the discovery record with bounded readiness checks and validate workspace ID, session ID, PID/start identity, and protocol version. The record contains connection metadata, never runtime state. The dashboard worker owns only browser transport; its backend is a persistent workspace-session client.
+
+`wsrt session stop` requests orderly shutdown. The host enters `stopping`, publishes `session.closing`, closes IPC, disposes its sole control plane and supervised processes, then removes the endpoint and discovery record. Configuration is loaded by the host and changes require a session restart in protocol version 1.
+
 ```text
 @wsrt/graph              @wsrt/capabilities
       ↓                         ↓

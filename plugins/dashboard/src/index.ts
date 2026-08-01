@@ -7,6 +7,7 @@ export {
 
 export {
 	createDirectDashboardBackend,
+	createSessionDashboardBackend,
 	type DashboardBackend,
 	type DashboardCancellationResult,
 	type OperationCancelCommand,

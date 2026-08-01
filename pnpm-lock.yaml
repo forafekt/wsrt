@@ -119,6 +119,9 @@ importers:
       '@wsrt/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@wsrt/workspace-session':
+        specifier: workspace:*
+        version: link:../workspace-session
       '@wsrt/workspace':
         specifier: workspace:*
         version: link:../workspace
@@ -194,6 +197,9 @@ importers:
       '@wsrt/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@wsrt/workspace-session':
+        specifier: workspace:*
+        version: link:../workspace-session
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -255,6 +261,12 @@ importers:
         specifier: workspace:*
         version: link:../../runtimes/node
 
+  packages/workspace-session:
+    dependencies:
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+
   plugins/dashboard:
     dependencies:
       '@wsrt/control-plane':
@@ -263,6 +275,9 @@ importers:
       '@wsrt/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
+      '@wsrt/workspace-session':
+        specifier: workspace:*
+        version: link:../../packages/workspace-session
     devDependencies:
       playwright:
         specifier: ^1.61.1

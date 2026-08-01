@@ -1,13 +1,16 @@
 import type { WsrtControlPlane } from "@wsrt/control-plane";
+import type { WorkspaceSessionClient } from "@wsrt/workspace-session";
 
 export type McpRequest = { tool: string; input?: Record<string, unknown> };
 
 export async function runMcpTool(
-	controlPlane: WsrtControlPlane,
+	controlPlane: WsrtControlPlane | WorkspaceSessionClient,
 	request: McpRequest,
 	options: { allowMutations?: boolean; signal?: AbortSignal } = {},
 ): Promise<unknown> {
 	const input = request.input ?? {};
+	if ("request" in controlPlane)
+		return runSessionTool(controlPlane as WorkspaceSessionClient, request.tool, input, options);
 	const contributed = controlPlane
 		.pluginContributions("mcp")
 		.find(
@@ -79,6 +82,79 @@ export async function runMcpTool(
 		default:
 			throw new Error(`Unknown MCP tool: ${request.tool}`);
 	}
+}
+
+async function runSessionTool(
+	client: WorkspaceSessionClient,
+	tool: string,
+	input: Record<string, unknown>,
+	options: { allowMutations?: boolean },
+): Promise<unknown> {
+	const snapshot = async () => client.snapshot();
+	switch (tool) {
+		case "workspace.overview": {
+			const value = await snapshot();
+			return {
+				name: value.workspace.name,
+				root: value.workspace.root,
+				nodes: value.nodes.length,
+				artifacts: value.artifacts.length,
+				diagnostics: value.diagnostics.length,
+			};
+		}
+		case "workspace.graph":
+			return client.graph();
+		case "workspace.snapshot":
+			return snapshot();
+		case "workspace.operations":
+			return client.operations();
+		case "workspace.operation":
+			return (await client.operations()).find((item) => item.id === String(input.id ?? ""));
+		case "workspace.node":
+		case "workspace.state":
+			return (await snapshot()).nodes.find((item) => item.id === String(input.id ?? ""));
+		case "workspace.dependencies":
+			return graphRelations(await client.graph(), String(input.id ?? ""), "to");
+		case "workspace.consumers":
+			return graphRelations(await client.graph(), String(input.id ?? ""), "from");
+		case "workspace.diagnostics":
+			return client.diagnostics();
+		case "workspace.events":
+			return client.events();
+		case "workspace.artifacts":
+			return client.artifacts();
+		case "workspace.artifact":
+			return (await client.artifacts()).find((item) => item.id === String(input.id ?? ""));
+		case "workspace.cancel":
+			mutation(options);
+			return client.execute({ type: "operation.cancel", operationId: String(input.id ?? "") });
+		case "workspace.start":
+			mutation(options);
+			return client.execute({ type: "node.start", nodeIds: ids(input) });
+		case "workspace.stop":
+			mutation(options);
+			return client.execute({ type: "node.stop", nodeIds: ids(input) });
+		case "workspace.restart":
+			mutation(options);
+			return client.execute({ type: "node.restart", nodeIds: ids(input) });
+		case "workspace.runTask":
+			mutation(options);
+			return client.execute({ type: "task.run", taskId: String(input.id ?? "") });
+		default:
+			throw new Error(`Unknown MCP tool: ${tool}`);
+	}
+}
+
+function graphRelations(value: unknown, id: string, direction: "from" | "to"): unknown[] {
+	if (!value || typeof value !== "object" || !("edges" in value) || !Array.isArray(value.edges))
+		return [];
+	return value.edges.filter(
+		(edge) =>
+			edge &&
+			typeof edge === "object" &&
+			direction in edge &&
+			(edge as Record<string, unknown>)[direction] === id,
+	);
 }
 
 export async function readMcpResource(

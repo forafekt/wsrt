@@ -4,6 +4,7 @@ import type {
 	WsrtControlPlane,
 } from "@wsrt/control-plane";
 import type { DashboardContribution } from "@wsrt/plugins";
+import type { WorkspaceSessionClient } from "@wsrt/workspace-session";
 import { safeSerializable } from "./serialization.js";
 import { DASHBOARD_PROTOCOL, type DashboardSnapshot } from "./shared/contracts.js";
 import { validateDashboardContributions } from "./shared/contributions.js";
@@ -53,6 +54,65 @@ export async function createDirectDashboardBackend(
 			);
 		},
 	};
+}
+
+export async function createSessionDashboardBackend(
+	client: WorkspaceSessionClient,
+): Promise<DashboardBackend> {
+	let current = await sessionDashboardSnapshot(client);
+	const listeners = new Set<(snapshot: DashboardSnapshot) => void>();
+	let refreshing = false;
+	const unsubscribe = client.subscribe((event) => {
+		if (event.type !== "snapshot.updated" || refreshing) return;
+		refreshing = true;
+		void sessionDashboardSnapshot(client)
+			.then((snapshot) => {
+				if (snapshot.revision <= current.revision) return;
+				current = snapshot;
+				for (const listener of listeners) listener(snapshot);
+			})
+			.finally(() => {
+				refreshing = false;
+			});
+	});
+	return {
+		snapshot: () => current,
+		subscribe(listener) {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+				if (!listeners.size) unsubscribe();
+			};
+		},
+		submit: (command) => client.submit(command),
+		cancel: (command) => client.execute(command) as Promise<DashboardCancellationResult>,
+		async runContribution(contributionId) {
+			throw new Error(
+				`Dashboard action ${contributionId} is unavailable through this protocol version`,
+			);
+		},
+	};
+}
+
+async function sessionDashboardSnapshot(
+	client: WorkspaceSessionClient,
+): Promise<DashboardSnapshot> {
+	const [controlPlane, graph, events, configuration] = await Promise.all([
+		client.snapshot(),
+		client.graph(),
+		client.events(),
+		client.definition(),
+	]);
+	return Object.freeze({
+		protocolVersion: 3,
+		protocol: DASHBOARD_PROTOCOL,
+		revision: controlPlane.revision,
+		controlPlane,
+		graph: graph as DashboardSnapshot["graph"],
+		events: events.map((event) => ({ ...event, payload: boundedValue(event.payload) })),
+		configuration: safeSerializable(configuration),
+		contributions: [],
+	});
 }
 
 async function loadContributions(controlPlane: WsrtControlPlane) {

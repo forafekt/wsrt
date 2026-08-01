@@ -1,6 +1,7 @@
 import { Worker } from "node:worker_threads";
 import { serializeControlPlaneError, type WsrtControlPlane } from "@wsrt/control-plane";
-import { createDirectDashboardBackend } from "../backend.js";
+import type { WorkspaceSessionClient } from "@wsrt/workspace-session";
+import { createDirectDashboardBackend, createSessionDashboardBackend } from "../backend.js";
 import { type DashboardOptions, normalizeDashboardOptions } from "../plugin/index.js";
 import type { DashboardHandle } from "./dashboard-server.js";
 import {
@@ -11,10 +12,13 @@ import {
 } from "./worker-backend.js";
 
 export async function startDashboard(
-	controlPlane: WsrtControlPlane,
+	controlPlane: WsrtControlPlane | WorkspaceSessionClient,
 	input: DashboardOptions = {},
 ): Promise<DashboardHandle> {
-	const backend = await createDirectDashboardBackend(controlPlane);
+	const backend =
+		"request" in controlPlane
+			? await createSessionDashboardBackend(controlPlane as WorkspaceSessionClient)
+			: await createDirectDashboardBackend(controlPlane as WsrtControlPlane);
 	const worker = new Worker(new URL("./dashboard-worker.js", import.meta.url), {
 		workerData: { options: normalizeDashboardOptions(input), snapshot: backend.snapshot() },
 	});
