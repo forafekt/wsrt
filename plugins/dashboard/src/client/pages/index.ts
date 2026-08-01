@@ -1,4 +1,4 @@
-import type { DashboardRoute } from "../../shared/contracts.js";
+import type { DashboardGraph, DashboardRoute } from "../../shared/contracts.js";
 import type { DashboardState } from "../state/store.js";
 
 export const escapeHtml = (value: unknown) =>
@@ -88,7 +88,7 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 		)}</div>`;
 	}
 	if (route === "workspace") {
-		const graph = data.graph as Graph;
+		const graph = data.graph;
 		const kinds = [...new Set((graph.nodes ?? []).map((node) => node.kind))];
 		return `${heading("Workspace explorer", "Packages, runnable nodes, relationships, imports, and outputs in one searchable model.", `<label class="search"><span class="sr-only">Filter workspace</span><input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Filter workspace…"></label>`)}<div class="explorer-layout"><section class="explorer-tree"><div class="section-heading"><h2>${escapeHtml(snapshot.workspace.name)}</h2><span class="count">${graph.nodes?.length ?? 0}</span></div>${kinds
 			.map(
@@ -115,7 +115,7 @@ export function renderPage(route: DashboardRoute, state: DashboardState): string
 				.map((edge) => [escapeHtml(edge.from), badge(edge.kind), escapeHtml(edge.to)]),
 		)}</section></div>`;
 	}
-	if (route === "graph") return renderGraph(data.graph as Graph, snapshot.nodes, state);
+	if (route === "graph") return renderGraph(data.graph, snapshot.nodes, state);
 	if (route === "nodes")
 		return `${heading("Nodes", "Processes, services, and tasks in the active system.", `<label class="search"><span class="sr-only">Search nodes</span><input data-filter="global" value="${escapeHtml(state.search)}" placeholder="Search nodes…"></label>`)}${table(
 			"All nodes",
@@ -339,7 +339,7 @@ export function renderNodeInspector(state: DashboardState): string {
 	const snapshot = state.snapshot?.controlPlane;
 	const node = snapshot?.nodes.find((item) => item.id === state.selectedNode);
 	if (!state.selectedNode || !node) return "";
-	const graph = state.snapshot?.graph as Graph;
+	const graph = state.snapshot.graph;
 	const dependencies = (graph?.edges ?? [])
 		.filter((edge) => edge.from === node.id)
 		.map((edge) => edge.to);
@@ -401,13 +401,8 @@ function renderConfig(value: unknown, path = "workspace"): string {
 		.join("");
 }
 
-type Graph = {
-	nodes?: { id: string; kind: string }[];
-	edges?: { from: string; to: string; kind: string }[];
-};
-
 function renderGraph(
-	graph: Graph,
+	graph: DashboardGraph,
 	states: readonly { id: string; health: string; state: string }[],
 	state: DashboardState,
 ) {

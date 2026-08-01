@@ -1,20 +1,19 @@
-import type { WsrtControlPlane } from "@wsrt/control-plane";
-import { dashboardSnapshot } from "../api.js";
+import type { DashboardBackend } from "../backend.js";
 
 export type SseWriter = { write(chunk: string): void; end(): void };
 
 export function streamSnapshots(
-	plane: WsrtControlPlane,
+	backend: DashboardBackend,
 	writer: SseWriter,
 	lastEventId?: string,
 	onClose?: () => void,
 	maxFrameBytes = 8 * 1024 * 1024,
 ) {
 	let revision = Number(lastEventId ?? -1);
-	const unsubscribe = plane.subscribeSnapshots((snapshot) => {
+	const unsubscribe = backend.subscribe((snapshot) => {
 		if (snapshot.revision <= revision) return;
 		revision = snapshot.revision;
-		const data = JSON.stringify(dashboardSnapshot(plane));
+		const data = JSON.stringify(snapshot);
 		const frame = `id: ${revision}\nevent: snapshot\ndata: ${data}\n\n`;
 		if (Buffer.byteLength(frame) > maxFrameBytes) {
 			const value = JSON.stringify({

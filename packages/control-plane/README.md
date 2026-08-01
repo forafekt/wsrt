@@ -33,8 +33,10 @@ termination, and intentional stops are excluded from restart policy.
 
 There is one composition root: `createControlPlane(options)`. The CLI, dashboard host,
 MCP transport, and programmatic consumers all receive that same control plane. The
-dashboard worker is only a serialized transport/view proxy; it does not construct a
-second control plane or implement lifecycle policy.
+dashboard plugin adapts it to the plugin-owned `DashboardBackend` contract. Its worker
+receives serialized dashboard projections and explicit commands; it does not construct
+a second control plane or implement lifecycle policy. The control-plane package has no
+dependency on that consumer-owned boundary.
 
 Commands have explicit semantics and accepted entity kinds:
 

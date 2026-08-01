@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { chromium } from "playwright";
-import { startDashboard } from "../dist/index.js";
+import { createDashboardServer } from "../dist/index.js";
 
 test("rendered dashboard supports primary workbench interactions", async (context) => {
 	const fixture = createPlaneFixture();
-	const dashboard = await startDashboard(fixture.plane, {
+	const dashboard = await createDashboardServer(fixture.backend, {
 		host: "127.0.0.1",
 		port: 0,
 		strictPort: false,
@@ -127,7 +127,7 @@ test("rendered dashboard supports primary workbench interactions", async (contex
 
 test("rendered 500-node graph filters without expanding virtual record DOM", async (context) => {
 	const fixture = createPlaneFixture(500, 500);
-	const dashboard = await startDashboard(fixture.plane, {
+	const dashboard = await createDashboardServer(fixture.backend, {
 		host: "127.0.0.1",
 		port: 0,
 		strictPort: false,
@@ -167,8 +167,8 @@ test("rendered 500-node graph filters without expanding virtual record DOM", asy
 
 test("oversized snapshot presents typed recovery guidance", async (context) => {
 	const fixture = createPlaneFixture();
-	fixture.plane.definition = () => ({ oversized: "x".repeat(8_000) });
-	const dashboard = await startDashboard(fixture.plane, {
+	fixture.configuration = { oversized: "x".repeat(8_000) };
+	const dashboard = await createDashboardServer(fixture.backend, {
 		host: "127.0.0.1",
 		port: 0,
 		strictPort: false,
@@ -295,66 +295,87 @@ function createPlaneFixture(nodeCount = 2, contributionCount = 0) {
 		plugins: [],
 		providers: [{ id: "runtime:node", kind: "runtime" }],
 	});
-	const plane = {
-		snapshot: controlSnapshot,
-		graph: () => ({
-			toJSON: () => ({
-				nodes: nodes.map(({ id, kind }) => ({ id, kind })),
-				edges: nodes.slice(1).map((node, index) => ({
-					from: node.id,
-					to: nodes[index].id,
-					kind: "depends-on",
-				})),
-			}),
-		}),
-		definition: () => ({ name: "acceptance-workspace", executables: nodes }),
-		listEvents: () => events,
-		listArtifacts: () => artifacts,
-		listOperations: () => operations,
-		getOperation: (id) => operations.find((operation) => operation.id === id),
-		getNode: (id) => nodes.find((node) => node.id === id),
-		getDependencies: () => ["task:build"],
-		getConsumers: () => [],
-		pluginContributions: () => [
-			...(contributionCount
-				? Array.from({ length: contributionCount }, (_, index) => ({
-						id: `command-${index}`,
-						kind: "command",
-						title: `Command ${index}`,
-						mutation: false,
-						run: () => ({ index }),
-					}))
-				: [
-						{
-							id: "broken-fixture",
-							kind: "page",
-							title: "Broken fixture",
-							load: () => {
-								throw new Error("fixture contribution failure");
-							},
+	const contributions = [
+		...(contributionCount
+			? Array.from({ length: contributionCount }, (_, index) => ({
+					id: `command-${index}`,
+					kind: "command",
+					title: `Command ${index}`,
+					mutation: false,
+					run: () => ({ index }),
+				}))
+			: [
+					{
+						id: "broken-fixture",
+						kind: "page",
+						title: "Broken fixture",
+						load: () => {
+							throw new Error("fixture contribution failure");
 						},
-					]),
-		],
-		invokePluginContribution: (_kind, _id, invoke) =>
-			invoke({ root: "/fixture" }, new AbortController().signal),
-		cancelOperation: () => {
-			cancelled = true;
-			return true;
+					},
+				]),
+	];
+	let configuration = { name: "acceptance-workspace", executables: nodes };
+	const dashboardSnapshot = () => ({
+		protocolVersion: 3,
+		protocol: {
+			transport: 1,
+			snapshot: 3,
+			contributions: 1,
+			actions: 1,
+			events: 1,
 		},
-		subscribeSnapshots(listener) {
+		revision,
+		controlPlane: controlSnapshot(),
+		graph: {
+			nodes: nodes.map(({ id, kind }) => ({ id, kind, name: id })),
+			edges: nodes.slice(1).map((node, index) => ({
+				from: node.id,
+				to: nodes[index].id,
+				kind: "depends-on",
+			})),
+		},
+		events,
+		configuration,
+		contributions: contributions.map(({ load, run: _run, ...item }) => ({
+			...item,
+			...(load ? { error: "fixture contribution failure" } : {}),
+		})),
+	});
+	const backend = {
+		snapshot: dashboardSnapshot,
+		async submit(command) {
+			return {
+				operationId: "submitted",
+				nodes: command.nodeIds ?? [command.taskId],
+				status: "accepted",
+			};
+		},
+		async cancel() {
+			cancelled = true;
+			return { operationId: "operation-running", cancelled: true };
+		},
+		async runContribution(id) {
+			const contribution = contributions.find((item) => item.id === id);
+			return contribution?.run?.();
+		},
+		subscribe(listener) {
 			listeners.add(listener);
-			listener(controlSnapshot());
+			listener(dashboardSnapshot());
 			return () => listeners.delete(listener);
 		},
 	};
 	return {
-		plane,
+		backend,
+		set configuration(value) {
+			configuration = value;
+		},
 		get cancelled() {
 			return cancelled;
 		},
 		advance() {
 			revision++;
-			for (const listener of listeners) listener(controlSnapshot());
+			for (const listener of listeners) listener(dashboardSnapshot());
 		},
 		appendEvents(count) {
 			for (let index = 0; index < count; index++)
@@ -368,7 +389,7 @@ function createPlaneFixture(nodeCount = 2, contributionCount = 0) {
 				});
 			if (events.length > 1_000) events.splice(0, events.length - 1_000);
 			revision++;
-			for (const listener of listeners) listener(controlSnapshot());
+			for (const listener of listeners) listener(dashboardSnapshot());
 		},
 		listeners,
 	};

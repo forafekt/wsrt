@@ -58,6 +58,9 @@ export class OperationManager {
 		for (const node of affected) this.state.nodeOperations.set(node, id);
 		this.changed();
 		await this.persistence.persistOperation(operation);
+		// Registration and persistence must become observable before a provider can
+		// monopolize the event loop with synchronous preparation work.
+		await new Promise<void>((resolve) => setImmediate(resolve));
 
 		try {
 			await execute(controller.signal);

@@ -5,7 +5,7 @@ import test from "node:test";
 import { loadSystemDefinition } from "@wsrt/config";
 import { createControlPlane } from "@wsrt/control-plane";
 import { runMcpTool } from "@wsrt/mcp";
-import { dashboardSnapshot } from "@wsrt/plugin-dashboard";
+import { createDirectDashboardBackend, dashboardSnapshot } from "@wsrt/plugin-dashboard";
 
 const root = path.resolve("examples/system-lifecycle");
 
@@ -37,7 +37,10 @@ test("control plane runs artifact task and shares data with MCP and dashboard", 
 		assert.equal(plane.listArtifacts()[0].status, "ready");
 		const overview = await runMcpTool(plane, { tool: "workspace.overview" });
 		assert.equal(overview.name, "system-lifecycle");
-		assert.equal(dashboardSnapshot(plane).graph.nodes.length > 0, true);
+		assert.equal(
+			dashboardSnapshot(await createDirectDashboardBackend(plane)).graph.nodes.length > 0,
+			true,
+		);
 	} finally {
 		await plane.dispose();
 		fs.rmSync(path.dirname(generated), { recursive: true, force: true });

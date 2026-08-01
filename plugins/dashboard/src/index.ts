@@ -5,6 +5,14 @@ export {
 	safeSerializable,
 } from "./api.js";
 
+export {
+	createDirectDashboardBackend,
+	type DashboardBackend,
+	type DashboardCancellationResult,
+	type OperationCancelCommand,
+	type OperationCreatingCommand,
+} from "./backend.js";
+
 export { loadLayout, WorkbenchLayout } from "./client/layout.js";
 
 export { matchDashboardRoute } from "./client/router.js";
@@ -21,10 +29,17 @@ export {
 } from "./plugin/index.js";
 
 export {
+	createDashboardServer,
 	type DashboardHandle,
 	startDashboard,
 	streamSnapshots,
 } from "./server/index.js";
+
+export {
+	createWorkerDashboardBackend,
+	DashboardTransportError,
+	type DashboardWorkerTransport,
+} from "./server/worker-backend.js";
 
 export { DASHBOARD_PROTOCOL } from "./shared/contracts.js";
 

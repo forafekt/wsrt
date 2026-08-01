@@ -3,18 +3,13 @@ import { readFile } from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Worker } from "node:worker_threads";
-import { serializeControlPlaneError, type WsrtControlPlane } from "@wsrt/control-plane";
-import {
-	dashboardCancelOperation,
-	dashboardOperation,
-	dashboardSnapshot,
-	safeSerializable,
-} from "../api.js";
+import { serializeControlPlaneError } from "@wsrt/control-plane";
+import { dashboardCancelOperation, dashboardOperation, dashboardSnapshot } from "../api.js";
+import type { DashboardBackend } from "../backend.js";
 import { dashboardStyles } from "../client/styles.js";
 import { type DashboardOptions, normalizeDashboardOptions } from "../plugin/index.js";
-import { validateDashboardContributions } from "../shared/contributions.js";
 import { streamSnapshots } from "./snapshots.js";
+import { DashboardTransportError } from "./worker-backend.js";
 
 export type DashboardHandle = {
 	url: string;
@@ -27,108 +22,8 @@ export type DashboardHandle = {
 
 const clientRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
-export async function startDashboard(
-	plane: WsrtControlPlane,
-	input: DashboardOptions = {},
-): Promise<DashboardHandle> {
-	const initialSnapshot = {
-		...dashboardSnapshot(plane),
-		contributions: await serializedContributions(plane),
-	};
-	const worker = new Worker(new URL("./dashboard-worker.js", import.meta.url), {
-		workerData: { options: normalizeDashboardOptions(input), snapshot: initialSnapshot },
-	});
-	const ready = new Promise<Omit<DashboardHandle, "disconnectClients" | "close">>(
-		(resolve, reject) => {
-			worker.on("message", async (message: WorkerMessage) => {
-				if (message.type === "ready") resolve(message.handle);
-				if (message.type === "command") {
-					try {
-						const value = await (message.command.type === "operation.cancel"
-							? plane.execute(message.command)
-							: message.command.type === "contribution"
-								? awaitContribution(plane, message.command.contributionId)
-								: plane.submit(message.command));
-						worker.postMessage({ type: "command-result", id: message.id, value });
-					} catch (cause) {
-						worker.postMessage({
-							type: "command-result",
-							id: message.id,
-							error: serializeControlPlaneError(cause),
-						});
-					}
-				}
-			});
-			worker.once("error", reject);
-			worker.once("exit", (code) => {
-				if (code !== 0) reject(new Error(`Dashboard worker exited with code ${code}`));
-			});
-		},
-	);
-	const unsubscribe = plane.subscribeSnapshots(() =>
-		worker.postMessage({ type: "snapshot", snapshot: dashboardSnapshot(plane) }),
-	);
-	const handle = await ready;
-	let sequence = 0;
-	const pending = new Map<number, { resolve(): void; reject(cause: unknown): void }>();
-	worker.on("message", (message: WorkerMessage) => {
-		if (message.type !== "response") return;
-		const waiter = pending.get(message.id);
-		if (!waiter) return;
-		pending.delete(message.id);
-		message.error ? waiter.reject(new Error(message.error)) : waiter.resolve();
-	});
-	const control = (action: "disconnect" | "close") =>
-		new Promise<void>((resolve, reject) => {
-			const id = ++sequence;
-			pending.set(id, { resolve, reject });
-			worker.postMessage({ type: "control", id, action });
-		});
-	let closed = false;
-	return {
-		...handle,
-		disconnectClients: () => void control("disconnect"),
-		async close() {
-			if (closed) return;
-			closed = true;
-			unsubscribe();
-			await control("close");
-			await worker.terminate();
-		},
-	};
-}
-
-async function serializedContributions(plane: WsrtControlPlane) {
-	return validateDashboardContributions(
-		await Promise.all(
-			plane.pluginContributions("dashboard").map(async (contribution) => {
-				try {
-					const data = contribution.load
-						? await plane.invokePluginContribution("dashboard", contribution.id, (context) =>
-								contribution.load?.(context, new AbortController().signal),
-							)
-						: undefined;
-					return safeSerializable({
-						...contribution,
-						load: undefined,
-						run: undefined,
-						data,
-					});
-				} catch (cause) {
-					return {
-						id: contribution.id,
-						kind: contribution.kind,
-						title: contribution.title,
-						error: cause instanceof Error ? cause.message : String(cause),
-					};
-				}
-			}),
-		),
-	);
-}
-
-export async function startDashboardInProcess(
-	plane: WsrtControlPlane,
+export async function createDashboardServer(
+	backend: DashboardBackend,
 	input: DashboardOptions = {},
 ): Promise<DashboardHandle> {
 	const options = normalizeDashboardOptions(input);
@@ -141,7 +36,7 @@ export async function startDashboardInProcess(
 	const server = createServer(async (request, response) => {
 		try {
 			await route(
-				plane,
+				backend,
 				options,
 				streams,
 				request.method ?? "GET",
@@ -199,30 +94,8 @@ export async function startDashboardInProcess(
 	};
 }
 
-type WorkerMessage =
-	| { type: "ready"; handle: Omit<DashboardHandle, "disconnectClients" | "close"> }
-	| {
-			type: "command";
-			id: number;
-			command:
-				| Exclude<import("@wsrt/control-plane").ControlPlaneCommand, { type: "operation.cancel" }>
-				| { type: "operation.cancel"; operationId: string }
-				| { type: "contribution"; contributionId: string };
-	  }
-	| { type: "response"; id: number; error?: string };
-
-async function awaitContribution(plane: WsrtControlPlane, contributionId: string) {
-	const contribution = plane
-		.pluginContributions("dashboard")
-		.find((item) => item.id === contributionId);
-	if (!contribution?.run) throw new Error(`Action ${contributionId} was not found`);
-	return plane.invokePluginContribution("dashboard", contributionId, (context) =>
-		contribution.run?.({}, context, new AbortController().signal),
-	);
-}
-
 async function route(
-	plane: WsrtControlPlane,
+	backend: DashboardBackend,
 	options: ReturnType<typeof normalizeDashboardOptions>,
 	streams: Set<() => void>,
 	method: string,
@@ -258,11 +131,11 @@ async function route(
 			"x-accel-buffering": "no",
 		});
 		response.write(
-			`event: connected\ndata: ${JSON.stringify({ revision: plane.snapshot().revision })}\n\n`,
+			`event: connected\ndata: ${JSON.stringify({ revision: backend.snapshot().revision })}\n\n`,
 		);
 		let close = () => {};
 		close = streamSnapshots(
-			plane,
+			backend,
 			response,
 			lastEventId,
 			() => streams.delete(close),
@@ -272,7 +145,7 @@ async function route(
 		response.on("close", close);
 		return;
 	}
-	if (relative.startsWith("/api/")) return api(plane, options, method, relative, response);
+	if (relative.startsWith("/api/")) return api(backend, options, method, relative, response);
 	if (relative === "/assets/styles.css")
 		return textResponse(response, 200, "text/css; charset=utf-8", dashboardStyles);
 	if (relative.startsWith("/assets/client/") && relative.endsWith(".js")) {
@@ -297,13 +170,13 @@ async function route(
 }
 
 async function api(
-	plane: WsrtControlPlane,
+	backend: DashboardBackend,
 	options: ReturnType<typeof normalizeDashboardOptions>,
 	method: string,
 	relative: string,
 	response: ServerResponse,
 ) {
-	const snapshot = dashboardSnapshot(plane),
+	const snapshot = dashboardSnapshot(backend),
 		parts = relative.split("/").filter(Boolean),
 		resource = parts[1],
 		id = parts[2] ? decodeURIComponent(parts[2]) : undefined,
@@ -312,41 +185,22 @@ async function api(
 		let value: unknown;
 		if (resource === "snapshot") value = snapshot;
 		else if (resource === "nodes")
-			value = id ? nodeDetail(plane, id, snapshot) : snapshot.controlPlane.nodes;
+			value = id ? nodeDetail(id, snapshot) : snapshot.controlPlane.nodes;
 		else if (resource === "operations")
-			value = id ? plane.getOperation(id) : plane.listOperations();
+			value = id
+				? snapshot.controlPlane.operations.find((item) => item.id === id)
+				: snapshot.controlPlane.operations;
 		else if (resource === "artifacts")
-			value = id ? plane.listArtifacts().find((item) => item.id === id) : plane.listArtifacts();
-		else if (resource === "events") value = plane.listEvents().slice(-500);
+			value = id
+				? snapshot.controlPlane.artifacts.find((item) => item.id === id)
+				: snapshot.controlPlane.artifacts;
+		else if (resource === "events") value = snapshot.events.slice(-500);
 		else if (resource === "diagnostics") value = snapshot.controlPlane.diagnostics;
 		else if (resource === "plugins") value = snapshot.controlPlane.plugins;
 		else if (resource === "providers") value = snapshot.controlPlane.providers;
-		else if (resource === "configuration") value = safeSerializable(plane.definition());
-		else if (resource === "contributions") {
-			const contributions = plane.pluginContributions("dashboard");
-			value = validateDashboardContributions(
-				await Promise.all(
-					contributions.map(async (contribution) => {
-						try {
-							const data = contribution.load
-								? await plane.invokePluginContribution("dashboard", contribution.id, (context) =>
-										contribution.load?.(context, new AbortController().signal),
-									)
-								: undefined;
-							JSON.stringify(data);
-							return { ...contribution, load: undefined, run: undefined, data };
-						} catch (cause) {
-							return {
-								id: contribution.id,
-								kind: contribution.kind,
-								title: contribution.title,
-								error: cause instanceof Error ? cause.message : String(cause),
-							};
-						}
-					}),
-				),
-			);
-		} else return error(response, 404, "dashboard.not_found", "API resource not found");
+		else if (resource === "configuration") value = snapshot.configuration;
+		else if (resource === "contributions") value = snapshot.contributions;
+		else return error(response, 404, "dashboard.not_found", "API resource not found");
 		if (id && value === undefined)
 			return error(response, 404, "dashboard.not_found", `${resource} ${id} was not found`);
 		return json(
@@ -363,22 +217,17 @@ async function api(
 	if (!options.mutations)
 		return error(response, 403, "dashboard.read_only", "Dashboard mutations are disabled");
 	if (resource === "contributions" && id && action === "run") {
-		const contribution = plane
-			.pluginContributions("dashboard")
-			.find(
-				(item) =>
-					["action", "command", "artifact-action", "operation-action"].includes(item.kind) &&
-					item.id === id,
-			);
-		if (!contribution?.run)
+		const contribution = snapshot.contributions.find((item) => item.id === id);
+		if (
+			!contribution ||
+			!["action", "command", "artifact-action", "operation-action"].includes(contribution.kind)
+		)
 			return error(response, 404, "dashboard.not_found", `Action ${id} was not found`);
 		try {
-			const value = await plane.invokePluginContribution("dashboard", id, (context) =>
-				contribution.run?.({}, context, new AbortController().signal),
-			);
+			const value = await backend.runContribution(id);
 			return json(response, 200, value, options.maxActionResponseBytes);
 		} catch (cause) {
-			return error(response, 409, "dashboard.action_failed", String(cause));
+			return commandError(response, cause, "dashboard.action_failed");
 		}
 	}
 	if (resource === "nodes" && id && ["start", "stop", "restart"].includes(action ?? ""))
@@ -386,30 +235,31 @@ async function api(
 			return json(
 				response,
 				202,
-				await dashboardOperation(plane, {
+				await dashboardOperation(backend, {
 					type: `node.${action}` as "node.start" | "node.stop" | "node.restart",
 					nodeIds: [id],
 				}),
 				options.maxActionResponseBytes,
 			);
 		} catch (cause) {
-			const failure = serializeControlPlaneError(cause);
-			return error(response, 409, failure.code, failure.message);
+			return commandError(response, cause);
 		}
 	if (resource === "tasks" && id && action === "run")
 		try {
 			return json(
 				response,
 				202,
-				await dashboardOperation(plane, { type: "task.run", taskId: id }),
+				await dashboardOperation(backend, { type: "task.run", taskId: id }),
 				options.maxActionResponseBytes,
 			);
 		} catch (cause) {
-			const failure = serializeControlPlaneError(cause);
-			return error(response, 409, failure.code, failure.message);
+			return commandError(response, cause);
 		}
 	if (resource === "operations" && id && action === "cancel") {
-		const value = await dashboardCancelOperation(plane, id);
+		const value = await dashboardCancelOperation(backend, {
+			type: "operation.cancel",
+			operationId: id,
+		});
 		return value.cancelled
 			? json(response, 202, value, options.maxActionResponseBytes)
 			: error(response, 409, "dashboard.not_cancellable", "Operation is not active");
@@ -417,22 +267,22 @@ async function api(
 	return error(response, 404, "dashboard.not_found", "Mutation route not found");
 }
 
-function nodeDetail(
-	plane: WsrtControlPlane,
-	id: string,
-	snapshot: ReturnType<typeof dashboardSnapshot>,
-) {
+function nodeDetail(id: string, snapshot: ReturnType<typeof dashboardSnapshot>) {
 	const node = snapshot.controlPlane.nodes.find((item) => item.id === id);
+	const graph = snapshot.graph;
 	return (
 		node && {
 			...node,
-			graph: plane.getNode(id),
-			dependencies: plane.getDependencies(id),
-			consumers: plane.getConsumers(id),
-			events: plane
-				.listEvents()
-				.filter((event) => event.source === id)
-				.slice(-100),
+			graph: graph.nodes.find((item) => item.id === id),
+			dependencies: graph.edges
+				.filter((edge) => edge.from === id && edge.kind === "depends-on")
+				.map((edge) => graph.nodes.find((item) => item.id === edge.to))
+				.filter((item) => item !== undefined),
+			consumers: graph.edges
+				.filter((edge) => edge.to === id && edge.kind === "depends-on")
+				.map((edge) => graph.nodes.find((item) => item.id === edge.from))
+				.filter((item) => item !== undefined),
+			events: snapshot.events.filter((event) => event.source === id).slice(-100),
 		}
 	);
 }
@@ -474,6 +324,13 @@ function json(response: ServerResponse, status: number, value: unknown, limit = 
 
 function error(response: ServerResponse, status: number, code: string, message: string) {
 	json(response, status, { error: { code, message, status } });
+}
+
+function commandError(response: ServerResponse, cause: unknown, fallbackCode?: string) {
+	if (cause instanceof DashboardTransportError)
+		return error(response, 503, cause.code, cause.message);
+	const failure = serializeControlPlaneError(cause);
+	return error(response, 409, fallbackCode ?? failure.code, failure.message);
 }
 
 function textResponse(response: ServerResponse, status: number, type: string, body: string) {
