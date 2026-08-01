@@ -14,6 +14,7 @@ export interface WorkspaceSessionRecord {
 	readonly sessionId: string;
 	readonly pid: number;
 	readonly processStartedAt: string;
+	readonly processExecutable?: string;
 	readonly endpoint: WorkspaceEndpoint;
 	readonly createdAt: string;
 }
@@ -55,6 +56,7 @@ export async function readSessionRecord(file: string): Promise<WorkspaceSessionR
 		typeof value.sessionId !== "string" ||
 		typeof value.pid !== "number" ||
 		typeof value.processStartedAt !== "string" ||
+		(value.processExecutable !== undefined && typeof value.processExecutable !== "string") ||
 		!isRecord(value.endpoint) ||
 		(value.endpoint.kind !== "unix" && value.endpoint.kind !== "pipe") ||
 		typeof value.endpoint.address !== "string" ||

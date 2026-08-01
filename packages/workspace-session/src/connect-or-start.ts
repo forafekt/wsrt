@@ -1,17 +1,10 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import {
-	protocolError,
-	WORKSPACE_PROTOCOL_VERSION,
-	type WorkspaceSessionHandshake,
-} from "./protocol.js";
-import {
-	readSessionRecord,
-	recordMatchesHandshake,
-	sessionPaths,
-	type WorkspaceSessionRecord,
-} from "./session-record.js";
+import { PlatformProcessIdentityProvider } from "./process-identity.js";
+import { protocolError, type WorkspaceSessionHandshake } from "./protocol.js";
+import { readSessionRecord, sessionPaths } from "./session-record.js";
+import { validateRecordedSession } from "./session-validation.js";
 import { WorkspaceTransportConnection } from "./transport.js";
 import { discoverWorkspaceRoot, workspaceIdentity } from "./workspace-identity.js";
 import { WorkspaceSessionClient } from "./workspace-session-client.js";
@@ -29,10 +22,7 @@ export async function connectOrStartWorkspaceSession(
 	const root = await discoverWorkspaceRoot(options.root, options.config);
 	const identity = await workspaceIdentity(root);
 	const paths = sessionPaths(identity.root, identity.workspaceId);
-	const existing = await connectRecorded(paths.record, identity.workspaceId).catch((cause) => {
-		if (!recoverable(cause)) throw cause;
-		return undefined;
-	});
+	const existing = await connectRecorded(paths.record, identity.workspaceId, true);
 	if (existing) return existing;
 	if (options.start === false)
 		throw protocolError("session.unavailable", "No active workspace session");
@@ -65,11 +55,11 @@ export async function connectOrStartWorkspaceSession(
 	let last: unknown;
 	while (Date.now() < deadline) {
 		try {
-			const client = await connectRecorded(paths.record, identity.workspaceId);
+			const client = await connectRecorded(paths.record, identity.workspaceId, false);
 			if (client) return client;
 		} catch (cause) {
 			last = cause;
-			if (!recoverable(cause)) throw cause;
+			if ((cause as { code?: string }).code !== "session.unavailable") throw cause;
 		}
 		await observableDelay(paths.record, Math.min(250, deadline - Date.now()));
 	}
@@ -82,41 +72,44 @@ export async function connectOrStartWorkspaceSession(
 async function connectRecorded(
 	file: string,
 	workspaceId: string,
+	recoverStale: boolean,
 ): Promise<WorkspaceSessionClient | undefined> {
 	const record = await readSessionRecord(file);
 	if (!record) return undefined;
-	if (record.workspaceId !== workspaceId)
+	let connection: WorkspaceTransportConnection | undefined;
+	const validation = await validateRecordedSession(
+		record,
+		workspaceId,
+		new PlatformProcessIdentityProvider(),
+		async () => {
+			connection = await WorkspaceTransportConnection.connect(record.endpoint);
+			return (await connection.request({ type: "session.handshake" })) as WorkspaceSessionHandshake;
+		},
+	);
+	if (validation.status === "stale") {
+		await connection?.close().catch(() => {});
+		if (!recoverStale)
+			throw protocolError("session.unavailable", `Recorded session is stale: ${validation.reason}`);
+		await fs.unlink(file).catch(() => {});
+		if (record.endpoint.kind === "unix") await fs.unlink(record.endpoint.address).catch(() => {});
+		return undefined;
+	}
+	if (validation.status !== "healthy") {
+		await connection?.close().catch(() => {});
 		throw protocolError(
-			"workspace.identity_mismatch",
-			"Session record belongs to another workspace",
+			`session.${validation.status}`,
+			`Workspace session is ${validation.status}: ${validation.reason}`,
+			{ reason: validation.reason },
 		);
-	const connection = await WorkspaceTransportConnection.connect(record.endpoint);
+	}
+	if (!connection)
+		throw protocolError("session.indeterminate", "Healthy session has no transport connection");
 	try {
-		const handshake = (await connection.request({
-			type: "session.handshake",
-		})) as WorkspaceSessionHandshake;
-		validateHandshake(record, handshake);
-		return new WorkspaceSessionClient(connection, handshake);
+		return new WorkspaceSessionClient(connection, validation.handshake);
 	} catch (cause) {
 		await connection.close().catch(() => {});
 		throw cause;
 	}
-}
-function validateHandshake(record: WorkspaceSessionRecord, value: WorkspaceSessionHandshake) {
-	if (value.protocolVersion !== WORKSPACE_PROTOCOL_VERSION)
-		throw protocolError(
-			"protocol.version_mismatch",
-			`Host protocol ${value.protocolVersion} is incompatible with client protocol ${WORKSPACE_PROTOCOL_VERSION}`,
-		);
-	if (!recordMatchesHandshake(record, value))
-		throw protocolError(
-			"session.identity_mismatch",
-			"Session handshake does not match its discovery record",
-		);
-}
-function recoverable(cause: unknown): boolean {
-	const code = (cause as { code?: string })?.code;
-	return !code || ["transport.unavailable", "session.malformed_record"].includes(code);
 }
 async function observableDelay(file: string, timeout: number): Promise<void> {
 	if (timeout <= 0) return;

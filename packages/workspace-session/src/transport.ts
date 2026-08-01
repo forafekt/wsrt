@@ -12,19 +12,30 @@ import {
 import type { WorkspaceEndpoint } from "./session-record.js";
 
 export class WorkspaceTransportConnection {
+	readonly closed: Promise<void>;
+	#resolveClosed!: () => void;
 	readonly #pending = new Map<
 		string,
-		{ resolve(value: unknown): void; reject(cause: unknown): void; timer: NodeJS.Timeout }
+		{
+			resolve(value: unknown): void;
+			reject(cause: unknown): void;
+			timer: NodeJS.Timeout;
+			cleanup(): void;
+		}
 	>();
 	readonly #listeners = new Set<(event: WorkspaceEventEnvelope["event"]) => void>();
 	readonly #decoder = new LengthPrefixedFrameDecoder();
 	#closed = false;
 	private constructor(readonly socket: net.Socket) {
+		this.closed = new Promise((resolve) => {
+			this.#resolveClosed = resolve;
+		});
 		socket.on("data", (chunk) => this.#receive(chunk));
 		socket.once("error", (cause) => this.#fail(cause));
-		socket.once("close", () =>
-			this.#fail(protocolError("transport.unavailable", "Workspace connection closed")),
-		);
+		socket.once("close", () => {
+			this.#resolveClosed();
+			this.#fail(protocolError("transport.unavailable", "Workspace connection closed"));
+		});
 	}
 	static connect(
 		endpoint: WorkspaceEndpoint,
@@ -56,27 +67,54 @@ export class WorkspaceTransportConnection {
 			});
 		});
 	}
-	request(request: WorkspaceRequest, timeoutMs = 15_000): Promise<unknown> {
+	request(
+		request: WorkspaceRequest,
+		options: { timeoutMs?: number; signal?: AbortSignal } = {},
+	): Promise<unknown> {
 		if (this.#closed)
 			return Promise.reject(
 				protocolError("transport.unavailable", "Workspace connection is closed"),
 			);
 		const requestId = crypto.randomUUID();
+		const timeoutMs = options.timeoutMs ?? 15_000;
 		const envelope: WorkspaceRequestEnvelope = {
 			protocolVersion: WORKSPACE_PROTOCOL_VERSION,
 			requestId,
 			request,
 		};
 		return new Promise((resolve, reject) => {
+			const abort = () => {
+				this.#pending.delete(requestId);
+				clearTimeout(timer);
+				options.signal?.removeEventListener("abort", abort);
+				void this.request({ type: "request.cancel", targetRequestId }, { timeoutMs: 2_000 }).catch(
+					() => {},
+				);
+				reject(
+					options.signal?.reason ??
+						protocolError("request.cancelled", `Workspace request ${requestId} was cancelled`),
+				);
+			};
+			const targetRequestId = requestId;
 			const timer = setTimeout(() => {
 				this.#pending.delete(requestId);
+				options.signal?.removeEventListener("abort", abort);
+				void this.request({ type: "request.cancel", targetRequestId }, { timeoutMs: 2_000 }).catch(
+					() => {},
+				);
 				reject(
 					protocolError("request.timeout", `Workspace request ${requestId} timed out`, {
 						requestId,
 					}),
 				);
 			}, timeoutMs);
-			this.#pending.set(requestId, { resolve, reject, timer });
+			const cleanup = () => options.signal?.removeEventListener("abort", abort);
+			this.#pending.set(requestId, { resolve, reject, timer, cleanup });
+			if (options.signal?.aborted) {
+				abort();
+				return;
+			}
+			options.signal?.addEventListener("abort", abort, { once: true });
 			this.socket.write(encodeFrame(envelope), (cause) => {
 				if (cause) this.#settleError(requestId, cause);
 			});
@@ -106,6 +144,7 @@ export class WorkspaceTransportConnection {
 				if (!pending) continue;
 				this.#pending.delete(value.requestId);
 				clearTimeout(pending.timer);
+				pending.cleanup();
 				if (value.ok) pending.resolve(value.result);
 				else if ("error" in value)
 					pending.reject(Object.assign(new Error(value.error.message), value.error));
@@ -120,6 +159,7 @@ export class WorkspaceTransportConnection {
 		if (!pending) return;
 		this.#pending.delete(id);
 		clearTimeout(pending.timer);
+		pending.cleanup();
 		pending.reject(cause);
 	}
 	#fail(cause: unknown) {

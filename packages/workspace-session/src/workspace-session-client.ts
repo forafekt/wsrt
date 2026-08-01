@@ -6,7 +6,11 @@ import type {
 	SubmittedOperation,
 	WorkspaceEvent,
 } from "@wsrt/control-plane";
-import type { WorkspaceSessionHandshake } from "./protocol.js";
+import type {
+	DashboardActionDescriptor,
+	WorkspaceClientLease,
+	WorkspaceSessionHandshake,
+} from "./protocol.js";
 import type { WorkspaceTransportConnection } from "./transport.js";
 
 export class WorkspaceSessionClient {
@@ -16,8 +20,9 @@ export class WorkspaceSessionClient {
 	) {}
 	request<T = unknown>(
 		request: Parameters<WorkspaceTransportConnection["request"]>[0],
+		options?: Parameters<WorkspaceTransportConnection["request"]>[1],
 	): Promise<T> {
-		return this.connection.request(request) as Promise<T>;
+		return this.connection.request(request, options) as Promise<T>;
 	}
 	handshake(): WorkspaceSessionHandshake {
 		return this.session;
@@ -58,8 +63,34 @@ export class WorkspaceSessionClient {
 	status(): Promise<unknown> {
 		return this.request({ type: "session.status" });
 	}
-	stopSession(): Promise<unknown> {
-		return this.request({ type: "session.stop" });
+	async stopSession(): Promise<unknown> {
+		const result = await this.request({ type: "session.stop" });
+		await Promise.race([
+			this.connection.closed,
+			new Promise((resolve) => {
+				const timer = setTimeout(resolve, 15_000);
+				timer.unref?.();
+			}),
+		]);
+		return result;
+	}
+	acquireLease(kind: WorkspaceClientLease["kind"]): Promise<WorkspaceClientLease> {
+		return this.request({ type: "lease.acquire", kind });
+	}
+	renewLease(leaseId: string): Promise<WorkspaceClientLease> {
+		return this.request({ type: "lease.renew", leaseId });
+	}
+	releaseLease(leaseId: string): Promise<{ released: boolean }> {
+		return this.request({ type: "lease.release", leaseId });
+	}
+	dashboardActions(): Promise<readonly DashboardActionDescriptor[]> {
+		return this.request({ type: "dashboard.action.list" });
+	}
+	invokeDashboardAction(actionId: string, input?: unknown, signal?: AbortSignal): Promise<unknown> {
+		return this.request({ type: "dashboard.action.invoke", actionId, input }, { signal });
+	}
+	startSubscription(afterRevision?: number): Promise<unknown> {
+		return this.request({ type: "subscription.start", afterRevision });
 	}
 	subscribe(listener: Parameters<WorkspaceTransportConnection["subscribe"]>[0]): () => void {
 		return this.connection.subscribe(listener);

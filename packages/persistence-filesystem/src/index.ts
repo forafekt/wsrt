@@ -24,6 +24,7 @@ type WorkspaceLock = {
 	pid: number;
 	hostname: string;
 	startedAt: string;
+	processStartedAt?: string;
 };
 
 type StoredValue<T> = { updatedAt: string; value: T };
@@ -289,6 +290,7 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 			pid: process.pid,
 			hostname: os.hostname(),
 			startedAt: new Date().toISOString(),
+			processStartedAt: await processStartIdentity(process.pid),
 		};
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
@@ -305,7 +307,7 @@ export class FilesystemPersistenceProvider implements PersistenceProvider {
 			} catch (cause) {
 				if (!isNodeError(cause, "EEXIST")) throw cause;
 				const owner = await readJson<WorkspaceLock>(file);
-				if (!owner || !lockIsLive(owner)) {
+				if (!owner || !(await lockIsLive(owner))) {
 					await fs.unlink(file).catch(() => {});
 					continue;
 				}
@@ -405,12 +407,35 @@ async function readJson<T>(file: string): Promise<T | undefined> {
 	}
 }
 
-function lockIsLive(lock: WorkspaceLock): boolean {
+async function lockIsLive(lock: WorkspaceLock): Promise<boolean> {
 	if (lock.hostname !== os.hostname()) return true;
 	try {
 		process.kill(lock.pid, 0);
-		return true;
+		if (!lock.processStartedAt) return true;
+		return (await processStartIdentity(lock.pid)) === lock.processStartedAt;
 	} catch (cause) {
 		return !isNodeError(cause, "ESRCH");
+	}
+}
+
+async function processStartIdentity(pid: number): Promise<string | undefined> {
+	if (process.platform !== "linux") return undefined;
+	try {
+		const [stat, bootId] = await Promise.all([
+			fs.readFile(`/proc/${pid}/stat`, "utf8"),
+			fs.readFile("/proc/sys/kernel/random/boot_id", "utf8"),
+		]);
+		const close = stat.lastIndexOf(")");
+		const started =
+			close >= 0
+				? stat
+						.slice(close + 2)
+						.trim()
+						.split(/\s+/)[19]
+				: undefined;
+		return started ? `linux:${bootId.trim()}:${started}` : undefined;
+	} catch (cause) {
+		if (isNodeError(cause, "ENOENT")) return undefined;
+		throw cause;
 	}
 }

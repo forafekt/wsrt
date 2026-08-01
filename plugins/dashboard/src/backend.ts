@@ -59,6 +59,16 @@ export async function createDirectDashboardBackend(
 export async function createSessionDashboardBackend(
 	client: WorkspaceSessionClient,
 ): Promise<DashboardBackend> {
+	let lease = await client.acquireLease("dashboard");
+	const renew = setInterval(() => {
+		void client
+			.renewLease(lease.id)
+			.then((value) => {
+				lease = value;
+			})
+			.catch(() => {});
+	}, 10_000);
+	renew.unref?.();
 	let current = await sessionDashboardSnapshot(client);
 	const listeners = new Set<(snapshot: DashboardSnapshot) => void>();
 	let refreshing = false;
@@ -81,27 +91,28 @@ export async function createSessionDashboardBackend(
 			listeners.add(listener);
 			return () => {
 				listeners.delete(listener);
-				if (!listeners.size) unsubscribe();
+				if (!listeners.size) {
+					unsubscribe();
+					clearInterval(renew);
+					void client.releaseLease(lease.id);
+				}
 			};
 		},
 		submit: (command) => client.submit(command),
 		cancel: (command) => client.execute(command) as Promise<DashboardCancellationResult>,
-		async runContribution(contributionId) {
-			throw new Error(
-				`Dashboard action ${contributionId} is unavailable through this protocol version`,
-			);
-		},
+		runContribution: (contributionId) => client.invokeDashboardAction(contributionId),
 	};
 }
 
 async function sessionDashboardSnapshot(
 	client: WorkspaceSessionClient,
 ): Promise<DashboardSnapshot> {
-	const [controlPlane, graph, events, configuration] = await Promise.all([
+	const [controlPlane, graph, events, configuration, actions] = await Promise.all([
 		client.snapshot(),
 		client.graph(),
 		client.events(),
 		client.definition(),
+		client.dashboardActions(),
 	]);
 	return Object.freeze({
 		protocolVersion: 3,
@@ -111,7 +122,12 @@ async function sessionDashboardSnapshot(
 		graph: graph as DashboardSnapshot["graph"],
 		events: events.map((event) => ({ ...event, payload: boundedValue(event.payload) })),
 		configuration: safeSerializable(configuration),
-		contributions: [],
+		contributions: actions.map((action) => ({
+			id: action.id,
+			kind: "action" as const,
+			title: action.title,
+			description: action.description,
+		})),
 	});
 }
 

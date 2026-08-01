@@ -23,8 +23,8 @@
 	},
 	"dependencies": {
 		"@wsrt/control-plane": "workspace:*",
-		"@wsrt/plugins": "workspace:*"
-		,"@wsrt/workspace-session": "workspace:*"
+		"@wsrt/plugins": "workspace:*",
+		"@wsrt/workspace-session": "workspace:*"
 	},
 	"description": "A local browser dashboard plugin for the WSRT control plane.",
 	"license": "ISC",
