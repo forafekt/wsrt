@@ -22,6 +22,7 @@ export const packageCatalog = Object.freeze(
 		["@wsrt/persistence-filesystem", "packages/persistence-filesystem", "public-fixed"],
 		["@wsrt/persistence-memory", "packages/persistence-memory", "public-fixed"],
 		["@wsrt/plugin-dashboard", "plugins/dashboard", "public-fixed"],
+		["@wsrt/plugin-workbench", "plugins/workbench", "public-fixed"],
 		["@wsrt/plugin-vite", "plugins/vite", "public-fixed"],
 		["@wsrt/plugins", "packages/plugins", "public-fixed"],
 		["@wsrt/runtime-node", "runtimes/node", "public-fixed"],

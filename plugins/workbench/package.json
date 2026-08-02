@@ -1,0 +1,54 @@
+{
+	"name": "@wsrt/plugin-workbench",
+	"version": "0.1.0-alpha.0",
+	"type": "module",
+	"private": false,
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"ARCHITECTURE.md"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "node --test tests/*.test.mjs"
+	},
+	"dependencies": {
+		"@wsrt/control-plane": "workspace:*",
+		"@wsrt/plugins": "workspace:*",
+		"@wsrt/workspace-session": "workspace:*"
+	},
+	"description": "Authoritative semantic workspace explorer and operating layer for WSRT.",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/forafekt/wsrt.git",
+		"directory": "plugins/workbench"
+	},
+	"bugs": {
+		"url": "https://github.com/forafekt/wsrt/issues"
+	},
+	"homepage": "https://github.com/forafekt/wsrt#readme",
+	"keywords": [
+		"wsrt",
+		"workspace",
+		"workbench",
+		"orchestration"
+	],
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"sideEffects": false
+}

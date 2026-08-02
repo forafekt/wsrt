@@ -9,6 +9,15 @@ export default defineSystem({
 	},
 	plugins: [
 		{
+			provider: "@wsrt/plugin-workbench",
+			options: {
+				host: "127.0.0.1",
+				port: 5178,
+				basePath: "/__wsrt/workbench",
+				open: false,
+			},
+		},
+		{
 			provider: "@wsrt/plugin-dashboard",
 			options: {
 				host: "127.0.0.1",

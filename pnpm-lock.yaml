@@ -51,6 +51,9 @@ importers:
       '@wsrt/plugin-vite':
         specifier: workspace:*
         version: link:plugins/vite
+      '@wsrt/plugin-workbench':
+        specifier: workspace:*
+        version: link:plugins/workbench
       '@wsrt/plugins':
         specifier: workspace:*
         version: link:packages/plugins
@@ -334,6 +337,18 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  plugins/workbench:
+    dependencies:
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
+      '@wsrt/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@wsrt/workspace-session':
+        specifier: workspace:*
+        version: link:../../packages/workspace-session
 
   runtimes/node:
     dependencies:
