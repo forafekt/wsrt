@@ -6,6 +6,7 @@ export interface WorkspaceEndpoint {
 	readonly kind: "unix" | "pipe";
 	readonly address: string;
 }
+
 export interface WorkspaceSessionRecord {
 	readonly schemaVersion: 1;
 	readonly protocolVersion: number;
@@ -88,6 +89,7 @@ export function recordMatchesHandshake(
 		record.processStartedAt === handshake.processStartedAt
 	);
 }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value);
 }

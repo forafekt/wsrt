@@ -62,6 +62,11 @@ export function generateWsrtConfigJsonSchema(): JsonSchema {
 			additionalProperties: false,
 		},
 		adapter: { type: "string", deprecated: true },
+		sources: { type: "array", items: { type: "string", minLength: 1 } },
+		entrypoints: { type: "array", items: { type: "string", minLength: 1 } },
+		configuration: { type: "array", items: { type: "string", minLength: 1 } },
+		tests: { type: "array", items: { type: "string", minLength: 1 } },
+		generated: { type: "array", items: { type: "string", minLength: 1 } },
 	};
 	const schema = {
 		$schema: "https://json-schema.org/draft/2020-12/schema",
@@ -160,6 +165,7 @@ export function generateWsrtConfigJsonSchema(): JsonSchema {
 				type: "object",
 				properties: {
 					...executableProperties,
+					inputs: { type: "array", items: { type: "string", minLength: 1 } },
 					processes: record("#/$defs/executable"),
 					consumes: { type: "array", items: { type: "string" } },
 				},

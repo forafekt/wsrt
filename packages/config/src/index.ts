@@ -30,7 +30,9 @@ export type {
 	NormalizedArtifact,
 	NormalizedCommand,
 	NormalizedExecutable,
+	NormalizedSourceAssociation,
 	NormalizedSystemDefinition,
+	SourceAssociationRole,
 	SourceReference,
 	SystemDiagnostic,
 	TaskInput,
@@ -44,5 +46,6 @@ export {
 	defineSystem,
 	normalizeSystemDefinition,
 	publicConfigSections,
+	sourceAssociationRoles,
 	WSRT_CONFIG_SCHEMA_URL,
 } from "./system.js";

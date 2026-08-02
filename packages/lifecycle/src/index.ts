@@ -370,6 +370,6 @@ async function withTimeout<T>(
 	}
 }
 
-export { defaultDependencyCondition };
-
 export type { DependencyCondition };
+
+export { defaultDependencyCondition };

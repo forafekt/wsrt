@@ -54,6 +54,26 @@ export type ControlPlaneCommand =
 	| { type: "task.run"; taskId: string }
 	| { type: "operation.cancel"; operationId: string };
 
+export const controlPlaneCommandPermissions = Object.freeze([
+	"nodes.start",
+	"nodes.stop",
+	"nodes.restart",
+	"tasks.run",
+	"operations.cancel",
+] as const);
+
+export type ControlPlaneCommandPermission = (typeof controlPlaneCommandPermissions)[number];
+
+export function controlPlaneCommandPermission(
+	command: ControlPlaneCommand,
+): ControlPlaneCommandPermission {
+	if (command.type === "node.start") return "nodes.start";
+	if (command.type === "node.stop") return "nodes.stop";
+	if (command.type === "node.restart") return "nodes.restart";
+	if (command.type === "task.run") return "tasks.run";
+	return "operations.cancel";
+}
+
 export type ControlPlaneCommandResult =
 	| OperationResult
 	| { operationId: string; cancelled: boolean };

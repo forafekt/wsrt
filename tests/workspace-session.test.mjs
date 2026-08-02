@@ -61,6 +61,87 @@ test("concurrent clients elect one authoritative host", async () => {
 		const identity = await workspaceIdentity(root);
 		const record = await readSessionRecord(sessionPaths(root, identity.workspaceId).record);
 		assert.equal(record?.sessionId, clients[0].session.sessionId);
+		const manifest = JSON.parse(
+			await fs.readFile(path.join(root, ".wsrt", "workspace-manifest.json"), "utf8"),
+		);
+		assert.equal(manifest.workspace.id, identity.workspaceId);
+		assert.deepEqual(manifest.protocol, { name: "wsrt.workspace", version: 1 });
+		assert.equal(manifest.sessionDiscovery.record, ".wsrt/session/record.json");
+		assert.equal(manifest.mcp.command, "wsrt-mcp");
+		assert.ok(manifest.capabilities.includes("workspace.description"));
+		const descriptions = await Promise.all(clients.map((client) => client.describeWorkspace()));
+		assert.equal(new Set(descriptions.map(({ metadata }) => metadata.workspaceRevision)).size, 1);
+		assert.equal(new Set(descriptions.map(({ result }) => JSON.stringify(result))).size, 1);
+		assert.equal(descriptions[0].result.workspace.name, "session");
+		assert.equal(
+			descriptions[0].result.nodes.some(({ id }) => id === "application:desktop"),
+			true,
+		);
+		assert.equal(
+			(await clients[0].getCapabilities()).result.some(({ id }) => id === "workspace.description"),
+			true,
+		);
+		assert.equal((await clients[0].describeNode("application:desktop")).result.name, "desktop");
+		assert.deepEqual(
+			(await clients[0].queryGraph({ roots: ["application:desktop"], depth: 0 })).result.nodes.map(
+				({ id }) => id,
+			),
+			["application:desktop"],
+		);
+		assert.deepEqual(
+			(await clients[0].queryFiles({ nodeIds: ["application:desktop"] })).result.files,
+			[],
+		);
+		await assert.rejects(
+			clients[0].request({
+				type: "workspace.command.execute",
+				command: { type: "node.start", nodeIds: ["application:desktop"] },
+			}),
+			{ code: "authorization.denied", details: { requiredPermission: "nodes.start" } },
+		);
+		await assert.rejects(
+			clients[0].request({
+				type: "workspace.command.plan",
+				command: { type: "node.start", nodeIds: ["application:desktop"] },
+			}),
+			{ code: "authorization.denied", details: { requiredPermission: "commands.plan" } },
+		);
+		const execution = await clients[0].executeWorkspaceCommand(
+			{ type: "operation.cancel", operationId: "missing-operation" },
+			{
+				permissions: ["operations.cancel"],
+				expectedRevision: descriptions[0].metadata.workspaceRevision,
+			},
+		);
+		assert.equal(execution.result.cancelled, false);
+		assert.equal(execution.metadata.workspaceRevision, descriptions[0].metadata.workspaceRevision);
+		const revisionEvent = new Promise((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error("Timed out waiting for revision event")),
+				2_000,
+			);
+			const unsubscribe = clients[1].subscribe((event) => {
+				if (event.type !== "workspace.revision.changed") return;
+				clearTimeout(timeout);
+				unsubscribe();
+				resolve(event);
+			});
+		});
+		await clients[0].executeWorkspaceCommand(
+			{ type: "node.start", nodeIds: ["application:desktop"] },
+			{ permissions: ["nodes.start"] },
+		);
+		const changed = await revisionEvent;
+		assert.ok(changed.revision > changed.previousRevision);
+		const resync = await clients[2].startSubscription(changed.previousRevision);
+		assert.equal(resync.mode, "snapshot-required");
+		assert.ok(resync.revision >= changed.revision);
+		await assert.rejects(
+			clients[0].describeWorkspace({
+				expectedRevision: descriptions[0].metadata.workspaceRevision + 1,
+			}),
+			{ code: "workspace.revision_stale" },
+		);
 		await clients[0].stopSession();
 	} finally {
 		await Promise.all(clients.map((client) => client.close().catch(() => {})));
@@ -288,6 +369,7 @@ async function availablePort() {
 	await new Promise((resolve) => server.close(resolve));
 	return port;
 }
+
 async function waitForJson(file) {
 	for (let attempt = 0; attempt < 500; attempt++) {
 		try {
@@ -298,6 +380,7 @@ async function waitForJson(file) {
 	}
 	throw new Error(`Timed out waiting for ${file}`);
 }
+
 function processAlive(pid) {
 	try {
 		process.kill(pid, 0);
@@ -306,6 +389,7 @@ function processAlive(pid) {
 		return false;
 	}
 }
+
 async function rebind(port) {
 	const server = net.createServer();
 	await new Promise((resolve, reject) => {

@@ -4,6 +4,7 @@ import type {
 	ReadinessProvider,
 	RuntimeProvider,
 } from "@wsrt/capabilities";
+import type { SourceAssociationRole } from "@wsrt/config";
 
 export type PluginIdentity = { readonly id: string; readonly version: string };
 
@@ -19,7 +20,8 @@ export type PluginCapability =
 	| "diagnostics"
 	| "dashboard"
 	| "mcp"
-	| "completion";
+	| "completion"
+	| "workspace-intelligence";
 
 export type PluginDependency =
 	| string
@@ -175,6 +177,27 @@ export type CompletionContribution = {
 	complete(input: string, context: PluginContext): readonly string[] | Promise<readonly string[]>;
 };
 
+export type WorkspaceIntelligenceContribution = {
+	readonly id: string;
+	readonly owner: PluginIdentity;
+	readonly category:
+		| "project-discovery"
+		| "source-ownership"
+		| "relationships"
+		| "change-impact"
+		| "validation"
+		| "documentation";
+	readonly facts: readonly Readonly<{
+		type: "source-ownership";
+		selector: Readonly<{ nodeId?: string; provider?: string }>;
+		associations: readonly Readonly<{
+			pattern: string;
+			role: SourceAssociationRole;
+			generated?: boolean;
+		}>[];
+	}>[];
+};
+
 export type PluginContributions = {
 	runtimes?: readonly RuntimeProvider[];
 	adapters?: readonly ExecutionAdapter[];
@@ -189,6 +212,7 @@ export type PluginContributions = {
 	mcp?: readonly McpContribution[];
 	completion?: readonly CompletionContribution[];
 	executables?: readonly ExecutableContribution[];
+	intelligence?: readonly WorkspaceIntelligenceContribution[];
 };
 
 export interface WsrtPlugin extends PluginMetadata {
@@ -214,6 +238,7 @@ const contributionCapability: Partial<Record<keyof PluginContributions, PluginCa
 	dashboard: "dashboard",
 	mcp: "mcp",
 	completion: "completion",
+	intelligence: "workspace-intelligence",
 };
 
 export function orderPlugins(plugins: readonly WsrtPlugin[]): readonly WsrtPlugin[] {
@@ -560,6 +585,7 @@ function contributionSnapshots(
 		"mcp",
 		"completion",
 		"executables",
+		"intelligence",
 	]);
 	return Object.entries(plugin.contributions ?? {}).flatMap(([kind, values]) =>
 		Array.isArray(values)
@@ -645,7 +671,7 @@ function assertUniqueContributions(plugins: readonly WsrtPlugin[]): void {
 						value && typeof value === "object" && "id" in value ? String(value.id) : undefined;
 					if (!id) continue;
 					if (
-						(kind === "executables" || kind === "cli") &&
+						(kind === "executables" || kind === "cli" || kind === "intelligence") &&
 						(!(value as { owner?: PluginIdentity }).owner?.id ||
 							(value as { owner?: PluginIdentity }).owner?.id !== plugin.id)
 					)

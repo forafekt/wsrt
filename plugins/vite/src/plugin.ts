@@ -147,6 +147,8 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 			};
 		},
 	};
+	const project = (options.project ?? ".").replaceAll("\\", "/").replace(/^\.\/?/, "");
+	const inProject = (value: string) => (project ? `${project}/${value}` : value);
 	return definePlugin({
 		id: owner.id,
 		name: "Vite",
@@ -158,12 +160,31 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 			"artifact-provider",
 			"workspace-provider",
 			"dashboard",
+			"workspace-intelligence",
 		],
 		contributions: {
 			adapters: [createViteAdapter(options)],
 			readiness: [readiness],
 			artifacts: [artifacts],
 			executables: [executable],
+			intelligence: [
+				{
+					id: "vite-source-ownership",
+					owner,
+					category: "source-ownership",
+					facts: [
+						{
+							type: "source-ownership",
+							selector: { provider: "vite" },
+							associations: [
+								{ pattern: inProject("index.html"), role: "entrypoint" },
+								{ pattern: inProject("vite.config.*"), role: "configuration" },
+								{ pattern: inProject("dist/**"), role: "generated", generated: true },
+							],
+						},
+					],
+				},
+			],
 			dashboard: [
 				{
 					id: "vite-status",

@@ -9,7 +9,8 @@ import {
 } from "@wsrt/commandline";
 import type { WsrtConfigFormat } from "@wsrt/config";
 import type { CliContribution, PluginContext, PluginSession } from "@wsrt/plugins";
-import type { WorkspaceSessionClient } from "@wsrt/workspace-session";
+import type { WorkspaceRequest, WorkspaceSessionClient } from "@wsrt/workspace-session";
+import { integrationTargets, removeIntegration, setupIntegration } from "./integrations.js";
 import { logger } from "./logger.js";
 
 const packageMetadata = createRequire(import.meta.url)("../package.json") as {
@@ -42,6 +43,23 @@ interface ConfigWriteOptions extends GlobalOptions {
 	checkPorts?: boolean;
 	checkNetwork?: boolean;
 }
+
+interface WorkspaceQueryOptions extends GlobalOptions {
+	depth?: number;
+	direction?: "dependencies" | "dependents" | "both";
+	kind?: string;
+	role?: string;
+	path?: string;
+	includeGenerated?: boolean;
+	limit?: number;
+	cursor?: string;
+}
+
+type WorkspaceGraphRequest = Extract<WorkspaceRequest, { type: "workspace.graph.query" }>;
+
+type WorkspaceFilesRequest = Extract<WorkspaceRequest, { type: "workspace.files.query" }>;
+
+type WorkspacePlanRequest = Extract<WorkspaceRequest, { type: "workspace.command.plan" }>;
 
 class ReportedConfigurationError extends Error {}
 
@@ -91,6 +109,148 @@ export function createWsrtCli(
 		// 	"  $ wsrt exec dashboard -- --port 5177",
 		// ],
 		commands: [
+			{
+				name: "integrate list",
+				description: "List vendor-neutral consumer integration adapters",
+				group: "Integration",
+				action: (options: GlobalOptions) => printResult(integrationTargets, !!options.json),
+			},
+			{
+				name: "integrate setup <target>",
+				description: "Install managed consumer instructions without replacing user content",
+				group: "Integration",
+				action: (target: string, options: GlobalOptions) =>
+					execute((client) => setupIntegration(client.session.workspaceRoot, target, client))(
+						options,
+					),
+			},
+			{
+				name: "integrate remove <target>",
+				description: "Remove WSRT-managed consumer integration content",
+				group: "Integration",
+				action: async (target: string, options: GlobalOptions) => {
+					const root = path.resolve(options.root ?? process.cwd());
+					printResult(await removeIntegration(root, target), !!options.json);
+				},
+			},
+			{
+				name: "workspace capabilities",
+				description: "Describe authoritative workspace protocol capabilities",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace capabilities --json"],
+				action: execute((client) => client.request({ type: "workspace.capabilities" })),
+			},
+			{
+				name: "workspace describe",
+				description: "Describe the authoritative semantic workspace model",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace describe --json"],
+				action: execute((client) => client.request({ type: "workspace.describe" })),
+			},
+			{
+				name: "workspace node <node-id>",
+				description: "Describe one authoritative workspace node",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace node application:desktop --json"],
+				action: (nodeId: string, options: GlobalOptions) =>
+					execute((client) => client.request({ type: "workspace.node.describe", nodeId }))(options),
+			},
+			{
+				name: "workspace graph [node-id]",
+				description: "Query dependencies or dependents from a workspace node",
+				group: "Workspace intelligence",
+				options: [
+					{ name: "--depth <number>", description: "Traversal depth (0-32)" },
+					{ name: "--direction <direction>", description: "dependencies, dependents, or both" },
+					{ name: "--kind <kind>", description: "Include a selected node kind" },
+					{ name: "--limit <number>", description: "Maximum nodes (1-500)" },
+				],
+				examples: ["  $ wsrt workspace graph application:desktop --depth 2 --json"],
+				action: (nodeId: string | undefined, options: WorkspaceQueryOptions) => {
+					if (!nodeId) throw new CommandLineError("workspace graph requires a node ID");
+					return execute((client) =>
+						client.request({
+							type: "workspace.graph.query",
+							query: {
+								roots: [nodeId],
+								...(options.depth !== undefined ? { depth: Number(options.depth) } : {}),
+								...(options.direction ? { direction: options.direction } : {}),
+								...(options.kind
+									? { kinds: [options.kind] as WorkspaceGraphRequest["query"]["kinds"] }
+									: {}),
+								...(options.limit !== undefined ? { limit: Number(options.limit) } : {}),
+							},
+						}),
+					)(options);
+				},
+			},
+			{
+				name: "workspace files [node-id]",
+				description: "Query declared source ownership for nodes, roles, or paths",
+				group: "Workspace intelligence",
+				options: [
+					{ name: "--role <role>", description: "Include a selected file role" },
+					{ name: "--path <path>", description: "Resolve an explicit workspace-relative path" },
+					{ name: "--include-generated", description: "Include generated files" },
+					{ name: "--limit <number>", description: "Page size (1-500)" },
+					{ name: "--cursor <cursor>", description: "Continue a previous query" },
+				],
+				examples: ["  $ wsrt workspace files application:desktop --role source --json"],
+				action: (nodeId: string | undefined, options: WorkspaceQueryOptions) =>
+					execute((client) =>
+						client.request({
+							type: "workspace.files.query",
+							query: {
+								...(nodeId ? { nodeIds: [nodeId] } : {}),
+								...(options.role
+									? { roles: [options.role] as WorkspaceFilesRequest["query"]["roles"] }
+									: {}),
+								...(options.path ? { paths: [options.path] } : {}),
+								...(options.includeGenerated ? { includeGenerated: true } : {}),
+								...(options.limit !== undefined ? { limit: Number(options.limit) } : {}),
+								...(options.cursor ? { cursor: options.cursor } : {}),
+							},
+						}),
+					)(options),
+			},
+			{
+				name: "workspace impact [...paths]",
+				description: "Analyze evidence-backed impact of changed workspace paths",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace impact apps/web/src.js --json"],
+				action: (paths: string[], options: GlobalOptions) => {
+					if (!paths.length)
+						throw new CommandLineError("workspace impact requires at least one path");
+					return execute((client) => client.analyzeChangeImpact({ paths }))(options);
+				},
+			},
+			{
+				name: "workspace command plan <command> [...targets]",
+				description: "Plan a workspace command without executing it",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace command plan node.start application:web --json"],
+				action: (command: string, targets: string[], options: GlobalOptions) =>
+					execute((client) => client.planCommand(parseWorkspaceCommand(command, targets)))(options),
+			},
+			{
+				name: "workspace command execute <command> [...targets]",
+				description: "Plan and execute a permissioned workspace command",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace command execute task.run build --json"],
+				action: (command: string, targets: string[], options: GlobalOptions) =>
+					execute(async (client) => {
+						const parsed = parseWorkspaceCommand(command, targets);
+						const plan = await client.planCommand(parsed);
+						if (!plan.result.valid)
+							throw new CommandLineError(
+								plan.result.warnings.join("; ") || "Command plan is invalid",
+							);
+						return client.executeWorkspaceCommand(parsed, {
+							permissions: plan.result.requiredPermissions as never,
+							expectedRevision: plan.metadata.workspaceRevision,
+						});
+					})(options),
+			},
 			{
 				name: "init",
 				description: "Create a discoverable WSRT configuration (YAML by default)",
@@ -525,6 +685,7 @@ export async function run(argv = process.argv, cliVersion = version): Promise<vo
 		}
 		const utilityCommand =
 			bootstrapArguments[0] === "init" ||
+			bootstrapArguments[0] === "integrate" ||
 			(bootstrapArguments[0] === "config" &&
 				["convert", "validate", "test", "schema"].includes(bootstrapArguments[1] ?? ""));
 		if (utilityCommand) {
@@ -1010,6 +1171,19 @@ function printResult(result: unknown, json: boolean): void {
 			result && typeof result === "object" ? (result as Record<string, unknown>) : { result },
 		);
 	}
+}
+
+function parseWorkspaceCommand(
+	type: string,
+	targets: readonly string[],
+): WorkspacePlanRequest["command"] {
+	if (["node.start", "node.stop", "node.restart"].includes(type)) {
+		if (!targets.length) throw new CommandLineError(`${type} requires at least one node ID`);
+		return { type: type as "node.start" | "node.stop" | "node.restart", nodeIds: targets };
+	}
+	if (type === "task.run" && targets.length === 1) return { type, taskId: targets[0] };
+	if (type === "operation.cancel" && targets.length === 1) return { type, operationId: targets[0] };
+	throw new CommandLineError(`unsupported command ${type} or invalid target count`);
 }
 
 function errorCode(cause: unknown): string {

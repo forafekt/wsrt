@@ -127,3 +127,109 @@ test("MCP transport isolates unknown calls and permission denial", async () => {
 		await server.close();
 	}
 });
+
+test("MCP workspace intelligence tools are thin structured session-client adapters", async () => {
+	const calls = [];
+	const response = (operation, result) => ({
+		metadata: {
+			protocolVersion: 1,
+			workspaceRevision: 4,
+			generatedAt: "2026-08-02T12:00:00.000Z",
+			requestId: operation,
+		},
+		result,
+	});
+	const session = {
+		request() {},
+		getCapabilities: async (options) => {
+			calls.push(["capabilities", options]);
+			return response("capabilities", []);
+		},
+		describeWorkspace: async (options) => {
+			calls.push(["describe", options]);
+			return response("describe", { workspace: { name: "test" } });
+		},
+		describeNode: async (id, options) => {
+			calls.push(["node", id, options]);
+			return response("node", { id });
+		},
+		queryGraph: async (query, options) => {
+			calls.push(["graph", query, options]);
+			return response("graph", { nodes: [] });
+		},
+		queryFiles: async (query, options) => {
+			calls.push(["files", query, options]);
+			return response("files", { files: [] });
+		},
+		analyzeChangeImpact: async (query, options) => {
+			calls.push(["impact", query, options]);
+			return response("impact", { affectedNodes: [] });
+		},
+		planCommand: async (command, options) => {
+			calls.push(["plan", command, options]);
+			return response("plan", { valid: true });
+		},
+		executeWorkspaceCommand: async (command, options) => {
+			calls.push(["execute", command, options]);
+			return response("execute", { status: "completed" });
+		},
+	};
+	const server = new WsrtMcpServer(session);
+	const client = new Client({ name: "test", version: "1" });
+	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+	await server.connect(serverTransport);
+	await client.connect(clientTransport);
+	try {
+		const tools = await client.listTools();
+		for (const name of [
+			"wsrt_workspace_capabilities",
+			"wsrt_workspace_describe",
+			"wsrt_node_describe",
+			"wsrt_graph_query",
+			"wsrt_files_query",
+			"wsrt_change_impact",
+			"wsrt_command_plan",
+			"wsrt_command_execute",
+		]) {
+			const tool = tools.tools.find((item) => item.name === name);
+			assert.ok(tool, name);
+			assert.match(tool.description, /authoritative/i);
+		}
+		await client.callTool({ name: "wsrt_workspace_capabilities", arguments: {} });
+		await client.callTool({ name: "wsrt_workspace_describe", arguments: {} });
+		const node = await client.callTool({
+			name: "wsrt_node_describe",
+			arguments: { nodeId: "application:web" },
+		});
+		await client.callTool({
+			name: "wsrt_graph_query",
+			arguments: { roots: ["application:web"], depth: 2 },
+		});
+		await client.callTool({
+			name: "wsrt_files_query",
+			arguments: { nodeIds: ["application:web"], roles: ["source"] },
+		});
+		await client.callTool({ name: "wsrt_change_impact", arguments: { paths: ["src/main.ts"] } });
+		await client.callTool({
+			name: "wsrt_command_plan",
+			arguments: { command: { type: "node.start", nodeIds: ["application:web"] } },
+		});
+		assert.equal(node.structuredContent.result.id, "application:web");
+		assert.deepEqual(
+			calls.map(([operation]) => operation),
+			["capabilities", "describe", "node", "graph", "files", "impact", "plan"],
+		);
+		assert.deepEqual(calls[3][1], { roots: ["application:web"], depth: 2 });
+		assert.deepEqual(calls[4][1], { nodeIds: ["application:web"], roles: ["source"] });
+		assert.deepEqual(calls[5][1], { paths: ["src/main.ts"] });
+		assert.deepEqual(calls[6][1], { type: "node.start", nodeIds: ["application:web"] });
+		const denied = await client.callTool({
+			name: "wsrt_command_execute",
+			arguments: { command: { type: "node.start", nodeIds: ["application:web"] } },
+		});
+		assert.equal(denied.isError, true);
+	} finally {
+		await client.close();
+		await server.close();
+	}
+});

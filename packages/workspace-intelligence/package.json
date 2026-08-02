@@ -1,5 +1,5 @@
 {
-	"name": "@wsrt/workspace-session",
+	"name": "@wsrt/workspace-intelligence",
 	"version": "0.1.0-alpha.0",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -19,8 +19,10 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
+		"@wsrt/config": "workspace:*",
 		"@wsrt/control-plane": "workspace:*",
-		"@wsrt/workspace-intelligence": "workspace:*",
+		"@wsrt/graph": "workspace:*",
+		"@wsrt/plugins": "workspace:*",
 		"@wsrt/workspace": "workspace:*"
 	},
 	"engines": {

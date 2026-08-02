@@ -111,6 +111,7 @@ async function connectRecorded(
 		throw cause;
 	}
 }
+
 async function observableDelay(file: string, timeout: number): Promise<void> {
 	if (timeout <= 0) return;
 	const watcher = fs.watch(file);

@@ -4,6 +4,11 @@ import { createRequire } from "node:module";
 import type net from "node:net";
 import process from "node:process";
 import { createControlPlane, type WsrtControlPlane } from "@wsrt/control-plane";
+import { resolveWorkspace } from "@wsrt/workspace";
+import {
+	DefaultWorkspaceIntelligence,
+	type WorkspaceIntelligence,
+} from "@wsrt/workspace-intelligence";
 import { WorkspaceConfigurationTracker } from "./configuration-revision.js";
 import { encodeFrame, LengthPrefixedFrameDecoder } from "./framing.js";
 import { WorkspaceLeaseRegistry } from "./lease-registry.js";
@@ -17,11 +22,13 @@ import {
 	type WorkspaceResponseEnvelope,
 	type WorkspaceSessionHandshake,
 	type WorkspaceSessionState,
+	workspacePermissions,
 } from "./protocol.js";
 import { WorkspaceRequestRouter } from "./request-router.js";
 import { sessionPaths, writeSessionRecord } from "./session-record.js";
 import { createWorkspaceTransportServer } from "./transport.js";
 import { workspaceIdentity } from "./workspace-identity.js";
+import { writeWorkspaceManifest } from "./workspace-manifest.js";
 
 const geHostVersion = () => {
 	const require = createRequire(import.meta.url);
@@ -35,6 +42,7 @@ export class WorkspaceSessionHost {
 	#server?: net.Server;
 	#unsubscribe?: () => void;
 	#configuration?: WorkspaceConfigurationTracker;
+	#intelligence?: WorkspaceIntelligence;
 	readonly #sockets = new Set<net.Socket>();
 	readonly #inflight = new Map<string, AbortController>();
 	readonly #completedRequests = new Set<string>();
@@ -64,12 +72,35 @@ export class WorkspaceSessionHost {
 			});
 		try {
 			this.#plane = await createControlPlane({ root: this.root, config: this.config });
+			const workspace = await resolveWorkspace({ root: this.root });
+			this.#intelligence = new DefaultWorkspaceIntelligence({
+				workspaceId: this.workspaceId,
+				definition: this.#plane.definition(),
+				graph: this.#plane.graph(),
+				snapshot: () => {
+					if (!this.#plane)
+						throw protocolError("session.not_ready", "Workspace session is not ready");
+					return this.#plane.snapshot();
+				},
+				workspace,
+				contributions: this.#plane.pluginContributions("intelligence"),
+				hostFeatures: {
+					protocolVersion: WORKSPACE_PROTOCOL_VERSION,
+					transports: [paths.endpoint.kind],
+					subscriptions: true,
+					commandExecution: true,
+					changeImpact: true,
+					commandPlanning: true,
+					permissions: workspacePermissions,
+				},
+			});
 			this.#configuration = await WorkspaceConfigurationTracker.create(
 				this.#plane.definition().sourceFile,
 				this.#plane.definition(),
 			);
 			const router = new WorkspaceRequestRouter(
 				this.#plane,
+				this.#intelligence,
 				() => this.handshake(),
 				async () => ({
 					...this.handshake(),
@@ -115,21 +146,44 @@ export class WorkspaceSessionHost {
 				this.#server?.listen(paths.endpoint.address, resolve);
 			});
 			this.#state = "ready";
+			let previous = this.#plane.snapshot();
+			let previousCapabilities = this.#intelligence.describeWorkspace().capabilities;
 			this.#unsubscribe = this.#plane.subscribeSnapshots((snapshot) => {
-				const event: WorkspaceEventEnvelope = {
-					protocolVersion: WORKSPACE_PROTOCOL_VERSION,
-					sessionId: this.#sessionId,
-					event: { type: "snapshot.updated", revision: snapshot.revision, snapshot },
-				};
-				const frame = encodeFrame(event);
-				for (const socket of this.#sockets)
-					if (!socket.destroyed && !socket.write(frame))
-						socket.destroy(
-							protocolError(
-								"transport.slow_client",
-								"Workspace client exceeded its outbound buffer",
-							),
-						);
+				this.#broadcast({ type: "snapshot.updated", revision: snapshot.revision, snapshot });
+				this.#broadcast({
+					type: "workspace.revision.changed",
+					previousRevision: previous.revision,
+					revision: snapshot.revision,
+				});
+				for (const node of changedById(previous.nodes, snapshot.nodes))
+					this.#broadcast({ type: "workspace.node.changed", revision: snapshot.revision, node });
+				for (const operation of changedById(previous.operations, snapshot.operations))
+					this.#broadcast({
+						type: "workspace.operation.changed",
+						revision: snapshot.revision,
+						operation,
+					});
+				for (const diagnostic of added(previous.diagnostics, snapshot.diagnostics))
+					this.#broadcast({
+						type: "workspace.diagnostic.added",
+						revision: snapshot.revision,
+						diagnostic,
+					});
+				for (const artifact of changedById(previous.artifacts, snapshot.artifacts))
+					this.#broadcast({
+						type: "workspace.artifact.changed",
+						revision: snapshot.revision,
+						artifact,
+					});
+				const capabilities = this.#intelligence?.describeWorkspace().capabilities ?? [];
+				if (JSON.stringify(capabilities) !== JSON.stringify(previousCapabilities))
+					this.#broadcast({
+						type: "workspace.capabilities.changed",
+						revision: snapshot.revision,
+						capabilities,
+					});
+				previous = snapshot;
+				previousCapabilities = capabilities;
 			});
 			await writeSessionRecord(paths.record, {
 				schemaVersion: 1,
@@ -145,6 +199,12 @@ export class WorkspaceSessionHost {
 				endpoint: paths.endpoint,
 				createdAt: new Date().toISOString(),
 			});
+			const semantic = this.#intelligence.describeWorkspace();
+			await writeWorkspaceManifest(
+				this.root,
+				{ id: this.workspaceId, name: semantic.workspace.name },
+				semantic.capabilities,
+			);
 		} catch (cause) {
 			this.#state = "failed";
 			await this.#cleanup();
@@ -250,7 +310,7 @@ export class WorkspaceSessionHost {
 								protocolVersion: WORKSPACE_PROTOCOL_VERSION,
 								requestId: envelope.requestId,
 								ok: true,
-								result: await router.route(envelope.request, controller.signal),
+								result: await router.route(envelope.request, controller.signal, envelope.requestId),
 							};
 						}
 					} catch (cause) {
@@ -274,6 +334,18 @@ export class WorkspaceSessionHost {
 		socket.once("close", () => this.#sockets.delete(socket));
 		socket.once("error", () => this.#sockets.delete(socket));
 	}
+	#broadcast(event: WorkspaceEventEnvelope["event"]) {
+		const frame = encodeFrame({
+			protocolVersion: WORKSPACE_PROTOCOL_VERSION,
+			sessionId: this.#sessionId,
+			event,
+		} satisfies WorkspaceEventEnvelope);
+		for (const socket of this.#sockets)
+			if (!socket.destroyed && !socket.write(frame))
+				socket.destroy(
+					protocolError("transport.slow_client", "Workspace client exceeded its outbound buffer"),
+				);
+	}
 	async #cleanup() {
 		const paths = sessionPaths(this.root, this.workspaceId);
 		for (const controller of this.#inflight.values())
@@ -289,4 +361,14 @@ export class WorkspaceSessionHost {
 		await fs.unlink(paths.record).catch(() => {});
 		if (paths.endpoint.kind === "unix") await fs.unlink(paths.endpoint.address).catch(() => {});
 	}
+}
+
+function changedById<T extends { id: string }>(previous: readonly T[], current: readonly T[]): T[] {
+	const prior = new Map(previous.map((item) => [item.id, JSON.stringify(item)]));
+	return current.filter((item) => prior.get(item.id) !== JSON.stringify(item));
+}
+
+function added<T>(previous: readonly T[], current: readonly T[]): T[] {
+	const prior = new Set(previous.map((item) => JSON.stringify(item)));
+	return current.filter((item) => !prior.has(JSON.stringify(item)));
 }

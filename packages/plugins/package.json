@@ -21,7 +21,8 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@wsrt/capabilities": "workspace:*"
+		"@wsrt/capabilities": "workspace:*",
+		"@wsrt/config": "workspace:*"
 	},
 	"description": "Contracts, loading, and lifecycle management for WSRT plugins.",
 	"license": "ISC",

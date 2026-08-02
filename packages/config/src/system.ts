@@ -70,6 +70,11 @@ export type ExecutableInput = {
 	provider?: { provider: string; options?: unknown };
 	/** Execution adapter contribution id (for example `vite`). */
 	adapter?: string;
+	sources?: string[];
+	entrypoints?: string[];
+	configuration?: string[];
+	tests?: string[];
+	generated?: string[];
 };
 
 export type ApplicationInput = ExecutableInput & {
@@ -79,8 +84,30 @@ export type ApplicationInput = ExecutableInput & {
 
 export type TaskInput = ExecutableInput & {
 	produces?: string[];
+	inputs?: string[];
 	outputs?: TaskOutputInput[];
 };
+
+export const sourceAssociationRoles = Object.freeze([
+	"source",
+	"entrypoint",
+	"configuration",
+	"test",
+	"generated",
+	"task-input",
+	"task-output",
+	"artifact",
+	"manifest",
+] as const);
+
+export type SourceAssociationRole = (typeof sourceAssociationRoles)[number];
+
+export type NormalizedSourceAssociation = Readonly<{
+	pattern: string;
+	role: SourceAssociationRole;
+	generated: boolean;
+	source: SourceReference;
+}>;
 
 export type ArtifactInput = {
 	type: string;
@@ -147,6 +174,7 @@ export type NormalizedExecutable = {
 	outputs: readonly TaskOutputInput[];
 	environment: Readonly<Record<string, string>>;
 	source: SourceReference;
+	files: readonly NormalizedSourceAssociation[];
 };
 
 export type NormalizedArtifact = ArtifactInput & {
@@ -261,6 +289,7 @@ export function normalizeSystemDefinition(
 		prefix: string = kind,
 	) => {
 		const id = `${prefix}:${name}`;
+		const sourcePath = `${kind}s.${name}`;
 		executables.push({
 			id,
 			name,
@@ -275,7 +304,8 @@ export function normalizeSystemDefinition(
 			critical: value.critical ?? true,
 			outputs: Object.freeze([...(kind === "task" ? ((value as TaskInput).outputs ?? []) : [])]),
 			environment: Object.freeze({ ...value.environment }),
-			source: { file: options.file, path: `${kind}s.${name}` },
+			source: { file: options.file, path: sourcePath },
+			files: Object.freeze(sourceAssociations(value, kind, root, options.file, sourcePath)),
 		});
 		return id;
 	};
@@ -401,8 +431,81 @@ function validateInputShape(input: WorkspaceDefinitionInput, file: string): Syst
 			}
 			if (value.healthcheck && !["process", "http", "tcp"].includes(value.healthcheck.type))
 				error(`${base}.healthcheck.type`, "Expected process, http, or tcp");
+			for (const key of [
+				"sources",
+				"entrypoints",
+				"configuration",
+				"tests",
+				"generated",
+				"inputs",
+			] as const) {
+				const patterns = value[key as keyof typeof value];
+				if (
+					patterns !== undefined &&
+					(!Array.isArray(patterns) || patterns.some((item) => typeof item !== "string" || !item))
+				)
+					error(`${base}.${key}`, `${key} must be an array of non-empty strings`);
+				else if (Array.isArray(patterns))
+					for (const [index, pattern] of patterns.entries())
+						if (
+							typeof pattern === "string" &&
+							(path.isAbsolute(pattern) || pattern.replaceAll("\\", "/").split("/").includes(".."))
+						)
+							error(
+								`${base}.${key}.${index}`,
+								`${key} patterns must be workspace-relative and cannot contain '..'`,
+							);
+			}
 		}
 	return diagnostics;
+}
+
+function sourceAssociations(
+	value: ExecutableInput,
+	kind: NormalizedExecutable["kind"],
+	root: string,
+	file: string,
+	configPath: string,
+): NormalizedSourceAssociation[] {
+	const groups: readonly [keyof ExecutableInput | "inputs", SourceAssociationRole, boolean][] = [
+		["sources", "source", false],
+		["entrypoints", "entrypoint", false],
+		["configuration", "configuration", false],
+		["tests", "test", false],
+		["generated", "generated", true],
+		["inputs", "task-input", false],
+	];
+	const result: NormalizedSourceAssociation[] = [];
+	for (const [key, role, generated] of groups) {
+		if (key === "inputs" && kind !== "task") continue;
+		const values = (value as TaskInput)[key as keyof TaskInput];
+		if (!Array.isArray(values)) continue;
+		for (const [index, pattern] of values.entries())
+			if (typeof pattern === "string")
+				result.push({
+					pattern: normalizeWorkspacePattern(root, pattern),
+					role,
+					generated,
+					source: { file, path: `${configPath}.${key}.${index}` },
+				});
+	}
+	if (kind === "task")
+		for (const [index, output] of ((value as TaskInput).outputs ?? []).entries())
+			result.push({
+				pattern: normalizeWorkspacePattern(root, output.path),
+				role: "task-output",
+				generated: true,
+				source: { file, path: `${configPath}.outputs.${index}.path` },
+			});
+	return result.sort((a, b) => a.pattern.localeCompare(b.pattern) || a.role.localeCompare(b.role));
+}
+
+function normalizeWorkspacePattern(root: string, pattern: string): string {
+	const normalized = pattern.replaceAll("\\", "/").replace(/^\.\//, "");
+	const prefix = normalized.split(/[*?[]/, 1)[0] ?? normalized;
+	const resolved = path.resolve(root, prefix || ".");
+	if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return normalized;
+	return normalized;
 }
 
 function command(value?: CommandInput): NormalizedCommand | undefined {

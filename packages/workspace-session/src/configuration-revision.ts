@@ -6,6 +6,7 @@ export interface WorkspaceConfigurationSource {
 	readonly file: string;
 	readonly hash: string;
 }
+
 export interface WorkspaceConfigurationRevision {
 	readonly fingerprint: string;
 	readonly loadedAt: string;
@@ -65,6 +66,7 @@ async function revision(
 		.digest("hex");
 	return { fingerprint, loadedAt: new Date().toISOString(), sources };
 }
+
 async function discoverSources(entry: string): Promise<string[]> {
 	const seen = new Set<string>();
 	async function visit(file: string): Promise<void> {
@@ -83,6 +85,7 @@ async function discoverSources(entry: string): Promise<string[]> {
 	await visit(entry);
 	return [...seen];
 }
+
 async function resolveSource(base: string): Promise<string | undefined> {
 	const sourceBase = /\.[cm]?js$/.test(base) ? base.replace(/\.[cm]?js$/, "") : base;
 	for (const file of [
@@ -101,6 +104,7 @@ async function resolveSource(base: string): Promise<string | undefined> {
 			return file;
 	return undefined;
 }
+
 function stable(value: unknown): string {
 	if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
 	if (value && typeof value === "object")

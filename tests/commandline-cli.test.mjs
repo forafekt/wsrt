@@ -106,6 +106,12 @@ test("WSRT help is grouped and includes every migrated command", () => {
 	assert.match(help, /Inspection:/);
 	assert.match(help, /Lifecycle:/);
 	assert.match(help, /Execution:/);
+	assert.match(help, /Workspace intelligence:/);
+	assert.match(help, /workspace capabilities/);
+	assert.match(help, /workspace describe/);
+	assert.match(help, /workspace node/);
+	assert.match(help, /workspace graph/);
+	assert.match(help, /workspace files/);
 	for (const command of [
 		"inspect",
 		"validate",

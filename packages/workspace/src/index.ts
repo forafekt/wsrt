@@ -462,7 +462,7 @@ function matches(
 	);
 }
 
-function glob(value: string, pattern: string): boolean {
+export function matchesWorkspacePattern(value: string, pattern: string): boolean {
 	const escaped = pattern
 		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
 		.replace(/\*\*/g, "<GLOBSTAR>")
@@ -471,6 +471,8 @@ function glob(value: string, pattern: string): boolean {
 		.replace(/\?/g, ".");
 	return new RegExp(`^${escaped}$`).test(value);
 }
+
+const glob = matchesWorkspacePattern;
 
 function projection(
 	file: string,

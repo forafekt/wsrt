@@ -18,6 +18,11 @@ export default defineSystem({
 		webBuild: {
 			root: "apps/web",
 			provider: { provider: "vite", options: { command: "build" } },
+			dependsOn: { hello: { condition: "successful" } },
+			sources: ["apps/web/src.js"],
+			entrypoints: ["apps/web/index.html"],
+			configuration: ["apps/web/package.json"],
+			inputs: ["apps/lib/src/**"],
 		},
 	},
 	services: {

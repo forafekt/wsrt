@@ -1,11 +1,21 @@
-import type { WsrtControlPlane } from "@wsrt/control-plane";
+import { controlPlaneCommandPermission, type WsrtControlPlane } from "@wsrt/control-plane";
+import type {
+	WorkspaceIntelligence,
+	WorkspaceIntelligenceSnapshot,
+} from "@wsrt/workspace-intelligence";
 import { DashboardActionRouter } from "./dashboard-actions.js";
 import type { WorkspaceLeaseRegistry } from "./lease-registry.js";
-import { protocolError, type WorkspaceRequest } from "./protocol.js";
+import {
+	protocolError,
+	WORKSPACE_PROTOCOL_VERSION,
+	type WorkspacePermission,
+	type WorkspaceRequest,
+} from "./protocol.js";
 
 export class WorkspaceRequestRouter {
 	constructor(
 		readonly plane: WsrtControlPlane,
+		readonly intelligence: WorkspaceIntelligence,
 		readonly handshake: () => unknown,
 		readonly status: () => unknown,
 		readonly stop: () => void,
@@ -13,7 +23,11 @@ export class WorkspaceRequestRouter {
 		readonly diagnostics: () => unknown | Promise<unknown>,
 		readonly dashboardActions = new DashboardActionRouter(plane),
 	) {}
-	async route(request: WorkspaceRequest, signal = new AbortController().signal): Promise<unknown> {
+	async route(
+		request: WorkspaceRequest,
+		signal = new AbortController().signal,
+		requestId = "internal",
+	): Promise<unknown> {
 		switch (request.type) {
 			case "session.handshake":
 				return this.handshake();
@@ -22,6 +36,64 @@ export class WorkspaceRequestRouter {
 			case "session.stop":
 				this.stop();
 				return { stopping: true };
+			case "workspace.capabilities": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(snapshot, snapshot.capabilities, requestId);
+			}
+			case "workspace.describe": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(snapshot, snapshot, requestId);
+			}
+			case "workspace.node.describe": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.describeNode(request.nodeId),
+					requestId,
+				);
+			}
+			case "workspace.graph.query": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.queryGraph(request.query),
+					requestId,
+				);
+			}
+			case "workspace.files.query": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.queryFiles(request.query),
+					requestId,
+				);
+			}
+			case "workspace.change.impact": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.analyzeChangeImpact(request.query),
+					requestId,
+				);
+			}
+			case "workspace.command.plan": {
+				this.#authorize(request.command, request.permissions, true);
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.planCommand(request.command),
+					requestId,
+				);
+			}
+			case "workspace.command.execute": {
+				this.#authorize(request.command, request.permissions, false);
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				const result =
+					request.command.type === "operation.cancel"
+						? await this.plane.execute(request.command)
+						: await this.plane.execute(request.command);
+				return this.#workspaceResponse(snapshot, result, requestId);
+			}
 			case "request.cancel":
 				throw protocolError(
 					"request.invalid_cancel_route",
@@ -66,6 +138,7 @@ export class WorkspaceRequestRouter {
 			case "completion.get":
 				return this.plane.complete(request.input);
 			case "command.submit": {
+				this.#authorize(request.command, request.permissions, false);
 				if (request.command.type === "operation.cancel")
 					throw protocolError(
 						"command.rejected",
@@ -74,6 +147,7 @@ export class WorkspaceRequestRouter {
 				return this.plane.submit(request.command);
 			}
 			case "command.execute": {
+				this.#authorize(request.command, request.permissions, false);
 				if (request.command.type === "operation.cancel") return this.plane.execute(request.command);
 				return this.plane.execute(request.command);
 			}
@@ -83,5 +157,40 @@ export class WorkspaceRequestRouter {
 					`Unsupported workspace request: ${(request as { type: string }).type}`,
 				);
 		}
+	}
+
+	#authorize(
+		command: Parameters<WorkspaceIntelligence["planCommand"]>[0],
+		permissions: readonly WorkspacePermission[] | undefined,
+		planning: boolean,
+	) {
+		const required = planning ? "commands.plan" : controlPlaneCommandPermission(command);
+		if (!permissions?.includes(required))
+			throw protocolError("authorization.denied", `Permission ${required} is required`, {
+				requiredPermission: required,
+			});
+	}
+
+	#workspaceSnapshot(expectedRevision?: number): WorkspaceIntelligenceSnapshot {
+		const snapshot = this.intelligence.describeWorkspace();
+		if (expectedRevision !== undefined && expectedRevision !== snapshot.workspaceRevision)
+			throw protocolError(
+				"workspace.revision_stale",
+				`Expected workspace revision ${expectedRevision}, current revision is ${snapshot.workspaceRevision}`,
+				{ expectedRevision, currentRevision: snapshot.workspaceRevision },
+			);
+		return snapshot;
+	}
+
+	#workspaceResponse<T>(snapshot: WorkspaceIntelligenceSnapshot, result: T, requestId: string) {
+		return {
+			metadata: {
+				protocolVersion: WORKSPACE_PROTOCOL_VERSION,
+				workspaceRevision: snapshot.workspaceRevision,
+				generatedAt: snapshot.generatedAt,
+				requestId,
+			},
+			result,
+		};
 	}
 }

@@ -40,6 +40,7 @@ export async function workspaceIdentity(
 async function canonical(value: string): Promise<string> {
 	return path.normalize(await fs.realpath(path.resolve(value)));
 }
+
 async function exists(file: string): Promise<boolean> {
 	return fs.stat(file).then(
 		(item) => item.isFile(),

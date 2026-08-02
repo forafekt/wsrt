@@ -119,12 +119,12 @@ importers:
       '@wsrt/plugins':
         specifier: workspace:*
         version: link:../plugins
-      '@wsrt/workspace-session':
-        specifier: workspace:*
-        version: link:../workspace-session
       '@wsrt/workspace':
         specifier: workspace:*
         version: link:../workspace
+      '@wsrt/workspace-session':
+        specifier: workspace:*
+        version: link:../workspace-session
 
   packages/config:
     dependencies:
@@ -223,6 +223,9 @@ importers:
       '@wsrt/capabilities':
         specifier: workspace:*
         version: link:../capabilities
+      '@wsrt/config':
+        specifier: workspace:*
+        version: link:../config
 
   packages/workspace:
     dependencies:
@@ -236,6 +239,36 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/workspace-intelligence:
+    dependencies:
+      '@wsrt/config':
+        specifier: workspace:*
+        version: link:../config
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@wsrt/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@wsrt/plugins':
+        specifier: workspace:*
+        version: link:../plugins
+      '@wsrt/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+
+  packages/workspace-session:
+    dependencies:
+      '@wsrt/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@wsrt/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+      '@wsrt/workspace-intelligence':
+        specifier: workspace:*
+        version: link:../workspace-intelligence
 
   packages/wsrt:
     dependencies:
@@ -260,12 +293,6 @@ importers:
       '@wsrt/runtime-node':
         specifier: workspace:*
         version: link:../../runtimes/node
-
-  packages/workspace-session:
-    dependencies:
-      '@wsrt/control-plane':
-        specifier: workspace:*
-        version: link:../control-plane
 
   plugins/dashboard:
     dependencies:
