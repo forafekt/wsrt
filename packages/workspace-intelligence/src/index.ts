@@ -8,7 +8,7 @@ export type { WorkspaceIntelligenceSources } from "./workspace-intelligence.js";
 
 export { DefaultWorkspaceIntelligence } from "./workspace-intelligence.js";
 
-export const WORKSPACE_INTELLIGENCE_SCHEMA_VERSION = "1" as const;
+export const WORKSPACE_INTELLIGENCE_SCHEMA_VERSION = "2" as const;
 
 export const evidenceTypes = Object.freeze([
 	"configuration",
@@ -29,7 +29,12 @@ export type EvidenceRecord = Readonly<{
 	reason: string;
 }>;
 
+export type EvidenceCollection = Readonly<{
+	records: Readonly<Record<string, EvidenceRecord>>;
+}>;
+
 export type EvidenceConfidence = "declared" | "derived" | "inferred" | "unknown";
+
 export type WorkspaceKnowledgeSupport = "full" | "partial" | "unavailable";
 
 export type WorkspaceDescription = Readonly<{
@@ -60,7 +65,7 @@ export type WorkspaceFileAssociation = Readonly<{
 	match: "exact" | "glob";
 	role: WorkspaceFileRole;
 	generated: boolean;
-	contributionSource: string;
+	contributionSources: readonly string[];
 	producerId?: string;
 	consumerIds?: readonly string[];
 	evidence: readonly EvidenceRecord[];
@@ -105,6 +110,10 @@ export type WorkspaceProviderMetadata = Readonly<{
 
 export type WorkspaceNodeDescription = Readonly<{
 	id: string;
+	canonicalId: string;
+	aliases: readonly string[];
+	parentId?: string;
+	matchedAlias?: string;
 	kind: SystemNodeKind;
 	name: string;
 	projectId?: string;
@@ -118,6 +127,21 @@ export type WorkspaceNodeDescription = Readonly<{
 	metadata: Readonly<Record<string, unknown>>;
 	providerMetadata?: WorkspaceProviderMetadata;
 	evidence: readonly EvidenceRecord[];
+	aggregation?: Readonly<{
+		depth: number;
+		includedNodeIds: readonly string[];
+		originalOwnerIds: readonly string[];
+	}>;
+	includedNodes?: readonly WorkspaceNodeDescription[];
+	includedRelationships?: readonly WorkspaceRelationship[];
+}>;
+
+export type NodeDescriptionSection = "children" | "relationships";
+
+export type DescribeNodeOptions = Readonly<{
+	include?: readonly NodeDescriptionSection[];
+	aggregate?: boolean;
+	depth?: number;
 }>;
 
 export type WorkspaceRelationship = Readonly<{
@@ -134,6 +158,28 @@ export type WorkspaceCapability = Readonly<{
 	available: boolean;
 	version?: string;
 	details?: Readonly<Record<string, unknown>>;
+}>;
+
+export type SuggestedWorkspaceCall = Readonly<{
+	operation: string;
+	arguments: Readonly<Record<string, unknown>>;
+	reason: string;
+}>;
+
+export type WorkspaceGetStarted = Readonly<{
+	workspace: Readonly<{ id: string; name: string }>;
+	protocolVersion?: number;
+	capabilities: readonly WorkspaceCapability[];
+	importantNodeIds: readonly string[];
+	canonicalIdRules: readonly string[];
+	recommendedCalls: readonly SuggestedWorkspaceCall[];
+	limitations: readonly string[];
+	querySemantics: Readonly<{
+		nodeDescriptions: string;
+		impactResponses: string;
+	}>;
+	authorityBoundaries: readonly string[];
+	availableAdapters: readonly string[];
 }>;
 
 export type WorkspaceIntelligenceSnapshot = Readonly<{
@@ -214,24 +260,50 @@ export type NodeQueryResult = Readonly<{
 
 export type ChangeImpactConfidence = EvidenceConfidence;
 
+export const impactRelationships = Object.freeze([
+	"direct-owner",
+	"composite-parent",
+	"dependent-runtime",
+	"validation-task",
+	"produced-artifact",
+	"potentially-affected",
+	"related",
+] as const);
+
+export type ImpactRelationship = (typeof impactRelationships)[number];
+
+export type WorkspaceImpactEntity = Readonly<{
+	id: string;
+	kind: SystemNodeKind;
+	name: string;
+	relationship: ImpactRelationship;
+	direct: boolean;
+	path: readonly string[];
+	reason: string;
+	confidence: EvidenceConfidence;
+	evidenceIds: readonly string[];
+}>;
+
 export type ChangeImpactQuery = Readonly<{
 	paths: readonly string[];
+	expand?: readonly ("nodes" | "projects" | "tasks" | "artifacts" | "files" | "evidence")[];
 }>;
 
 export type ChangeImpactResult = Readonly<{
 	workspaceRevision: number;
 	support: WorkspaceKnowledgeSupport;
-	affectedFiles: readonly WorkspaceFileDescription[];
+	entities: readonly WorkspaceImpactEntity[];
+	affectedFiles?: readonly WorkspaceFileDescription[];
 	directOwnerIds: readonly string[];
 	aggregateOwnerIds: readonly string[];
-	affectedProjects: readonly ProjectDescription[];
-	affectedNodes: readonly WorkspaceNodeDescription[];
-	affectedApplications: readonly WorkspaceNodeDescription[];
-	affectedProcesses: readonly WorkspaceNodeDescription[];
-	affectedTasks: readonly WorkspaceNodeDescription[];
-	affectedArtifacts: readonly WorkspaceNodeDescription[];
+	affectedProjects?: readonly ProjectDescription[];
+	affectedNodes?: readonly WorkspaceNodeDescription[];
+	affectedApplications?: readonly WorkspaceNodeDescription[];
+	affectedProcesses?: readonly WorkspaceNodeDescription[];
+	affectedTasks?: readonly WorkspaceNodeDescription[];
+	affectedArtifacts?: readonly WorkspaceNodeDescription[];
 	recommendedValidations: readonly string[];
-	evidence: readonly EvidenceRecord[];
+	evidence?: EvidenceCollection;
 	confidence: ChangeImpactConfidence;
 	warnings: readonly Readonly<{ code: string; message: string }>[];
 }>;
@@ -240,7 +312,7 @@ export type ValidationRecommendation = Readonly<{
 	taskId: string;
 	reason: string;
 	confidence: EvidenceConfidence;
-	evidence: readonly EvidenceRecord[];
+	evidenceIds: readonly string[];
 	prerequisiteTaskIds: readonly string[];
 	coveredTaskIds?: readonly string[];
 }>;
@@ -249,16 +321,25 @@ export type ValidationRecommendationResult = Readonly<{
 	workspaceRevision: number;
 	support: WorkspaceKnowledgeSupport;
 	recommendations: readonly ValidationRecommendation[];
+	evidence: EvidenceCollection;
 	warnings: readonly Readonly<{ code: string; message: string }>[];
 }>;
 
 export type CommandPlan = Readonly<{
 	command: ControlPlaneCommand;
 	valid: boolean;
-	resolvedTargets: readonly string[];
-	dependencyActions: readonly Readonly<{ action: string; target: string }>[];
-	dependencyOrder: readonly string[];
+	requestedTargets: readonly string[];
+	expandedTargets: readonly string[];
+	actions: readonly Readonly<{
+		id: string;
+		action: "start" | "stop" | "restart" | "run" | "cancel";
+		target: string;
+		prerequisite: boolean;
+	}>[];
+	prerequisiteActions: readonly string[];
+	executionOrder: readonly string[];
 	readinessRequirements: readonly Readonly<{ from: string; to: string; condition?: string }>[];
+	affectedNodes: readonly string[];
 	affectedProcesses: readonly string[];
 	resources: readonly string[];
 	expectedArtifacts: readonly string[];
@@ -270,7 +351,8 @@ export type CommandPlan = Readonly<{
 
 export interface WorkspaceIntelligence {
 	describeWorkspace(): WorkspaceIntelligenceSnapshot;
-	describeNode(id: string): WorkspaceNodeDescription;
+	getStarted(): WorkspaceGetStarted;
+	describeNode(id: string, options?: DescribeNodeOptions): WorkspaceNodeDescription;
 	queryGraph(query: GraphQuery): GraphQueryResult;
 	queryFiles(query: FileQuery): FileQueryResult;
 	queryNodes(query: NodeQuery): NodeQueryResult;

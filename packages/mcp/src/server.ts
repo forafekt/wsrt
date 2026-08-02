@@ -189,15 +189,56 @@ export class WsrtMcpServer {
 				),
 		);
 		this.server.registerTool(
+			"wsrt_workspace_get_started",
+			{
+				description: `Start here when unfamiliar with the workspace. Returns canonical-ID rules, recommended calls, query semantics, limitations, and authority boundaries. ${authority}`,
+				inputSchema: {},
+				annotations: { readOnlyHint: true },
+			},
+			(_input, extra) =>
+				this.#invoke(extra.signal, async (signal) =>
+					toolResult(await client.getStarted({ signal })),
+				),
+		);
+		this.server.registerTool(
 			"wsrt_node_describe",
 			{
 				description: `Use after workspace discovery to inspect one declared node, its live state, ownership, artifacts, operations, and evidence. It does not interpret source code; read associated files for implementation details. ${authority}`,
-				inputSchema: { nodeId: z.string().min(1) },
+				inputSchema: {
+					nodeId: z.string().min(1),
+					aggregate: z.boolean().optional(),
+					depth: z.number().int().min(1).max(32).optional(),
+				},
 				annotations: { readOnlyHint: true },
 			},
-			({ nodeId }, extra) =>
+			({ nodeId, aggregate, depth }, extra) =>
 				this.#invoke(extra.signal, async (signal) =>
-					toolResult(await client.describeNode(nodeId, { signal })),
+					toolResult(await client.describeNode(nodeId, { signal, aggregate, depth })),
+				),
+		);
+		this.server.registerTool(
+			"wsrt_nodes_query",
+			{
+				description: `List canonical workspace node IDs, kinds, names, aliases, and parent IDs before targeted queries. ${authority}`,
+				inputSchema: {
+					kinds: z.array(z.string().min(1)).optional(),
+					limit: z.number().int().min(1).max(500).optional(),
+					cursor: z.string().optional(),
+				},
+				annotations: { readOnlyHint: true },
+			},
+			({ kinds, limit, cursor }, extra) =>
+				this.#invoke(extra.signal, async (signal) =>
+					toolResult(
+						await client.queryNodes(
+							{
+								...(kinds ? { kinds: kinds as never } : {}),
+								...(limit !== undefined ? { limit } : {}),
+								...(cursor ? { cursor } : {}),
+							},
+							{ signal },
+						),
+					),
 				),
 		);
 		this.server.registerTool(
@@ -266,12 +307,19 @@ export class WsrtMcpServer {
 			"wsrt_change_impact",
 			{
 				description: `Use after identifying changed workspace-relative paths to find declared owners, dependent nodes/tasks, and recommended validations with evidence and confidence. It does not use Git history, ASTs, embeddings, or semantic code inference. ${authority}`,
-				inputSchema: { paths: z.array(z.string().min(1)).min(1) },
+				inputSchema: {
+					paths: z.array(z.string().min(1)).min(1),
+					expand: z
+						.array(z.enum(["nodes", "projects", "tasks", "artifacts", "files", "evidence"]))
+						.optional(),
+				},
 				annotations: { readOnlyHint: true },
 			},
-			({ paths }, extra) =>
+			({ paths, expand }, extra) =>
 				this.#invoke(extra.signal, async (signal) =>
-					toolResult(await client.analyzeChangeImpact({ paths }, { signal })),
+					toolResult(
+						await client.analyzeChangeImpact({ paths, ...(expand ? { expand } : {}) }, { signal }),
+					),
 				),
 		);
 		this.server.registerTool(

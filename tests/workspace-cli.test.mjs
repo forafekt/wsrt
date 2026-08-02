@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { WORKSPACE_PROTOCOL_VERSION } from "../packages/workspace-session/dist/index.js";
 
 const executable = path.resolve("packages/cli/dist/index.js");
 
@@ -20,7 +21,7 @@ test("workspace CLI preserves protocol JSON response semantics", async () => {
 		const describe = await cli(root, "workspace", "describe", "--json");
 		assert.equal(describe.code, 0, describe.stderr);
 		const response = JSON.parse(describe.stdout);
-		assert.equal(response.metadata.protocolVersion, 1);
+		assert.equal(response.metadata.protocolVersion, WORKSPACE_PROTOCOL_VERSION);
 		assert.equal(response.result.workspace.name, "cli-workspace");
 		const files = await cli(
 			root,

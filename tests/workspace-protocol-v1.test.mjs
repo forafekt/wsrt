@@ -11,10 +11,33 @@ const envelope = (request) => ({
 	request,
 });
 
-test("workspace protocol v1 validates transport-neutral intelligence operations", () => {
+test("workspace protocol v2 validates transport-neutral intelligence operations", () => {
 	assert.deepEqual(validateRequestEnvelope(envelope({ type: "workspace.capabilities" })).request, {
 		type: "workspace.capabilities",
 	});
+	assert.deepEqual(validateRequestEnvelope(envelope({ type: "workspace.get-started" })).request, {
+		type: "workspace.get-started",
+	});
+	assert.deepEqual(
+		validateRequestEnvelope(
+			envelope({
+				type: "workspace.node.describe",
+				nodeId: "application:desktop",
+				options: { aggregate: true, depth: 2 },
+			}),
+		).request,
+		{
+			type: "workspace.node.describe",
+			nodeId: "application:desktop",
+			options: { aggregate: true, depth: 2 },
+		},
+	);
+	assert.deepEqual(
+		validateRequestEnvelope(
+			envelope({ type: "workspace.nodes.query", query: { kinds: ["process"], limit: 10 } }),
+		).request,
+		{ type: "workspace.nodes.query", query: { kinds: ["process"], limit: 10 } },
+	);
 	assert.deepEqual(
 		validateRequestEnvelope(
 			envelope({
@@ -45,9 +68,15 @@ test("workspace protocol v1 validates transport-neutral intelligence operations"
 	);
 	assert.deepEqual(
 		validateRequestEnvelope(
-			envelope({ type: "workspace.change.impact", query: { paths: ["src/main.ts"] } }),
+			envelope({
+				type: "workspace.change.impact",
+				query: { paths: ["src/main.ts"], expand: ["nodes", "evidence"] },
+			}),
 		).request,
-		{ type: "workspace.change.impact", query: { paths: ["src/main.ts"] } },
+		{
+			type: "workspace.change.impact",
+			query: { paths: ["src/main.ts"], expand: ["nodes", "evidence"] },
+		},
 	);
 	assert.deepEqual(
 		validateRequestEnvelope(
@@ -88,14 +117,17 @@ test("workspace protocol v1 validates transport-neutral intelligence operations"
 	);
 });
 
-test("workspace protocol v1 rejects malformed requests", () => {
+test("workspace protocol v2 rejects malformed requests", () => {
 	for (const request of [
 		{ type: "workspace.node.describe", nodeId: "" },
+		{ type: "workspace.node.describe", nodeId: "application:desktop", options: { depth: 0 } },
 		{ type: "workspace.graph.query", query: { roots: "application:web" } },
+		{ type: "workspace.nodes.query", query: { kinds: "process" } },
 		{ type: "workspace.graph.query", query: { roots: [], direction: "sideways" } },
 		{ type: "workspace.files.query", query: { roles: [1] } },
 		{ type: "workspace.describe", expectedRevision: -1 },
 		{ type: "workspace.change.impact", query: { paths: [] } },
+		{ type: "workspace.change.impact", query: { paths: ["src/main.ts"], expand: ["unknown"] } },
 		{ type: "workspace.command.plan", command: { type: "shell", command: "rm" } },
 		{
 			type: "workspace.command.execute",

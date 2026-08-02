@@ -7,7 +7,7 @@ import {
 } from "../packages/workspace-intelligence/dist/index.js";
 
 test("workspace intelligence contract exposes stable JSON-safe vocabularies", () => {
-	assert.equal(WORKSPACE_INTELLIGENCE_SCHEMA_VERSION, "1");
+	assert.equal(WORKSPACE_INTELLIGENCE_SCHEMA_VERSION, "2");
 	assert.deepEqual(JSON.parse(JSON.stringify(evidenceTypes)), [
 		"configuration",
 		"plugin",

@@ -51,8 +51,10 @@ interface WorkspaceQueryOptions extends GlobalOptions {
 	role?: string;
 	path?: string;
 	includeGenerated?: boolean;
+	aggregate?: boolean;
 	limit?: number;
 	cursor?: string;
+	expand?: string;
 }
 
 type WorkspaceGraphRequest = Extract<WorkspaceRequest, { type: "workspace.graph.query" }>;
@@ -148,12 +150,47 @@ export function createWsrtCli(
 				action: execute((client) => client.request({ type: "workspace.describe" })),
 			},
 			{
+				name: "workspace get-started",
+				description: "Discover the recommended vendor-neutral WSRT workflow",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace get-started --json"],
+				action: execute((client) => client.getStarted()),
+			},
+			{
 				name: "workspace node <node-id>",
 				description: "Describe one authoritative workspace node",
 				group: "Workspace intelligence",
+				options: [
+					{ name: "--aggregate", description: "Include bounded composed-child descriptions" },
+					{ name: "--depth <number>", description: "Composition depth (1-32, default 1)" },
+				],
 				examples: ["  $ wsrt workspace node application:desktop --json"],
-				action: (nodeId: string, options: GlobalOptions) =>
-					execute((client) => client.request({ type: "workspace.node.describe", nodeId }))(options),
+				action: (nodeId: string, options: WorkspaceQueryOptions) =>
+					execute((client) =>
+						client.describeNode(nodeId, {
+							...(options.aggregate ? { aggregate: true } : {}),
+							...(options.depth !== undefined ? { depth: Number(options.depth) } : {}),
+						}),
+					)(options),
+			},
+			{
+				name: "workspace nodes",
+				description: "List canonical workspace node IDs, aliases, kinds, and parents",
+				group: "Workspace intelligence",
+				options: [
+					{ name: "--kind <kind>", description: "Include a selected node kind" },
+					{ name: "--limit <number>", description: "Page size (1-500)" },
+					{ name: "--cursor <cursor>", description: "Continue a previous query" },
+				],
+				examples: ["  $ wsrt workspace nodes --json"],
+				action: (options: WorkspaceQueryOptions) =>
+					execute((client) =>
+						client.queryNodes({
+							...(options.kind ? { kinds: [options.kind] as never } : {}),
+							...(options.limit !== undefined ? { limit: Number(options.limit) } : {}),
+							...(options.cursor ? { cursor: options.cursor } : {}),
+						}),
+					)(options),
 			},
 			{
 				name: "workspace graph [node-id]",
@@ -217,11 +254,25 @@ export function createWsrtCli(
 				name: "workspace impact [...paths]",
 				description: "Analyze evidence-backed impact of changed workspace paths",
 				group: "Workspace intelligence",
+				options: [
+					{
+						name: "--expand <sections>",
+						description: "Include nodes, projects, tasks, artifacts, files, or evidence",
+					},
+				],
 				examples: ["  $ wsrt workspace impact apps/web/src.js --json"],
-				action: (paths: string[], options: GlobalOptions) => {
+				action: (paths: string[], options: WorkspaceQueryOptions) => {
 					if (!paths.length)
 						throw new CommandLineError("workspace impact requires at least one path");
-					return execute((client) => client.analyzeChangeImpact({ paths }))(options);
+					const expand = options.expand
+						?.split(",")
+						.map((section) => section.trim())
+						.filter(Boolean) as
+						| ("nodes" | "projects" | "tasks" | "artifacts" | "files" | "evidence")[]
+						| undefined;
+					return execute((client) =>
+						client.analyzeChangeImpact({ paths, ...(expand?.length ? { expand } : {}) }),
+					)(options);
 				},
 			},
 			{
@@ -719,7 +770,9 @@ export async function run(argv = process.argv, cliVersion = version): Promise<vo
 		if (cause instanceof ReportedConfigurationError) return;
 		const message = cause instanceof Error ? cause.message : String(cause);
 		if (argv.includes("--json"))
-			process.stderr.write(`${JSON.stringify({ error: { code: errorCode(cause), message } })}\n`);
+			process.stderr.write(
+				`${JSON.stringify({ error: { code: errorCode(cause), message, ...errorDetails(cause) } })}\n`,
+			);
 		else logger.error(`Error: ${message}`);
 	} finally {
 		await session
@@ -1185,11 +1238,93 @@ function printResult(result: unknown, json: boolean): void {
 			process.stdout.write(`${JSON.stringify(result)}\n`);
 			return;
 		}
+		const workspaceView = formatWorkspaceResult(result);
+		if (workspaceView) {
+			process.stdout.write(`${workspaceView}\n`);
+			return;
+		}
 		logger.log(
 			`wsrt ${process.argv.slice(2).join(" ")}`,
 			result && typeof result === "object" ? (result as Record<string, unknown>) : { result },
 		);
 	}
+}
+
+export function formatWorkspaceResult(value: unknown): string | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const envelope = value as { result?: unknown; metadata?: { workspaceRevision?: number } };
+	if (!envelope.result || typeof envelope.result !== "object") return undefined;
+	const result = envelope.result as Record<string, unknown>;
+	const lines: string[] = [];
+	const section = (title: string, values: readonly string[]) => {
+		lines.push(title);
+		lines.push(...(values.length ? values.map((item) => `  ${item}`) : ["  none"]));
+	};
+	if (Array.isArray(result.entities)) {
+		const labels: Record<string, string> = {
+			"direct-owner": "Direct owners",
+			"composite-parent": "Composite parents",
+			"dependent-runtime": "Runtime dependants",
+			"validation-task": "Validation tasks",
+			"produced-artifact": "Produced artifacts",
+			"potentially-affected": "Potentially affected",
+			related: "Related",
+		};
+		for (const relationship of Object.keys(labels))
+			section(
+				labels[relationship],
+				(result.entities as Array<Record<string, unknown>>)
+					.filter((entity) => entity.relationship === relationship)
+					.map((entity) => `${entity.id} — ${entity.reason}`),
+			);
+	} else if (Array.isArray(result.recommendations)) {
+		lines.push(
+			...(result.recommendations as Array<Record<string, unknown>>).flatMap(
+				(recommendation, index) => [
+					...(index ? ["  ↓"] : []),
+					String(recommendation.taskId),
+					`  ${recommendation.reason}`,
+				],
+			),
+		);
+	} else if (Array.isArray(result.actions) && Array.isArray(result.requestedTargets)) {
+		section("Requested target", result.requestedTargets.map(String));
+		section("Execution order", (result.executionOrder as unknown[]).map(String));
+		section(
+			"Readiness requirements",
+			(result.readinessRequirements as Array<Record<string, unknown>>).map(
+				(item) => `${item.from} → ${item.to}${item.condition ? ` (${item.condition})` : ""}`,
+			),
+		);
+		section("Processes", (result.affectedProcesses as unknown[]).map(String));
+		section("Resources", (result.resources as unknown[]).map(String));
+		section("Permissions", (result.requiredPermissions as unknown[]).map(String));
+		section("Risk", [String(result.risk)]);
+	} else if (typeof result.canonicalId === "string") {
+		lines.push(`${result.canonicalId}  [${result.kind}]`);
+		if (result.lifecycleState) lines.push(`State: ${result.lifecycleState}`);
+		const aggregation = result.aggregation as Record<string, unknown> | undefined;
+		if (aggregation)
+			section("Composed nodes", (aggregation.includedNodeIds as unknown[]).map(String));
+		const nodes = result.includedNodes as Array<Record<string, unknown>> | undefined;
+		for (const node of nodes ?? []) {
+			lines.push(`\n${node.id}  [${node.kind}]`);
+			const metadata = node.providerMetadata as Record<string, unknown> | undefined;
+			if (metadata?.entrypoints)
+				section("Entrypoints", (metadata.entrypoints as unknown[]).map(String));
+			if (metadata?.configurationFiles)
+				section("Configuration", (metadata.configurationFiles as unknown[]).map(String));
+		}
+	} else if (Array.isArray(result.files)) {
+		for (const file of result.files as Array<Record<string, unknown>>)
+			lines.push(
+				`${file.path}  ${file.role}  owner=${file.ownerId}  ${file.relationship ?? file.match}`,
+			);
+	}
+	if (!lines.length) return undefined;
+	if (envelope.metadata?.workspaceRevision !== undefined)
+		lines.push(`\nWorkspace revision: ${envelope.metadata.workspaceRevision}`);
+	return lines.join("\n");
 }
 
 function parseWorkspaceCommand(
@@ -1206,12 +1341,26 @@ function parseWorkspaceCommand(
 }
 
 function errorCode(cause: unknown): string {
+	if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string")
+		return cause.code;
 	if (cause instanceof Error) {
 		const match = cause.message.match(/\b(WSRT_[A-Z0-9_]+)\b/);
 		if (match) return match[1];
 		if (cause.name.startsWith("WSRT_")) return cause.name;
 	}
 	return "WSRT_INTERNAL_ERROR";
+}
+
+function errorDetails(cause: unknown): { details?: Readonly<Record<string, unknown>> } {
+	if (
+		cause &&
+		typeof cause === "object" &&
+		"details" in cause &&
+		cause.details &&
+		typeof cause.details === "object"
+	)
+		return { details: cause.details as Readonly<Record<string, unknown>> };
+	return {};
 }
 
 function printExecutableList(

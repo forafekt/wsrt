@@ -151,6 +151,8 @@ test("control-plane snapshots are immutable, revisioned and operation-backed", a
 	const unsubscribe = plane.subscribeSnapshots((snapshot) => revisions.push(snapshot.revision));
 	try {
 		const before = plane.snapshot();
+		assert.equal(before.revision, 0);
+		assert.equal(plane.snapshot().revision, before.revision);
 		const result = await plane.runTask("contracts");
 		const after = plane.snapshot();
 		assert.ok(result.operationId);
@@ -162,5 +164,11 @@ test("control-plane snapshots are immutable, revisioned and operation-backed", a
 	} finally {
 		unsubscribe();
 		await plane.dispose();
+	}
+	const restarted = await createControlPlane({ root: "examples/system-lifecycle" });
+	try {
+		assert.equal(restarted.snapshot().revision, 0);
+	} finally {
+		await restarted.dispose();
 	}
 });

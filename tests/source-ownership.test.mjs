@@ -80,7 +80,10 @@ test("normalizes source ownership and supports forward and reverse lookup", () =
 			.files[0].generated,
 		true,
 	);
-	const impact = intelligence.analyzeChangeImpact({ paths: ["apps/web/src/view.ts"] });
+	const impact = intelligence.analyzeChangeImpact({
+		paths: ["apps/web/src/view.ts"],
+		expand: ["nodes", "tasks", "artifacts", "evidence"],
+	});
 	assert.equal(impact.confidence, "declared");
 	assert.deepEqual(
 		impact.affectedNodes.map(({ id }) => id),
@@ -92,7 +95,20 @@ test("normalizes source ownership and supports forward and reverse lookup", () =
 		["artifact:bundle"],
 	);
 	assert.deepEqual(impact.recommendedValidations, ["task:build"]);
-	assert.ok(impact.evidence.some(({ reason }) => /declared source ownership/.test(reason)));
+	assert.deepEqual(
+		impact.entities.map(({ id, relationship, direct }) => ({ id, relationship, direct })),
+		[
+			{ id: "application:web", relationship: "direct-owner", direct: true },
+			{ id: "artifact:bundle", relationship: "related", direct: false },
+			{ id: "task:build", relationship: "validation-task", direct: true },
+		],
+	);
+	assert.ok(
+		Object.values(impact.evidence.records).some(({ reason }) =>
+			/declared source ownership/.test(reason),
+		),
+	);
+	assert.ok(impact.entities.every(({ evidenceIds }) => evidenceIds.length));
 	assert.equal(intelligence.analyzeChangeImpact({ paths: ["unknown.txt"] }).confidence, "unknown");
 	const taskFiles = intelligence.queryFiles({ taskIds: ["build"], includeGenerated: true }).files;
 	assert.ok(taskFiles.some(({ role, path }) => role === "task-input" && path === "tsconfig.json"));

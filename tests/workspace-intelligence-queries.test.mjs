@@ -20,7 +20,21 @@ function service() {
 			root: "/workspace",
 			workspace: {},
 			runtimes: {},
-			executables: [],
+			executables: ["a", "b", "c"].map((id) => ({
+				id,
+				name: id,
+				kind: "service",
+				root: "/workspace",
+				runtime: "node",
+				command: { command: "node", args: [id], shell: false },
+				dependencies: [],
+				restart: { policy: "never" },
+				critical: true,
+				outputs: [],
+				environment: {},
+				source: { file: "/workspace/wsrt.yml", path: `services.${id}` },
+				files: [],
+			})),
 			artifacts: [],
 			environments: {},
 			plugins: [],
@@ -92,12 +106,13 @@ test("command planning is read-only and resolves existing command dependencies",
 	const intelligence = service();
 	const plan = intelligence.planCommand({ type: "node.start", nodeIds: ["a"] });
 	assert.equal(plan.valid, true);
-	assert.deepEqual(plan.resolvedTargets, ["a"]);
+	assert.deepEqual(plan.requestedTargets, ["a"]);
 	assert.deepEqual(
-		plan.dependencyActions.map(({ target }) => target),
-		["c", "b"],
+		plan.actions.map(({ target }) => target),
+		["c", "b", "a"],
 	);
-	assert.deepEqual(plan.dependencyOrder, ["c", "b", "a"]);
+	assert.deepEqual(plan.executionOrder, ["start:c", "start:b", "start:a"]);
+	assert.deepEqual(plan.prerequisiteActions, ["start:c", "start:b"]);
 	assert.deepEqual(plan.requiredPermissions, ["nodes.start"]);
 	assert.equal(plan.risk, "low");
 	const invalid = intelligence.planCommand({ type: "node.stop", nodeIds: ["missing"] });

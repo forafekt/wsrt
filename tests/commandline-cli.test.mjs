@@ -9,7 +9,56 @@ import {
 	createCli,
 	generateCompletions,
 } from "../libraries/commandline/dist/mod.js";
-import { createWsrtCli } from "../packages/cli/dist/cli.js";
+import { createWsrtCli, formatWorkspaceResult } from "../packages/cli/dist/cli.js";
+
+test("workspace human views present impact, validation, and command plans", () => {
+	const metadata = { workspaceRevision: 3 };
+	const impact = formatWorkspaceResult({
+		metadata,
+		result: {
+			entities: [
+				{
+					id: "application:web",
+					relationship: "direct-owner",
+					reason: "owns the changed file",
+				},
+				{
+					id: "task:build",
+					relationship: "validation-task",
+					reason: "validates the owner",
+				},
+			],
+		},
+	});
+	assert.match(impact, /Direct owners\n {2}application:web/);
+	assert.match(impact, /Validation tasks\n {2}task:build/);
+	const validation = formatWorkspaceResult({
+		metadata,
+		result: {
+			recommendations: [
+				{ taskId: "task:typecheck", reason: "direct input" },
+				{ taskId: "task:build", reason: "depends on typecheck" },
+			],
+		},
+	});
+	assert.match(validation, /task:typecheck[\s\S]*↓[\s\S]*task:build/);
+	const plan = formatWorkspaceResult({
+		metadata,
+		result: {
+			requestedTargets: ["application:web"],
+			actions: [{ id: "start:service:web" }],
+			executionOrder: ["start:service:web"],
+			readinessRequirements: [],
+			affectedProcesses: [],
+			resources: ["tcp:localhost:3000"],
+			requiredPermissions: ["nodes.start"],
+			risk: "low",
+		},
+	});
+	assert.match(plan, /Requested target\n {2}application:web/);
+	assert.match(plan, /Execution order\n {2}start:service:web/);
+	assert.match(plan, /Risk\n {2}low/);
+});
 
 test("declarative commands support nested paths, aliases, validation, and async actions", async () => {
 	const calls = [];

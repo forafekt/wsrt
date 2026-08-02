@@ -149,6 +149,14 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 			calls.push(["describe", options]);
 			return response("describe", { workspace: { name: "test" } });
 		},
+		getStarted: async (options) => {
+			calls.push(["get-started", options]);
+			return response("get-started", { recommendedCalls: [] });
+		},
+		queryNodes: async (query, options) => {
+			calls.push(["nodes", query, options]);
+			return response("nodes", { nodes: [] });
+		},
 		describeNode: async (id, options) => {
 			calls.push(["node", id, options]);
 			return response("node", { id });
@@ -192,7 +200,9 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 		for (const name of [
 			"wsrt_workspace_capabilities",
 			"wsrt_workspace_describe",
+			"wsrt_workspace_get_started",
 			"wsrt_node_describe",
+			"wsrt_nodes_query",
 			"wsrt_graph_query",
 			"wsrt_files_query",
 			"wsrt_change_impact",
@@ -207,9 +217,11 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 		}
 		await client.callTool({ name: "wsrt_workspace_capabilities", arguments: {} });
 		await client.callTool({ name: "wsrt_workspace_describe", arguments: {} });
+		await client.callTool({ name: "wsrt_workspace_get_started", arguments: {} });
+		await client.callTool({ name: "wsrt_nodes_query", arguments: { kinds: ["process"] } });
 		const node = await client.callTool({
 			name: "wsrt_node_describe",
-			arguments: { nodeId: "application:web" },
+			arguments: { nodeId: "application:web", aggregate: true, depth: 2 },
 		});
 		await client.callTool({
 			name: "wsrt_graph_query",
@@ -219,7 +231,10 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 			name: "wsrt_files_query",
 			arguments: { nodeIds: ["application:web"], roles: ["source"] },
 		});
-		await client.callTool({ name: "wsrt_change_impact", arguments: { paths: ["src/main.ts"] } });
+		await client.callTool({
+			name: "wsrt_change_impact",
+			arguments: { paths: ["src/main.ts"], expand: ["evidence"] },
+		});
 		await client.callTool({ name: "wsrt_file_owners", arguments: { path: "src/main.ts" } });
 		await client.callTool({
 			name: "wsrt_validation_recommend",
@@ -235,6 +250,8 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 			[
 				"capabilities",
 				"describe",
+				"get-started",
+				"nodes",
 				"node",
 				"graph",
 				"files",
@@ -244,12 +261,15 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 				"plan",
 			],
 		);
-		assert.deepEqual(calls[3][1], { roots: ["application:web"], depth: 2 });
-		assert.deepEqual(calls[4][1], { nodeIds: ["application:web"], roles: ["source"] });
-		assert.deepEqual(calls[5][1], { paths: ["src/main.ts"] });
-		assert.equal(calls[6][1], "src/main.ts");
-		assert.deepEqual(calls[7][1], { paths: ["src/main.ts"] });
-		assert.deepEqual(calls[8][1], { type: "node.start", nodeIds: ["application:web"] });
+		assert.deepEqual(calls[3][1], { kinds: ["process"] });
+		assert.equal(calls[4][1], "application:web");
+		assert.equal(calls[4][2].aggregate, true);
+		assert.deepEqual(calls[5][1], { roots: ["application:web"], depth: 2 });
+		assert.deepEqual(calls[6][1], { nodeIds: ["application:web"], roles: ["source"] });
+		assert.deepEqual(calls[7][1], { paths: ["src/main.ts"], expand: ["evidence"] });
+		assert.equal(calls[8][1], "src/main.ts");
+		assert.deepEqual(calls[9][1], { paths: ["src/main.ts"] });
+		assert.deepEqual(calls[10][1], { type: "node.start", nodeIds: ["application:web"] });
 		const denied = await client.callTool({
 			name: "wsrt_command_execute",
 			arguments: { command: { type: "node.start", nodeIds: ["application:web"] } },

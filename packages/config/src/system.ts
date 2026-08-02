@@ -287,9 +287,9 @@ export function normalizeSystemDefinition(
 		name: string,
 		value: ExecutableInput,
 		prefix: string = kind,
+		sourcePath = `${kind === "process" ? "processes" : `${kind}s`}.${name}`,
 	) => {
 		const id = `${prefix}:${name}`;
-		const sourcePath = `${kind}s.${name}`;
 		executables.push({
 			id,
 			name,
@@ -312,7 +312,7 @@ export function normalizeSystemDefinition(
 	for (const [name, value] of Object.entries(input.applications ?? {})) {
 		const app = add("application", name, value);
 		for (const [child, item] of Object.entries(value.processes ?? {}))
-			add("process", child, item, `${app}/process`);
+			add("process", child, item, `${app}/process`, `applications.${name}.processes.${child}`);
 	}
 	for (const [name, value] of Object.entries(input.services ?? {})) add("service", name, value);
 	for (const [name, value] of Object.entries(input.tasks ?? {})) add("task", name, value);

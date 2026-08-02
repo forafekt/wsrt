@@ -44,13 +44,20 @@ export class WorkspaceRequestRouter {
 				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
 				return this.#workspaceResponse(snapshot, snapshot, requestId);
 			}
+			case "workspace.get-started": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(snapshot, this.intelligence.getStarted(), requestId);
+			}
 			case "workspace.node.describe":
 			case "workspace.task.describe":
 			case "workspace.artifact.describe": {
 				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
 				return this.#workspaceResponse(
 					snapshot,
-					this.intelligence.describeNode(request.nodeId),
+					this.intelligence.describeNode(
+						request.nodeId,
+						"options" in request ? request.options : undefined,
+					),
 					requestId,
 				);
 			}
@@ -59,6 +66,14 @@ export class WorkspaceRequestRouter {
 				return this.#workspaceResponse(
 					snapshot,
 					this.intelligence.queryGraph(request.query),
+					requestId,
+				);
+			}
+			case "workspace.nodes.query": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.queryNodes(request.query),
 					requestId,
 				);
 			}

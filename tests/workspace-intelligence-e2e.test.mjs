@@ -26,6 +26,8 @@ test("representative workspace is equivalent through programmatic, CLI, and MCP 
 		assert.equal(manifest.protocol.name, "wsrt.workspace");
 
 		const description = await programmatic.describeWorkspace();
+		const getStarted = await programmatic.getStarted();
+		const nodes = await programmatic.queryNodes({ limit: 20 });
 		assert.ok(description.result.projects.some(({ name }) => name === "@fixture/lib"));
 		assert.ok(description.result.projects.some(({ name }) => name === "@fixture/web"));
 		assert.ok(description.result.nodes.some(({ id }) => id === "task:webBuild"));
@@ -59,12 +61,16 @@ test("representative workspace is equivalent through programmatic, CLI, and MCP 
 		);
 		const impact = await programmatic.analyzeChangeImpact({ paths: ["apps/lib/src/index.js"] });
 		assert.equal(impact.result.confidence, "declared");
-		assert.ok(impact.result.affectedNodes.some(({ id }) => id === "task:webBuild"));
+		assert.ok(impact.result.entities.some(({ id }) => id === "task:webBuild"));
 		const plan = await programmatic.planCommand({ type: "task.run", taskId: "webBuild" });
 		assert.equal(plan.result.valid, true);
 		assert.deepEqual(plan.result.requiredPermissions, ["tasks.run"]);
 
 		const cliDescription = JSON.parse((await cli("workspace", "describe", "--json")).stdout);
+		const cliGetStarted = JSON.parse((await cli("workspace", "get-started", "--json")).stdout);
+		const cliNodes = JSON.parse(
+			(await cli("workspace", "nodes", "--limit", "20", "--json")).stdout,
+		);
 		const cliGraph = JSON.parse(
 			(await cli("workspace", "graph", "task:webBuild", "--depth", "1", "--json")).stdout,
 		);
@@ -80,6 +86,14 @@ test("representative workspace is equivalent through programmatic, CLI, and MCP 
 		const mcpDescription = await mcpClient.callTool({
 			name: "wsrt_workspace_describe",
 			arguments: {},
+		});
+		const mcpGetStarted = await mcpClient.callTool({
+			name: "wsrt_workspace_get_started",
+			arguments: {},
+		});
+		const mcpNodes = await mcpClient.callTool({
+			name: "wsrt_nodes_query",
+			arguments: { limit: 20 },
 		});
 		const mcpGraph = await mcpClient.callTool({
 			name: "wsrt_graph_query",
@@ -100,6 +114,10 @@ test("representative workspace is equivalent through programmatic, CLI, and MCP 
 
 		assert.deepEqual(cliDescription.result, description.result);
 		assert.deepEqual(mcpDescription.structuredContent.result, description.result);
+		assert.deepEqual(cliGetStarted.result, getStarted.result);
+		assert.deepEqual(mcpGetStarted.structuredContent.result, getStarted.result);
+		assert.deepEqual(cliNodes.result, nodes.result);
+		assert.deepEqual(mcpNodes.structuredContent.result, nodes.result);
 		assert.deepEqual(cliGraph.result, graph.result);
 		assert.deepEqual(mcpGraph.structuredContent.result, graph.result);
 		assert.deepEqual(cliFiles.result, files.result);

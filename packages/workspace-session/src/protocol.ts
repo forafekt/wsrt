@@ -7,17 +7,21 @@ import type {
 	ChangeImpactQuery,
 	ChangeImpactResult,
 	CommandPlan,
+	DescribeNodeOptions,
 	FileQuery,
 	FileQueryResult,
 	GraphQuery,
 	GraphQueryResult,
+	NodeQuery,
+	NodeQueryResult,
 	ValidationRecommendationResult,
 	WorkspaceCapability,
+	WorkspaceGetStarted,
 	WorkspaceIntelligenceSnapshot,
 	WorkspaceNodeDescription,
 } from "@wsrt/workspace-intelligence";
 
-export const WORKSPACE_PROTOCOL_VERSION = 1;
+export const WORKSPACE_PROTOCOL_VERSION = 2;
 
 export const MAX_WORKSPACE_FRAME_BYTES = 8 * 1024 * 1024;
 
@@ -38,14 +42,21 @@ export type WorkspaceRequest =
 	| { readonly type: "session.stop" }
 	| { readonly type: "workspace.capabilities"; readonly expectedRevision?: number }
 	| { readonly type: "workspace.describe"; readonly expectedRevision?: number }
+	| { readonly type: "workspace.get-started"; readonly expectedRevision?: number }
 	| {
 			readonly type: "workspace.node.describe";
 			readonly nodeId: string;
+			readonly options?: DescribeNodeOptions;
 			readonly expectedRevision?: number;
 	  }
 	| {
 			readonly type: "workspace.graph.query";
 			readonly query: GraphQuery;
+			readonly expectedRevision?: number;
+	  }
+	| {
+			readonly type: "workspace.nodes.query";
+			readonly query: NodeQuery;
 			readonly expectedRevision?: number;
 	  }
 	| {
@@ -140,13 +151,18 @@ export type WorkspaceCapabilitiesResponse = WorkspaceOperationResponse<
 
 export type WorkspaceDescribeResponse = WorkspaceOperationResponse<WorkspaceIntelligenceSnapshot>;
 
+export type WorkspaceGetStartedResponse = WorkspaceOperationResponse<WorkspaceGetStarted>;
+
 export type WorkspaceNodeDescribeResponse = WorkspaceOperationResponse<WorkspaceNodeDescription>;
 
 export type WorkspaceGraphQueryResponse = WorkspaceOperationResponse<GraphQueryResult>;
 
+export type WorkspaceNodesQueryResponse = WorkspaceOperationResponse<NodeQueryResult>;
+
 export type WorkspaceFilesQueryResponse = WorkspaceOperationResponse<FileQueryResult>;
 
 export type WorkspaceChangeImpactResponse = WorkspaceOperationResponse<ChangeImpactResult>;
+
 export type WorkspaceValidationRecommendationResponse =
 	WorkspaceOperationResponse<ValidationRecommendationResult>;
 
@@ -273,8 +289,19 @@ function validateWorkspaceRequest(value: Record<string, unknown>): WorkspaceRequ
 			return { type };
 		case "workspace.capabilities":
 		case "workspace.describe":
+		case "workspace.get-started":
 			return { type, ...expectedRevision(value) };
 		case "workspace.node.describe":
+			if (typeof value.nodeId === "string" && value.nodeId) {
+				const options = validateDescribeNodeOptions(value.options);
+				return {
+					type,
+					nodeId: value.nodeId,
+					...(options ? { options } : {}),
+					...expectedRevision(value),
+				};
+			}
+			break;
 		case "workspace.task.describe":
 		case "workspace.artifact.describe":
 			if (typeof value.nodeId === "string" && value.nodeId)
@@ -282,6 +309,8 @@ function validateWorkspaceRequest(value: Record<string, unknown>): WorkspaceRequ
 			break;
 		case "workspace.graph.query":
 			return { type, query: validateGraphQuery(value.query), ...expectedRevision(value) };
+		case "workspace.nodes.query":
+			return { type, query: validateNodeQuery(value.query), ...expectedRevision(value) };
 		case "workspace.files.query":
 			return { type, query: validateFileQuery(value.query), ...expectedRevision(value) };
 		case "workspace.file.owners":
@@ -366,6 +395,56 @@ function expectedRevision(value: Record<string, unknown>): { expectedRevision?: 
 	);
 }
 
+function validateDescribeNodeOptions(value: unknown): DescribeNodeOptions | undefined {
+	if (value === undefined) return undefined;
+	if (!isRecord(value))
+		throw protocolError("protocol.malformed_request", "Node description options must be an object");
+	const object = value;
+	if (object.aggregate !== undefined && typeof object.aggregate !== "boolean")
+		throw protocolError("protocol.malformed_request", "aggregate must be a boolean");
+	if (
+		object.depth !== undefined &&
+		(!Number.isInteger(object.depth) ||
+			(object.depth as number) < 1 ||
+			(object.depth as number) > 32)
+	)
+		throw protocolError("protocol.malformed_request", "depth must be an integer from 1 to 32");
+	const include =
+		object.include === undefined
+			? undefined
+			: Array.isArray(object.include) && object.include.every(nonEmptyString)
+				? (object.include as string[])
+				: (() => {
+						throw protocolError(
+							"protocol.malformed_request",
+							"include must be an array of strings",
+						);
+					})();
+	if (include?.some((section) => section !== "children" && section !== "relationships"))
+		throw protocolError("protocol.malformed_request", "include contains an unsupported section");
+	return {
+		...(object.aggregate !== undefined ? { aggregate: object.aggregate as boolean } : {}),
+		...(object.depth !== undefined ? { depth: object.depth as number } : {}),
+		...(include ? { include: include as DescribeNodeOptions["include"] } : {}),
+	};
+}
+
+function validateNodeQuery(value: unknown): NodeQuery {
+	if (!isRecord(value))
+		throw protocolError("protocol.malformed_request", "Node query must be an object");
+	for (const key of ["kinds", "lifecycleStates", "healthStates", "projectIds"])
+		if (
+			value[key] !== undefined &&
+			(!Array.isArray(value[key]) || !(value[key] as unknown[]).every(nonEmptyString))
+		)
+			throw protocolError("protocol.malformed_request", `${key} must be an array of strings`);
+	if (value.limit !== undefined && !Number.isInteger(value.limit))
+		throw protocolError("protocol.malformed_request", "Node query limit must be an integer");
+	if (value.cursor !== undefined && typeof value.cursor !== "string")
+		throw protocolError("protocol.malformed_request", "Node query cursor must be a string");
+	return value as NodeQuery;
+}
+
 function validateGraphQuery(value: unknown): GraphQuery {
 	if (!isRecord(value) || !Array.isArray(value.roots) || !value.roots.every(nonEmptyString))
 		throw protocolError(
@@ -441,7 +520,17 @@ function validateChangeImpactQuery(value: unknown): ChangeImpactQuery {
 			"protocol.malformed_request",
 			"Change impact paths must be an array of paths",
 		);
-	return { paths: value.paths };
+	const allowedExpansions = ["nodes", "projects", "tasks", "artifacts", "files", "evidence"];
+	if (
+		value.expand !== undefined &&
+		(!Array.isArray(value.expand) ||
+			!value.expand.every((item) => typeof item === "string" && allowedExpansions.includes(item)))
+	)
+		throw protocolError("protocol.malformed_request", "Change impact expand is invalid");
+	return {
+		paths: value.paths,
+		...(value.expand ? { expand: value.expand as ChangeImpactQuery["expand"] } : {}),
+	};
 }
 
 function nonEmptyString(value: unknown): value is string {

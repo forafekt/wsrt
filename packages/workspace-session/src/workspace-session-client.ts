@@ -7,7 +7,13 @@ import type {
 	WorkspaceEvent,
 } from "@wsrt/control-plane";
 import { controlPlaneCommandPermission } from "@wsrt/control-plane";
-import type { ChangeImpactQuery, FileQuery, GraphQuery } from "@wsrt/workspace-intelligence";
+import type {
+	ChangeImpactQuery,
+	DescribeNodeOptions,
+	FileQuery,
+	GraphQuery,
+	NodeQuery,
+} from "@wsrt/workspace-intelligence";
 import type {
 	DashboardActionDescriptor,
 	WorkspaceCapabilitiesResponse,
@@ -17,8 +23,10 @@ import type {
 	WorkspaceCommandPlanResponse,
 	WorkspaceDescribeResponse,
 	WorkspaceFilesQueryResponse,
+	WorkspaceGetStartedResponse,
 	WorkspaceGraphQueryResponse,
 	WorkspaceNodeDescribeResponse,
+	WorkspaceNodesQueryResponse,
 	WorkspacePermission,
 	WorkspaceSessionHandshake,
 	WorkspaceValidationRecommendationResponse,
@@ -55,12 +63,33 @@ export class WorkspaceSessionClient {
 			{ signal: options.signal },
 		);
 	}
+	getStarted(
+		options: WorkspaceIntelligenceRequestOptions = {},
+	): Promise<WorkspaceGetStartedResponse> {
+		return this.request(
+			{ type: "workspace.get-started", ...revisionOption(options.expectedRevision) },
+			{ signal: options.signal },
+		);
+	}
 	describeNode(
 		nodeId: string,
-		options: WorkspaceIntelligenceRequestOptions = {},
+		options: WorkspaceIntelligenceRequestOptions & DescribeNodeOptions = {},
 	): Promise<WorkspaceNodeDescribeResponse> {
 		return this.request(
-			{ type: "workspace.node.describe", nodeId, ...revisionOption(options.expectedRevision) },
+			{
+				type: "workspace.node.describe",
+				nodeId,
+				...(options.aggregate !== undefined || options.depth !== undefined || options.include
+					? {
+							options: {
+								...(options.aggregate !== undefined ? { aggregate: options.aggregate } : {}),
+								...(options.depth !== undefined ? { depth: options.depth } : {}),
+								...(options.include ? { include: options.include } : {}),
+							},
+						}
+					: {}),
+				...revisionOption(options.expectedRevision),
+			},
 			{ signal: options.signal },
 		);
 	}
@@ -70,6 +99,15 @@ export class WorkspaceSessionClient {
 	): Promise<WorkspaceGraphQueryResponse> {
 		return this.request(
 			{ type: "workspace.graph.query", query, ...revisionOption(options.expectedRevision) },
+			{ signal: options.signal },
+		);
+	}
+	queryNodes(
+		query: NodeQuery = {},
+		options: WorkspaceIntelligenceRequestOptions = {},
+	): Promise<WorkspaceNodesQueryResponse> {
+		return this.request(
+			{ type: "workspace.nodes.query", query, ...revisionOption(options.expectedRevision) },
 			{ signal: options.signal },
 		);
 	}

@@ -11,6 +11,7 @@ import {
 	readSessionRecord,
 	sessionPaths,
 	validateRecordedSession,
+	WORKSPACE_PROTOCOL_VERSION,
 	WorkspaceConfigurationTracker,
 	WorkspaceLeaseRegistry,
 	workspaceIdentity,
@@ -65,7 +66,10 @@ test("concurrent clients elect one authoritative host", async () => {
 			await fs.readFile(path.join(root, ".wsrt", "workspace-manifest.json"), "utf8"),
 		);
 		assert.equal(manifest.workspace.id, identity.workspaceId);
-		assert.deepEqual(manifest.protocol, { name: "wsrt.workspace", version: 1 });
+		assert.deepEqual(manifest.protocol, {
+			name: "wsrt.workspace",
+			version: WORKSPACE_PROTOCOL_VERSION,
+		});
 		assert.equal(manifest.sessionDiscovery.record, ".wsrt/session/record.json");
 		assert.equal(manifest.mcp.command, "wsrt-mcp");
 		assert.ok(manifest.capabilities.includes("workspace.description"));
@@ -152,7 +156,7 @@ test("concurrent clients elect one authoritative host", async () => {
 test("session validation distinguishes matching, reused, missing, and incompatible hosts", async () => {
 	const record = {
 		schemaVersion: 1,
-		protocolVersion: 1,
+		protocolVersion: WORKSPACE_PROTOCOL_VERSION,
 		workspaceId: "workspace",
 		workspaceRoot: "/workspace",
 		sessionId: "session",
@@ -162,8 +166,8 @@ test("session validation distinguishes matching, reused, missing, and incompatib
 		createdAt: new Date(0).toISOString(),
 	};
 	const handshake = {
-		protocolVersion: 1,
-		minimumClientProtocolVersion: 1,
+		protocolVersion: WORKSPACE_PROTOCOL_VERSION,
+		minimumClientProtocolVersion: WORKSPACE_PROTOCOL_VERSION,
 		workspaceId: "workspace",
 		workspaceRoot: "/workspace",
 		sessionId: "session",
