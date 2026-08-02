@@ -1,17 +1,15 @@
-import type { createControlPlane } from "@wsrt/control-plane";
-import type { ExecutableHandle } from "@wsrt/plugins";
+import type { ExecutableContribution, ExecutableHandle } from "@wsrt/plugins";
+import type { WorkspaceSessionClient } from "@wsrt/workspace-session";
 import { logger } from "./logger.js";
 
-type ControlPlane = Awaited<ReturnType<typeof createControlPlane>>;
-
 export async function executeContribution(
-	controlPlane: ControlPlane,
+	workspaceSession: WorkspaceSessionClient,
+	executables: readonly ExecutableContribution[],
 	id: string | undefined,
 	options: Record<string, unknown>,
 	listOnly: boolean,
 	args: readonly string[] = [],
 ): Promise<unknown> {
-	const executables = controlPlane.pluginContributions("executables");
 	if (!id || listOnly)
 		return executables.map(({ id, description, owner }) => ({
 			id,
@@ -32,20 +30,18 @@ export async function executeContribution(
 	const controller = new AbortController();
 	let output: unknown;
 	try {
-		output = await controlPlane.invokePluginContribution("executables", executable.id, () =>
-			executable.execute(
-				{
-					controlPlane,
-					signal: controller.signal,
-					arguments: Object.freeze([...args]),
-					logger: {
-						info: logger.info.bind(logger),
-						warn: logger.warn.bind(logger),
-						error: logger.error.bind(logger),
-					},
+		output = await executable.execute(
+			{
+				controlPlane: workspaceSession,
+				signal: controller.signal,
+				arguments: Object.freeze([...args]),
+				logger: {
+					info: logger.info.bind(logger),
+					warn: logger.warn.bind(logger),
+					error: logger.error.bind(logger),
 				},
-				validated,
-			),
+			},
+			validated,
 		);
 	} catch (cause) {
 		throw new Error(

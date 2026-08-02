@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { WsrtControlPlane } from "@wsrt/control-plane";
+import type { WorkspaceSessionClient } from "@wsrt/workspace-session";
 import { z } from "zod";
 import { getMcpPrompt, readMcpResource, runMcpTool } from "./index.js";
 
@@ -38,7 +39,7 @@ export class WsrtMcpServer {
 	readonly #controllers = new Set<AbortController>();
 	#closed = false;
 	constructor(
-		readonly controlPlane: WsrtControlPlane,
+		readonly controlPlane: WsrtControlPlane | WorkspaceSessionClient,
 		readonly options: WsrtMcpServerOptions = {},
 	) {
 		this.server = new McpServer({
@@ -129,7 +130,7 @@ export class WsrtMcpServer {
 									uri,
 									mimeType: "application/json",
 									text: stringify(
-										await readMcpResource(this.controlPlane, contributionName, {
+										await readMcpResource(this.controlPlane as WsrtControlPlane, contributionName, {
 											signal,
 										}),
 									),
@@ -146,15 +147,21 @@ export class WsrtMcpServer {
 					},
 					async ({ input }, extra) =>
 						this.#invoke(extra.signal, async (signal) => {
-							const result = await getMcpPrompt(this.controlPlane, contributionName, input, {
-								signal,
-							});
+							const result = await getMcpPrompt(
+								this.controlPlane as WsrtControlPlane,
+								contributionName,
+								input,
+								{
+									signal,
+								},
+							);
 							return promptResult(result);
 						}),
 				);
 		}
 	}
 	#contributions() {
+		if ("request" in this.controlPlane) return [];
 		const plugins = this.controlPlane.snapshot().plugins;
 		return this.controlPlane
 			.pluginContributions("mcp")

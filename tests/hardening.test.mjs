@@ -125,7 +125,7 @@ test("provider registries are isolated and reject duplicate owned IDs", () => {
 });
 
 test("event journal is bounded, sequenced, immutable and queryable", () => {
-	const journal = new EventJournal(2);
+	const journal = new EventJournal({ maximumSize: 2 });
 	for (const [index, source] of ["one", "two", "two"].entries())
 		journal.publish({
 			id: String(index),

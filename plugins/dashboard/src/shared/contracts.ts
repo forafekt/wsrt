@@ -5,9 +5,29 @@ export type DashboardSnapshot = Readonly<{
 	protocol: DashboardProtocolDescriptor;
 	revision: number;
 	controlPlane: ControlPlaneSnapshot;
-	graph: unknown;
+	graph: DashboardGraph;
 	events: readonly WorkspaceEvent[];
 	configuration: unknown;
+	contributions: readonly DashboardContributionView[];
+}>;
+
+export type DashboardGraph = Readonly<{
+	nodes: readonly Readonly<{
+		id: string;
+		kind: string;
+		name: string;
+		state?: string;
+		health?: string;
+		metadata?: Readonly<Record<string, unknown>>;
+		capabilities?: readonly string[];
+	}>[];
+	edges: readonly Readonly<{
+		from: string;
+		to: string;
+		kind: string;
+		condition?: string;
+		metadata?: Readonly<Record<string, unknown>>;
+	}>[];
 }>;
 
 export type DashboardProtocolDescriptor = Readonly<{

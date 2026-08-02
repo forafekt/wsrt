@@ -80,19 +80,38 @@ inspector.
 
 ## Architecture
 
-Dashboard v3 is a small dependency-free workbench. The server adapts one existing
-control plane into a redacted JSON API and an SSE snapshot stream; it neither owns
-the plane nor changes its contracts. The browser client is split into routing,
+Dashboard v3 is a small dependency-free workbench. `DashboardBackend` is the
+complete server boundary: it exposes one immutable dashboard projection, ordered
+subscription, explicit operation submission and cancellation, and dashboard
+contribution invocation. The HTTP/SSE server accepts only this contract and never
+receives a control plane. The browser client is split into routing,
 immutable state reduction, snapshot transport, page renderers, layout, and shared
 styles. Pages derive their display model from the latest snapshot, so there is no
 second authoritative cache and reconnects remain deterministic.
 
+`createDirectDashboardBackend(controlPlane)` deliberately delegates to the existing
+control plane. `startDashboard(controlPlane)` uses that direct backend in the parent
+and a worker backend in the HTTP worker. The worker backend is a remote adapter over
+correlated typed requests and monotonic snapshot messages; it does not construct a
+control plane, resolve nodes, or own lifecycle state. `createDashboardServer(backend)`
+is the shared server composition point for direct and worker-backed operation.
+
+Operation-creating commands use `submit()` and return an acknowledgement after
+validation and registration. Cancellation is a distinct immediate command with a
+typed cancellation result. Known control-plane errors retain their code, message,
+and details across the worker boundary; worker closure and protocol failures are
+`DashboardTransportError` values and produce `dashboard.transport_failed` responses.
+The server owns each subscription returned by the backend and disposes it when its
+SSE stream or server closes.
+
 ```text
 third-party plugin ──serializable contribution──┐
                                                 v
-WSRT plugin discovery ──> control plane ──> dashboard adapter ──HTTP/SSE──> workbench
-                              ^                     |
-                              └── public operations─┘
+WSRT plugin discovery ──> control plane ──> direct backend ──> worker backend
+                                ^                              |
+                                └──── explicit commands ──────┤
+                                                               v
+                                                        HTTP/SSE workbench
 ```
 
 The wire snapshot keeps the `protocolVersion: 3` compatibility marker and also

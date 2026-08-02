@@ -29,6 +29,7 @@
 		"@wsrt/console": "workspace:*",
 		"@wsrt/control-plane": "workspace:*",
 		"@wsrt/plugins": "workspace:*",
+		"@wsrt/workspace-session": "workspace:*",
 		"@wsrt/workspace": "workspace:*"
 	},
 	"description": "The WSRT command-line interface for inspecting and operating local software systems.",

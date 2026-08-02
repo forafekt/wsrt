@@ -2,6 +2,20 @@
 
 WSRT describes a software system and executes its lifecycle. Configuration is normalized once, compiled into a `SystemGraph`, and operated through `@wsrt/control-plane`.
 
+## Authoritative workspace session
+
+A configured workspace has at most one authoritative runtime session. The detached local workspace host is the only shared-session component that calls `createControlPlane`; it therefore owns the persistence lock, lifecycle engine, operation identities, managed processes, events, and snapshots. CLI and dashboard processes discover the canonical real path, derive its stable workspace identity, validate a versioned discovery record and handshake, and communicate over a Unix-domain socket or Windows named pipe using bounded length-prefixed JSON frames.
+
+First-client startup is elected by atomic directory creation. The winner launches the host; other clients observe the discovery record with bounded readiness checks and validate workspace ID, session ID, PID/start identity, and protocol version. The record contains connection metadata, never runtime state. The dashboard worker owns only browser transport; its backend is a persistent workspace-session client.
+
+`wsrt session stop` requests orderly shutdown. The host enters `stopping`, invalidates leases, publishes `session.closing`, rejects or aborts outstanding work, disposes its sole control plane and supervised processes, closes IPC, then removes the endpoint and discovery record. Configuration is loaded by the host and changes require a session restart in protocol version 1.
+
+Session ownership is validated against an operating-system process identity, not a PID alone. Linux identities combine the kernel boot ID with the process start tick from `/proc/<pid>/stat`; permission failures, live incompatible protocols, identity mismatches, and transient transport failures are never automatically recovered. Only a proven missing process or reused PID is classified as stale. The persistence lock records the same start identity.
+
+Long-lived dashboard, MCP, and IDE clients use renewable, expiring leases. Ordinary CLI requests do not. The current lifetime policy is deliberately explicit: a started host remains available until `wsrt session stop` or `wsrt session restart`; leases are inspection and future idle-policy inputs rather than implicit process ownership. Dashboard actions remain in the host and cross IPC only as descriptors and correlated invocations. Caller cancellation sends a separate `request.cancel` message and aborts the matching host request without cancelling unrelated submitted operations.
+
+The host fingerprints the normalized configuration together with the primary configuration and recursively discovered local imports. `session status` reports loaded/current fingerprints and changed sources; `diagnostics` publishes `WSRT_SESSION_CONFIGURATION_STALE`. Live graph replacement is intentionally unsupported, so `wsrt session restart` is the safe refresh command and stops managed nodes before loading the new configuration.
+
 ```text
 @wsrt/graph              @wsrt/capabilities
       ↓                         ↓

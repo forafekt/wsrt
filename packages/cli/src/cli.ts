@@ -8,8 +8,8 @@ import {
 	generateCompletions,
 } from "@wsrt/commandline";
 import type { WsrtConfigFormat } from "@wsrt/config";
-import type { createControlPlane } from "@wsrt/control-plane";
 import type { CliContribution, PluginContext, PluginSession } from "@wsrt/plugins";
+import type { WorkspaceSessionClient } from "@wsrt/workspace-session";
 import { logger } from "./logger.js";
 
 const packageMetadata = createRequire(import.meta.url)("../package.json") as {
@@ -63,32 +63,20 @@ export function createWsrtCli(
 	cliVersion = version,
 ) {
 	const execute =
-		(
-			action: (
-				plane: Awaited<ReturnType<typeof createControlPlane>>,
-				options: GlobalOptions,
-			) => unknown,
-			keepAlive = false,
-		) =>
+		(action: (client: WorkspaceSessionClient, options: GlobalOptions) => unknown) =>
 		async (...args: unknown[]) => {
 			const options = args.at(-1) as GlobalOptions;
 			if (options.json) process.env.WSRT_JSON_OUTPUT = "1";
-			const { createControlPlane } = await import("@wsrt/control-plane");
-			const plane = await createControlPlane({
+			const { connectOrStartWorkspaceSession } = await import("@wsrt/workspace-session");
+			const client = await connectOrStartWorkspaceSession({
 				root: options.root,
 				config: options.config,
-				pluginSession,
 			});
-			let retained = false;
 			try {
-				const result = await action(plane, options);
+				const result = await action(client, options);
 				printResult(result, !!options.json);
-				if (keepAlive && plane.hasActiveProcesses()) {
-					retained = true;
-					await waitForSignal(() => plane.dispose());
-				}
 			} finally {
-				if (!retained) await plane.dispose();
+				await client.close();
 			}
 		};
 
@@ -197,7 +185,7 @@ export function createWsrtCli(
 				name: "",
 				description: "Inspect the workspace (default)",
 				hidden: true,
-				action: execute((plane) => plane.snapshot()),
+				action: execute((client) => client.snapshot()),
 			},
 			{
 				name: "inspect",
@@ -205,59 +193,59 @@ export function createWsrtCli(
 				group: "Inspection",
 				aliases: ["info"],
 				examples: ["  $ wsrt inspect --json", "  $ wsrt inspect --root ../workspace"],
-				action: execute((plane) => plane.snapshot()),
+				action: execute((client) => client.snapshot()),
 			},
 			{
 				name: "validate",
 				description: "Validate the workspace definition",
 				group: "Inspection",
 				aliases: ["doctor"],
-				action: execute((plane) => plane.validate()),
+				action: execute((client) => client.diagnostics()),
 			},
 			{
 				name: "status",
 				description: "List node lifecycle and health states",
 				group: "Inspection",
 				aliases: ["health"],
-				action: execute((plane) => plane.snapshot().nodes),
+				action: execute(async (client) => (await client.snapshot()).nodes),
 			},
 			{
 				name: "events",
 				description: "List control-plane events",
 				group: "Inspection",
-				action: execute((plane) => plane.listEvents()),
+				action: execute((client) => client.events()),
 			},
 			{
 				name: "operations",
 				description: "List lifecycle operations",
 				group: "Inspection",
-				action: execute((plane) => plane.listOperations()),
+				action: execute((client) => client.operations()),
 			},
 			{
 				name: "artifacts",
 				description: "List workspace artifacts",
 				group: "Inspection",
-				action: execute((plane) => plane.listArtifacts()),
+				action: execute((client) => client.artifacts()),
 			},
 			{
 				name: "graph",
 				description: "Print the compiled system graph",
 				group: "Inspection",
-				action: execute((plane) => plane.graph().toJSON()),
+				action: execute((client) => client.graph()),
 			},
 			{
 				name: "plugins",
 				description: "List loaded plugins and their capabilities",
 				group: "Plugins",
-				action: execute((plane) => plane.snapshot().plugins),
+				action: execute(async (client) => (await client.snapshot()).plugins),
 			},
 			{
 				name: "plugins inspect [plugin]",
 				description: "Inspect plugin metadata and registrations",
 				group: "Plugins",
 				action: (plugin: string | undefined, options: GlobalOptions) =>
-					execute((plane) => {
-						const plugins = plane.snapshot().plugins;
+					execute(async (client) => {
+						const plugins = (await client.snapshot()).plugins;
 						if (!plugin) return plugins;
 						const match = plugins.find((item) => item.id === plugin);
 						if (!match) throw new Error(`WSRT_PLUGIN_NOT_LOADED: ${plugin}`);
@@ -268,8 +256,8 @@ export function createWsrtCli(
 				name: "plugins graph",
 				description: "Show plugin dependency relationships",
 				group: "Plugins",
-				action: execute((plane) =>
-					plane.snapshot().plugins.flatMap((plugin) => [
+				action: execute(async (client) =>
+					(await client.snapshot()).plugins.flatMap((plugin) => [
 						...(plugin.requires ?? []).map((dependency) => ({
 							from: plugin.id,
 							to: typeof dependency === "string" ? dependency : dependency.id,
@@ -287,13 +275,54 @@ export function createWsrtCli(
 				name: "up",
 				description: "Start all long-running workspace nodes",
 				group: "Lifecycle",
-				action: execute((plane) => plane.start(), true),
+				action: execute((client) => client.submit({ type: "node.start", nodeIds: [] })),
+			},
+			{
+				name: "session status",
+				description: "Show the authoritative workspace session",
+				group: "Session",
+				action: execute((client) => client.status()),
+			},
+			{
+				name: "session start",
+				description: "Start or connect to the authoritative workspace session",
+				group: "Session",
+				action: execute((client) => client.status()),
+			},
+			{
+				name: "session stop",
+				description: "Orderly stop the authoritative workspace session",
+				group: "Session",
+				action: execute((client) => client.stopSession()),
+			},
+			{
+				name: "session restart",
+				description: "Orderly restart the authoritative workspace session",
+				group: "Session",
+				action: async (options: GlobalOptions) => {
+					const { connectOrStartWorkspaceSession } = await import("@wsrt/workspace-session");
+					const current = await connectOrStartWorkspaceSession({
+						root: options.root,
+						config: options.config,
+					});
+					await current.stopSession();
+					await current.close();
+					const next = await connectOrStartWorkspaceSession({
+						root: options.root,
+						config: options.config,
+					});
+					try {
+						printResult(await next.status(), !!options.json);
+					} finally {
+						await next.close();
+					}
+				},
 			},
 			{
 				name: "down",
 				description: "Stop all workspace nodes",
 				group: "Lifecycle",
-				action: execute((plane) => plane.stop()),
+				action: execute((client) => client.execute({ type: "node.stop", nodeIds: [] })),
 			},
 			{
 				name: "start [...nodes]",
@@ -301,21 +330,23 @@ export function createWsrtCli(
 				group: "Lifecycle",
 				examples: ["  $ wsrt start api web"],
 				action: (nodes: string[], options: GlobalOptions) =>
-					execute((plane) => plane.start(nodes), true)(options),
+					execute((client) => client.submit({ type: "node.start", nodeIds: nodes }))(options),
 			},
 			{
 				name: "stop [...nodes]",
 				description: "Stop selected nodes and their dependants",
 				group: "Lifecycle",
 				action: (nodes: string[], options: GlobalOptions) =>
-					execute((plane) => plane.stop(nodes))(options),
+					execute((client) => client.execute({ type: "node.stop", nodeIds: nodes }))(options),
 			},
 			{
 				name: "restart <node> [...nodes]",
 				description: "Restart selected nodes",
 				group: "Lifecycle",
 				action: (node: string, nodes: string[], options: GlobalOptions) =>
-					execute((plane) => plane.restart([node, ...nodes]), true)(options),
+					execute((client) => client.submit({ type: "node.restart", nodeIds: [node, ...nodes] }))(
+						options,
+					),
 			},
 			{
 				name: "run <task>",
@@ -323,17 +354,14 @@ export function createWsrtCli(
 				group: "Execution",
 				examples: ["  $ wsrt run validate"],
 				action: (task: string, options: GlobalOptions) =>
-					execute((plane) => plane.runTask(task))(options),
+					execute((client) => client.execute({ type: "task.run", taskId: task }))(options),
 			},
 			{
 				name: "cancel <operation-id>",
 				description: "Cancel an active operation",
 				group: "Lifecycle",
 				action: (operationId: string, options: GlobalOptions) =>
-					execute((plane) => ({
-						operationId,
-						cancelled: plane.cancelOperation(operationId),
-					}))(options),
+					execute((client) => client.execute({ type: "operation.cancel", operationId }))(options),
 			},
 			{
 				name: "exec [executable] [...executableArguments]",
@@ -355,12 +383,13 @@ export function createWsrtCli(
 					_executableArguments: string[],
 					options: GlobalOptions & { list?: boolean },
 				) =>
-					execute(async (plane) => {
+					execute(async (client) => {
 						const { executeContribution, forwardedArguments, parseForwardedOptions } = await import(
 							"./executable.js"
 						);
 						const result = await executeContribution(
-							plane,
+							client,
+							pluginSession?.contributions("executables") ?? [],
 							id,
 							parseForwardedOptions(options["--"] ?? []),
 							!!options.list,
@@ -383,25 +412,33 @@ export function createWsrtCli(
 				name: "workspace inspect",
 				description: "Inspect discovered packages, aliases, and relationships",
 				group: "Workspace",
-				action: execute(async (plane) => workspaceCommand(plane.definition().root, "inspect")),
+				action: execute(async (client) =>
+					workspaceCommand((await client.snapshot()).workspace.root, "inspect"),
+				),
 			},
 			{
 				name: "workspace resolve",
 				description: "Resolve the workspace model without writing files",
 				group: "Workspace",
-				action: execute(async (plane) => workspaceCommand(plane.definition().root, "resolve")),
+				action: execute(async (client) =>
+					workspaceCommand((await client.snapshot()).workspace.root, "resolve"),
+				),
 			},
 			{
 				name: "workspace sync",
 				description: "Synchronize TypeScript paths and manifest dependencies",
 				group: "Workspace",
-				action: execute(async (plane) => workspaceCommand(plane.definition().root, "sync")),
+				action: execute(async (client) =>
+					workspaceCommand((await client.snapshot()).workspace.root, "sync"),
+				),
 			},
 			{
 				name: "workspace check",
 				description: "Fail when workspace projections are stale (CI safe)",
 				group: "Workspace",
-				action: execute(async (plane) => workspaceCommand(plane.definition().root, "check")),
+				action: execute(async (client) =>
+					workspaceCommand((await client.snapshot()).workspace.root, "check"),
+				),
 			},
 			...pluginCommands.map((contribution) => ({
 				name: `${contribution.path} [...pluginArguments]`,
@@ -409,9 +446,9 @@ export function createWsrtCli(
 				group: `Plugin: ${contribution.owner.id}`,
 				allowUnknownOptions: true,
 				action: (_pluginArguments: string[], options: GlobalOptions) =>
-					execute(async (plane) => {
+					execute(async (client) => {
 						const args = argumentsAfterPath(process.argv, contribution.path);
-						return contribution.run(pluginContext(plane), args);
+						return contribution.run(await pluginContext(client), args);
 					})(options),
 			})),
 			{
@@ -419,16 +456,15 @@ export function createWsrtCli(
 				description: "Resolve runtime completion candidates",
 				hidden: true,
 				action: async (input: string | undefined, options: GlobalOptions) => {
-					const { createControlPlane } = await import("@wsrt/control-plane");
-					const plane = await createControlPlane({
+					const { connectOrStartWorkspaceSession } = await import("@wsrt/workspace-session");
+					const client = await connectOrStartWorkspaceSession({
 						root: options.root,
 						config: options.config,
-						pluginSession,
 					});
 					try {
-						process.stdout.write(`${(await plane.complete(input ?? "")).join("\n")}\n`);
+						process.stdout.write(`${(await client.complete(input ?? "")).join("\n")}\n`);
 					} finally {
-						await plane.dispose();
+						await client.close();
 					}
 				},
 			},
@@ -924,10 +960,11 @@ async function discoverPluginCommands(
 	return { commands: contributions, session };
 }
 
-function pluginContext(plane: Awaited<ReturnType<typeof createControlPlane>>): PluginContext {
+async function pluginContext(client: WorkspaceSessionClient): Promise<PluginContext> {
+	const definition = await client.definition();
 	return Object.freeze({
-		root: plane.definition().root,
-		configuration: plane.definition(),
+		root: client.session.workspaceRoot,
+		configuration: definition,
 		logger: {
 			info: logger.info.bind(logger),
 			warn: logger.warn.bind(logger),
@@ -948,7 +985,7 @@ function pluginContext(plane: Awaited<ReturnType<typeof createControlPlane>>): P
 						: { payload },
 				),
 		},
-		services: Object.freeze({ controlPlane: plane, graph: plane.graph() }),
+		services: Object.freeze({ workspaceSession: client }),
 	});
 }
 
@@ -997,22 +1034,4 @@ function printExecutableList(
 function detectShell(): CompletionShell {
 	const shell = process.env.SHELL?.split("/").at(-1);
 	return shell === "fish" || shell === "zsh" ? shell : "bash";
-}
-
-async function waitForSignal(dispose: () => Promise<void>): Promise<void> {
-	await new Promise<void>((resolve, reject) => {
-		let closing = false;
-		const close = async () => {
-			if (closing) return;
-			closing = true;
-			try {
-				await dispose();
-				resolve();
-			} catch (cause) {
-				reject(cause);
-			}
-		};
-		process.once("SIGINT", close);
-		process.once("SIGTERM", close);
-	});
 }

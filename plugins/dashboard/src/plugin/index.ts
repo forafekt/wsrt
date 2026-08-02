@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
-import type { WsrtControlPlane } from "@wsrt/control-plane";
 import { definePlugin, type ExecutableContribution, type WsrtPlugin } from "@wsrt/plugins";
+import { WorkspaceSessionClient } from "@wsrt/workspace-session";
 
 export type DashboardOptions = {
 	enabled?: boolean;
@@ -88,11 +88,10 @@ export function dashboardPlugin(options: DashboardOptions = {}): WsrtPlugin {
 			}
 		},
 		async execute(context, executableOptions) {
-			const { startDashboard } = await import("../server/dashboard-server.js");
-			const dashboard = await startDashboard(
-				context.controlPlane as WsrtControlPlane,
-				executableOptions,
-			);
+			const { startDashboard } = await import("../server/dashboard-host.js");
+			if (!(context.controlPlane instanceof WorkspaceSessionClient))
+				throw new Error("Dashboard executable requires a workspace session client");
+			const dashboard = await startDashboard(context.controlPlane, executableOptions);
 			context.logger.info(`WSRT Dashboard: ${dashboard.url}`);
 			let release = () => {};
 			const waiting = new Promise<void>((resolve) => {

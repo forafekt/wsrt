@@ -236,61 +236,39 @@ test("dashboard stress fixture remains bounded and indexes contributions promptl
 test("SSE snapshots suppress duplicate revisions and clean up", () => {
 	let listener;
 	let unsubscribed = false;
-	const plane = {
-		subscribeSnapshots(value) {
+	const snapshot = dashboardTestSnapshot();
+	const backend = {
+		subscribe(value) {
 			listener = value;
-			value({ revision: 1 });
+			value(snapshot);
 			return () => {
 				unsubscribed = true;
 			};
 		},
-		snapshot: () => ({
-			revision: 1,
-			workspace: {},
-			nodes: [],
-			operations: [],
-			artifacts: [],
-			diagnostics: [],
-			events: { size: 0 },
-		}),
-		definition: () => ({}),
-		graph: () => ({ toJSON: () => ({}) }),
-		listEvents: () => [],
 	};
 	const chunks = [];
-	const close = streamSnapshots(plane, {
+	const close = streamSnapshots(backend, {
 		write: (chunk) => chunks.push(chunk),
 		end() {},
 	});
-	listener({ revision: 1 });
+	listener(snapshot);
 	assert.equal(chunks.filter((chunk) => chunk.includes("event: snapshot")).length, 1);
 	close();
 	assert.equal(unsubscribed, true);
 });
 
 test("SSE oversized snapshots produce one complete typed protocol error frame", () => {
-	const plane = {
-		subscribeSnapshots(listener) {
-			listener({ revision: 1 });
+	const snapshot = dashboardTestSnapshot({ large: "x".repeat(4_000) });
+	const backend = {
+		subscribe(listener) {
+			listener(snapshot);
 			return () => undefined;
 		},
-		snapshot: () => ({
-			revision: 1,
-			workspace: { name: "large" },
-			nodes: [],
-			operations: [],
-			artifacts: [],
-			diagnostics: [],
-			events: { size: 0 },
-		}),
-		definition: () => ({ large: "x".repeat(4_000) }),
-		graph: () => ({ toJSON: () => ({}) }),
-		listEvents: () => [],
 	};
 	const capture = (limit) => {
 		const chunks = [];
 		const close = streamSnapshots(
-			plane,
+			backend,
 			{ write: (chunk) => chunks.push(chunk), end() {} },
 			undefined,
 			undefined,
@@ -308,3 +286,33 @@ test("SSE oversized snapshots produce one complete typed protocol error frame", 
 	assert.match(rejected, /dashboard\.frame_too_large/);
 	assert.doesNotMatch(rejected, /x{100}/);
 });
+
+function dashboardTestSnapshot(configuration = {}) {
+	return {
+		protocolVersion: 3,
+		protocol: {
+			transport: 1,
+			snapshot: 3,
+			contributions: 1,
+			actions: 1,
+			events: 1,
+		},
+		revision: 1,
+		controlPlane: {
+			revision: 1,
+			generatedAt: new Date().toISOString(),
+			workspace: { name: "test", root: "/test" },
+			nodes: [],
+			operations: [],
+			artifacts: [],
+			diagnostics: [],
+			events: { size: 0 },
+			plugins: [],
+			providers: [],
+		},
+		graph: { nodes: [], edges: [] },
+		events: [],
+		configuration,
+		contributions: [],
+	};
+}
