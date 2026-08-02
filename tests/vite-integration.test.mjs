@@ -35,6 +35,27 @@ test("published entry points expose WSRT plugin, adapter, and native Vite plugin
 	assert.equal(wsrt().name, "wsrt:workspace");
 });
 
+test("Vite ownership resolves exact per-node configuration and project-relative outputs", () => {
+	const fact = vitePlugin().contributions.intelligence[0].facts[0];
+	const associations = fact.resolve({
+		nodeId: "application:desktop/process:renderer",
+		workspaceRoot: "/workspace",
+		projectRoot: "/workspace/apps/desktop",
+		projectRelativeRoot: "apps/desktop",
+		providerOptions: {
+			command: "dev",
+			configFile: "vite.config.ts",
+			args: ["--outDir", "dist/renderer"],
+		},
+	});
+	assert.deepEqual(associations, [
+		{ pattern: "apps/desktop/index.html", role: "entrypoint" },
+		{ pattern: "apps/desktop/src/**", role: "source" },
+		{ pattern: "apps/desktop/vite.config.ts", role: "configuration" },
+		{ pattern: "apps/desktop/dist/renderer/**", role: "generated", generated: true },
+	]);
+});
+
 test("configured Vite adapters carry plugin workspace options into a consumer config", async () => {
 	const adapter = createViteAdapter({
 		workspace: { discover: true, aliases: true, dependencies: true },

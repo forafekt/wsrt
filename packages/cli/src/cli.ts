@@ -225,6 +225,25 @@ export function createWsrtCli(
 				},
 			},
 			{
+				name: "workspace owners <path>",
+				description: "Resolve authoritative owners for a workspace-relative path",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace owners apps/desktop/vite.config.ts --json"],
+				action: (file: string, options: GlobalOptions) =>
+					execute((client) => client.fileOwners(file))(options),
+			},
+			{
+				name: "workspace validate-change [...paths]",
+				description: "Recommend ordered validation tasks for changed workspace paths",
+				group: "Workspace intelligence",
+				examples: ["  $ wsrt workspace validate-change apps/desktop/vite.config.ts --json"],
+				action: (paths: string[], options: GlobalOptions) => {
+					if (!paths.length)
+						throw new CommandLineError("workspace validate-change requires at least one path");
+					return execute((client) => client.recommendValidation({ paths }))(options);
+				},
+			},
+			{
 				name: "workspace command plan <command> [...targets]",
 				description: "Plan a workspace command without executing it",
 				group: "Workspace intelligence",

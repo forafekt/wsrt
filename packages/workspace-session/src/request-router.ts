@@ -44,7 +44,9 @@ export class WorkspaceRequestRouter {
 				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
 				return this.#workspaceResponse(snapshot, snapshot, requestId);
 			}
-			case "workspace.node.describe": {
+			case "workspace.node.describe":
+			case "workspace.task.describe":
+			case "workspace.artifact.describe": {
 				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
 				return this.#workspaceResponse(
 					snapshot,
@@ -68,11 +70,27 @@ export class WorkspaceRequestRouter {
 					requestId,
 				);
 			}
+			case "workspace.file.owners": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.queryFiles({ paths: [request.path], includeGenerated: true }),
+					requestId,
+				);
+			}
 			case "workspace.change.impact": {
 				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
 				return this.#workspaceResponse(
 					snapshot,
 					this.intelligence.analyzeChangeImpact(request.query),
+					requestId,
+				);
+			}
+			case "workspace.validation.recommend": {
+				const snapshot = this.#workspaceSnapshot(request.expectedRevision);
+				return this.#workspaceResponse(
+					snapshot,
+					this.intelligence.recommendValidation(request.query),
 					requestId,
 				);
 			}

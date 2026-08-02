@@ -1,14 +1,16 @@
 import type { NormalizedExecutable } from "@wsrt/config";
+import type { SystemGraph } from "@wsrt/graph";
 import type { ControlPlaneState } from "./control-plane-state.js";
 import { ControlPlaneError } from "./types.js";
-import { processShorthand, required } from "./utils.js";
+import { canonicalProcessId, processShorthand, required } from "./utils.js";
 
 export class GraphSelector {
 	constructor(private readonly state: ControlPlaneState) {}
 
 	resolveExecutable(value: string): NormalizedExecutable {
 		const definition = required(this.state.definition, "Control plane is not loaded");
-		const canonical = definition.executables.find((item) => item.id === value);
+		const canonicalValue = canonicalProcessId(value);
+		const canonical = definition.executables.find((item) => item.id === canonicalValue);
 		if (canonical) return canonical;
 		const matches = definition.executables.filter(
 			(item) => item.name === value || processShorthand(item.id) === value,
@@ -56,17 +58,7 @@ export class GraphSelector {
 
 	closure(ids: readonly string[]): string[] {
 		const graph = required(this.state.graph, "Control plane is not loaded");
-		const result = new Set(ids);
-		const visit = (id: string): void => {
-			const related = [...graph.dependencies(id), ...graph.neighbors(id, "out", "contains")];
-			for (const node of related) {
-				if (node.kind === "artifact" || result.has(node.id)) continue;
-				result.add(node.id);
-				visit(node.id);
-			}
-		};
-		for (const id of ids) visit(id);
-		return [...result];
+		return selectStartClosure(graph, ids);
 	}
 
 	dependants(ids: readonly string[]): string[] {
@@ -83,4 +75,18 @@ export class GraphSelector {
 		for (const id of ids) visit(id);
 		return [...result];
 	}
+}
+
+export function selectStartClosure(graph: SystemGraph, ids: readonly string[]): string[] {
+	const result = new Set(ids);
+	const visit = (id: string): void => {
+		const related = [...graph.dependencies(id), ...graph.neighbors(id, "out", "contains")];
+		for (const node of related) {
+			if (node.kind === "artifact" || result.has(node.id)) continue;
+			result.add(node.id);
+			visit(node.id);
+		}
+	};
+	for (const id of ids) visit(id);
+	return [...result];
 }

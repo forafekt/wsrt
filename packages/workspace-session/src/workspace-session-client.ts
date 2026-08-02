@@ -21,6 +21,7 @@ import type {
 	WorkspaceNodeDescribeResponse,
 	WorkspacePermission,
 	WorkspaceSessionHandshake,
+	WorkspaceValidationRecommendationResponse,
 } from "./protocol.js";
 import type { WorkspaceTransportConnection } from "./transport.js";
 
@@ -81,12 +82,64 @@ export class WorkspaceSessionClient {
 			{ signal: options.signal },
 		);
 	}
+	fileOwners(
+		workspaceRelativePath: string,
+		options: WorkspaceIntelligenceRequestOptions = {},
+	): Promise<WorkspaceFilesQueryResponse> {
+		return this.request(
+			{
+				type: "workspace.file.owners",
+				path: workspaceRelativePath,
+				...revisionOption(options.expectedRevision),
+			},
+			{ signal: options.signal },
+		);
+	}
+	describeTask(
+		taskId: string,
+		options: WorkspaceIntelligenceRequestOptions = {},
+	): Promise<WorkspaceNodeDescribeResponse> {
+		return this.request(
+			{
+				type: "workspace.task.describe",
+				nodeId: taskId.startsWith("task:") ? taskId : `task:${taskId}`,
+				...revisionOption(options.expectedRevision),
+			},
+			{ signal: options.signal },
+		);
+	}
+	describeArtifact(
+		artifactId: string,
+		options: WorkspaceIntelligenceRequestOptions = {},
+	): Promise<WorkspaceNodeDescribeResponse> {
+		return this.request(
+			{
+				type: "workspace.artifact.describe",
+				nodeId: artifactId.startsWith("artifact:") ? artifactId : `artifact:${artifactId}`,
+				...revisionOption(options.expectedRevision),
+			},
+			{ signal: options.signal },
+		);
+	}
 	analyzeChangeImpact(
 		query: ChangeImpactQuery,
 		options: WorkspaceIntelligenceRequestOptions = {},
 	): Promise<WorkspaceChangeImpactResponse> {
 		return this.request(
 			{ type: "workspace.change.impact", query, ...revisionOption(options.expectedRevision) },
+			{ signal: options.signal },
+		);
+	}
+	recommendValidation(
+		query: ChangeImpactQuery,
+		options: WorkspaceIntelligenceRequestOptions = {},
+	): Promise<WorkspaceValidationRecommendationResponse> {
+		return this.request(
+			{
+				type: "workspace.validation.recommend",
+				query,
+				...revisionOption(options.expectedRevision),
+			},
 			{ signal: options.signal },
 		);
 	}

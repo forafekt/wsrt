@@ -54,7 +54,7 @@ test("representative workspace is equivalent through programmatic, CLI, and MCP 
 				{ path: "apps/web/index.html", role: "entrypoint" },
 				{ path: "apps/web/package.json", role: "configuration" },
 				{ path: "apps/web/src.js", role: "source" },
-				{ path: "apps/web/vite.config.*", role: "configuration" },
+				{ path: "apps/web/src/**", role: "source" },
 			],
 		);
 		const impact = await programmatic.analyzeChangeImpact({ paths: ["apps/lib/src/index.js"] });

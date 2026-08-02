@@ -463,13 +463,36 @@ function matches(
 }
 
 export function matchesWorkspacePattern(value: string, pattern: string): boolean {
-	const escaped = pattern
+	const normalizedValue = normalizeWorkspaceRelativePath(value);
+	const normalizedPattern = normalizeWorkspaceRelativePath(pattern, { allowGlob: true });
+	const escaped = normalizedPattern
 		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
 		.replace(/\*\*/g, "<GLOBSTAR>")
 		.replace(/\*/g, "[^/]*")
 		.replace(/<GLOBSTAR>/g, ".*")
 		.replace(/\?/g, ".");
-	return new RegExp(`^${escaped}$`).test(value);
+	return new RegExp(`^${escaped}$`).test(normalizedValue);
+}
+
+export function workspacePatternKind(value: string): "exact" | "glob" {
+	return /[*?[\]{}]/.test(value) ? "glob" : "exact";
+}
+
+export function normalizeWorkspaceRelativePath(
+	value: string,
+	options: Readonly<{ allowGlob?: boolean }> = {},
+): string {
+	const normalized = value.replaceAll("\\", "/").replace(/^\.\//, "");
+	if (
+		!normalized ||
+		path.posix.isAbsolute(normalized) ||
+		normalized.split("/").includes("..") ||
+		(!options.allowGlob && workspacePatternKind(normalized) === "glob")
+	)
+		throw Object.assign(new Error(`Invalid workspace-relative path: ${value}`), {
+			code: "workspace.path_invalid",
+		});
+	return path.posix.normalize(normalized);
 }
 
 const glob = matchesWorkspacePattern;

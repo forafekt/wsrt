@@ -190,13 +190,26 @@ export type WorkspaceIntelligenceContribution = {
 	readonly facts: readonly Readonly<{
 		type: "source-ownership";
 		selector: Readonly<{ nodeId?: string; provider?: string }>;
-		associations: readonly Readonly<{
+		associations?: readonly Readonly<{
+			pattern: string;
+			role: SourceAssociationRole;
+			generated?: boolean;
+		}>[];
+		resolve?(context: WorkspaceIntelligenceResolutionContext): readonly Readonly<{
 			pattern: string;
 			role: SourceAssociationRole;
 			generated?: boolean;
 		}>[];
 	}>[];
 };
+
+export type WorkspaceIntelligenceResolutionContext = Readonly<{
+	nodeId: string;
+	workspaceRoot: string;
+	projectRoot: string;
+	projectRelativeRoot: string;
+	providerOptions?: unknown;
+}>;
 
 export type PluginContributions = {
 	runtimes?: readonly RuntimeProvider[];

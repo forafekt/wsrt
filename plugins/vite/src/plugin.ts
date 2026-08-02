@@ -147,8 +147,6 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 			};
 		},
 	};
-	const project = (options.project ?? ".").replaceAll("\\", "/").replace(/^\.\/?/, "");
-	const inProject = (value: string) => (project ? `${project}/${value}` : value);
 	return definePlugin({
 		id: owner.id,
 		name: "Vite",
@@ -176,11 +174,28 @@ export default function vite(options: VitePluginOptions = {}): WsrtPlugin {
 						{
 							type: "source-ownership",
 							selector: { provider: "vite" },
-							associations: [
-								{ pattern: inProject("index.html"), role: "entrypoint" },
-								{ pattern: inProject("vite.config.*"), role: "configuration" },
-								{ pattern: inProject("dist/**"), role: "generated", generated: true },
-							],
+							resolve: ({ projectRelativeRoot, providerOptions }) => {
+								const adapter = isRecord(providerOptions)
+									? (providerOptions as ViteAdapterOptions)
+									: {};
+								const root = projectRelativeRoot === "." ? "" : `${projectRelativeRoot}/`;
+								const config = adapter.configFile?.replaceAll("\\", "/").replace(/^\.\//, "");
+								const output = argumentValue(adapter.args ?? [], "--outDir") ?? "dist";
+								return [
+									...(adapter.command !== "build"
+										? [{ pattern: `${root}index.html`, role: "entrypoint" as const }]
+										: []),
+									{ pattern: `${root}src/**`, role: "source" },
+									...(config
+										? [{ pattern: `${root}${config}`, role: "configuration" as const }]
+										: []),
+									{
+										pattern: `${root}${output.replaceAll("\\", "/")}/**`,
+										role: "generated",
+										generated: true,
+									},
+								];
+							},
 						},
 					],
 				},

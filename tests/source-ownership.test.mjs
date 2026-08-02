@@ -31,7 +31,7 @@ test("normalizes source ownership and supports forward and reverse lookup", () =
 			},
 			tasks: {
 				build: {
-					inputs: ["packages/*/src/**", "tsconfig.json"],
+					inputs: ["apps/web/src/**", "packages/*/src/**", "tsconfig.json"],
 					outputs: [{ artifact: "bundle", path: "dist/**" }],
 				},
 			},
@@ -69,7 +69,10 @@ test("normalizes source ownership and supports forward and reverse lookup", () =
 		intelligence
 			.queryFiles({ paths: ["apps/web/src/view.ts"] })
 			.files.map(({ owners, path }) => ({ owners, path })),
-		[{ owners: ["application:web"], path: "apps/web/src/view.ts" }],
+		[
+			{ owners: ["application:web"], path: "apps/web/src/view.ts" },
+			{ owners: ["task:build"], path: "apps/web/src/view.ts" },
+		],
 	);
 	assert.deepEqual(intelligence.queryFiles({ paths: ["apps/web/generated/types.ts"] }).files, []);
 	assert.equal(
@@ -81,10 +84,30 @@ test("normalizes source ownership and supports forward and reverse lookup", () =
 	assert.equal(impact.confidence, "declared");
 	assert.deepEqual(
 		impact.affectedNodes.map(({ id }) => id),
-		["application:web"],
+		["application:web", "artifact:bundle", "task:build"],
 	);
-	assert.match(impact.evidence[0].reason, /declared source ownership/);
+	assert.deepEqual(impact.directOwnerIds, ["application:web", "task:build"]);
+	assert.deepEqual(
+		impact.affectedArtifacts.map(({ id }) => id),
+		["artifact:bundle"],
+	);
+	assert.deepEqual(impact.recommendedValidations, ["task:build"]);
+	assert.ok(impact.evidence.some(({ reason }) => /declared source ownership/.test(reason)));
 	assert.equal(intelligence.analyzeChangeImpact({ paths: ["unknown.txt"] }).confidence, "unknown");
+	const taskFiles = intelligence.queryFiles({ taskIds: ["build"], includeGenerated: true }).files;
+	assert.ok(taskFiles.some(({ role, path }) => role === "task-input" && path === "tsconfig.json"));
+	assert.ok(
+		taskFiles.some(({ role, producerId }) => role === "task-output" && producerId === "task:build"),
+	);
+	const artifactFiles = intelligence.queryFiles({
+		artifactIds: ["bundle"],
+		includeGenerated: true,
+	}).files;
+	assert.deepEqual(
+		artifactFiles.map(({ ownerId, path, producerId }) => ({ ownerId, path, producerId })),
+		[{ ownerId: "artifact:bundle", path: "dist/**", producerId: "task:build" }],
+	);
+	assert.deepEqual(intelligence.describeNode("task:build").artifacts, ["artifact:bundle"]);
 });
 
 test("rejects ownership paths that escape the workspace", () => {

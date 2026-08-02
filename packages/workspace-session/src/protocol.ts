@@ -11,6 +11,7 @@ import type {
 	FileQueryResult,
 	GraphQuery,
 	GraphQueryResult,
+	ValidationRecommendationResult,
 	WorkspaceCapability,
 	WorkspaceIntelligenceSnapshot,
 	WorkspaceNodeDescription,
@@ -53,7 +54,22 @@ export type WorkspaceRequest =
 			readonly expectedRevision?: number;
 	  }
 	| {
+			readonly type: "workspace.file.owners";
+			readonly path: string;
+			readonly expectedRevision?: number;
+	  }
+	| {
+			readonly type: "workspace.task.describe" | "workspace.artifact.describe";
+			readonly nodeId: string;
+			readonly expectedRevision?: number;
+	  }
+	| {
 			readonly type: "workspace.change.impact";
+			readonly query: ChangeImpactQuery;
+			readonly expectedRevision?: number;
+	  }
+	| {
+			readonly type: "workspace.validation.recommend";
 			readonly query: ChangeImpactQuery;
 			readonly expectedRevision?: number;
 	  }
@@ -131,6 +147,8 @@ export type WorkspaceGraphQueryResponse = WorkspaceOperationResponse<GraphQueryR
 export type WorkspaceFilesQueryResponse = WorkspaceOperationResponse<FileQueryResult>;
 
 export type WorkspaceChangeImpactResponse = WorkspaceOperationResponse<ChangeImpactResult>;
+export type WorkspaceValidationRecommendationResponse =
+	WorkspaceOperationResponse<ValidationRecommendationResult>;
 
 export type WorkspaceCommandPlanResponse = WorkspaceOperationResponse<CommandPlan>;
 
@@ -257,6 +275,8 @@ function validateWorkspaceRequest(value: Record<string, unknown>): WorkspaceRequ
 		case "workspace.describe":
 			return { type, ...expectedRevision(value) };
 		case "workspace.node.describe":
+		case "workspace.task.describe":
+		case "workspace.artifact.describe":
 			if (typeof value.nodeId === "string" && value.nodeId)
 				return { type, nodeId: value.nodeId, ...expectedRevision(value) };
 			break;
@@ -264,7 +284,12 @@ function validateWorkspaceRequest(value: Record<string, unknown>): WorkspaceRequ
 			return { type, query: validateGraphQuery(value.query), ...expectedRevision(value) };
 		case "workspace.files.query":
 			return { type, query: validateFileQuery(value.query), ...expectedRevision(value) };
+		case "workspace.file.owners":
+			if (nonEmptyString(value.path)) return { type, path: value.path, ...expectedRevision(value) };
+			break;
 		case "workspace.change.impact":
+			return { type, query: validateChangeImpactQuery(value.query), ...expectedRevision(value) };
+		case "workspace.validation.recommend":
 			return { type, query: validateChangeImpactQuery(value.query), ...expectedRevision(value) };
 		case "workspace.command.plan":
 			if (isControlPlaneCommand(value.command))
@@ -376,7 +401,15 @@ function validateGraphQuery(value: unknown): GraphQuery {
 function validateFileQuery(value: unknown): FileQuery {
 	if (!isRecord(value))
 		throw protocolError("protocol.malformed_request", "File query must be an object");
-	for (const key of ["nodeIds", "projectIds", "roles", "paths"])
+	for (const key of [
+		"nodeIds",
+		"projectIds",
+		"taskIds",
+		"artifactIds",
+		"roles",
+		"paths",
+		"patterns",
+	])
 		if (
 			value[key] !== undefined &&
 			(!Array.isArray(value[key]) || !(value[key] as unknown[]).every(nonEmptyString))
@@ -387,6 +420,9 @@ function validateFileQuery(value: unknown): FileQuery {
 			);
 	if (value.includeGenerated !== undefined && typeof value.includeGenerated !== "boolean")
 		throw protocolError("protocol.malformed_request", "includeGenerated must be a boolean");
+	for (const key of ["includePatterns", "includeMatchedFiles", "aggregate"])
+		if (value[key] !== undefined && typeof value[key] !== "boolean")
+			throw protocolError("protocol.malformed_request", `${key} must be a boolean`);
 	if (value.limit !== undefined && !Number.isInteger(value.limit))
 		throw protocolError("protocol.malformed_request", "File query limit must be an integer");
 	if (value.cursor !== undefined && typeof value.cursor !== "string")

@@ -31,6 +31,20 @@ test("workspace protocol v1 validates transport-neutral intelligence operations"
 	);
 	assert.deepEqual(
 		validateRequestEnvelope(
+			envelope({
+				type: "workspace.validation.recommend",
+				query: { paths: ["src/main.ts"] },
+			}),
+		).request,
+		{ type: "workspace.validation.recommend", query: { paths: ["src/main.ts"] } },
+	);
+	assert.deepEqual(
+		validateRequestEnvelope(envelope({ type: "workspace.file.owners", path: "src/main.ts" }))
+			.request,
+		{ type: "workspace.file.owners", path: "src/main.ts" },
+	);
+	assert.deepEqual(
+		validateRequestEnvelope(
 			envelope({ type: "workspace.change.impact", query: { paths: ["src/main.ts"] } }),
 		).request,
 		{ type: "workspace.change.impact", query: { paths: ["src/main.ts"] } },
@@ -55,13 +69,22 @@ test("workspace protocol v1 validates transport-neutral intelligence operations"
 				type: "workspace.files.query",
 				query: {
 					nodeIds: ["application:web"],
+					taskIds: ["build"],
 					roles: ["source"],
 					includeGenerated: false,
+					aggregate: true,
 					limit: 25,
 				},
 			}),
 		).request.query,
-		{ nodeIds: ["application:web"], roles: ["source"], includeGenerated: false, limit: 25 },
+		{
+			nodeIds: ["application:web"],
+			taskIds: ["build"],
+			roles: ["source"],
+			includeGenerated: false,
+			aggregate: true,
+			limit: 25,
+		},
 	);
 });
 

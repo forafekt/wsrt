@@ -275,6 +275,30 @@ export class WsrtMcpServer {
 				),
 		);
 		this.server.registerTool(
+			"wsrt_file_owners",
+			{
+				description: `Resolve direct and aggregate owners for one workspace-relative file through the authoritative workspace session. ${authority}`,
+				inputSchema: { path: z.string().min(1) },
+				annotations: { readOnlyHint: true },
+			},
+			({ path }, extra) =>
+				this.#invoke(extra.signal, async (signal) =>
+					toolResult(await client.fileOwners(path, { signal })),
+				),
+		);
+		this.server.registerTool(
+			"wsrt_validation_recommend",
+			{
+				description: `Recommend deterministically ordered validation tasks for changed workspace-relative files, with evidence and prerequisites. ${authority}`,
+				inputSchema: { paths: z.array(z.string().min(1)).min(1) },
+				annotations: { readOnlyHint: true },
+			},
+			({ paths }, extra) =>
+				this.#invoke(extra.signal, async (signal) =>
+					toolResult(await client.recommendValidation({ paths }, { signal })),
+				),
+		);
+		this.server.registerTool(
 			"wsrt_command_plan",
 			{
 				description: `Use before a lifecycle or task mutation to validate targets and inspect dependency actions, processes, resources, required permissions, risk, warnings, and provenance. This tool is read-only and never executes the command. ${authority}`,

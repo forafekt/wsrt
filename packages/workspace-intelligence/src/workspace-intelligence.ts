@@ -3,12 +3,18 @@ import type { NormalizedSystemDefinition } from "@wsrt/config";
 import {
 	type ControlPlaneCommand,
 	type ControlPlaneSnapshot,
+	canonicalProcessId,
 	controlPlaneCommandPermission,
+	selectStartClosure,
 } from "@wsrt/control-plane";
 import type { SystemGraph, SystemNode } from "@wsrt/graph";
 import type { WorkspaceIntelligenceContribution } from "@wsrt/plugins";
 import type { ResolvedWorkspace } from "@wsrt/workspace";
-import { matchesWorkspacePattern } from "@wsrt/workspace";
+import {
+	matchesWorkspacePattern,
+	normalizeWorkspaceRelativePath,
+	workspacePatternKind,
+} from "@wsrt/workspace";
 import {
 	type ChangeImpactQuery,
 	type ChangeImpactResult,
@@ -21,6 +27,7 @@ import {
 	type NodeQuery,
 	type NodeQueryResult,
 	type ProjectDescription,
+	type ValidationRecommendationResult,
 	WORKSPACE_INTELLIGENCE_SCHEMA_VERSION,
 	type WorkspaceFileAssociation,
 	type WorkspaceIntelligence,
@@ -50,6 +57,7 @@ export type WorkspaceIntelligenceSources = Readonly<{
 
 export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 	#cached?: WorkspaceIntelligenceSnapshot;
+	#associationIndex?: AssociationIndex;
 	constructor(readonly sources: WorkspaceIntelligenceSources) {}
 
 	describeWorkspace(): WorkspaceIntelligenceSnapshot {
@@ -82,7 +90,7 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 	}
 
 	describeNode(id: string): WorkspaceNodeDescription {
-		const node = this.sources.graph.node(id);
+		const node = this.sources.graph.node(canonicalProcessId(id));
 		if (!node)
 			throw intelligenceError("workspace.node_not_found", `Workspace node ${id} was not found`);
 		const projects = this.#projects();
@@ -132,9 +140,23 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 
 	queryFiles(query: FileQuery): FileQueryResult {
 		const snapshot = this.describeWorkspace();
+		const index = this.#fileIndex(snapshot);
+		const requestedIds = new Set([
+			...(query.nodeIds ?? []).map(canonicalProcessId),
+			...(query.taskIds ?? []).map((id) => (id.startsWith("task:") ? id : `task:${id}`)),
+			...(query.artifactIds ?? []).map((id) =>
+				id.startsWith("artifact:") ? id : `artifact:${id}`,
+			),
+		]);
+		const selectedIds = new Map<string, "direct" | "composed-child">();
+		for (const id of requestedIds) selectedIds.set(id, "direct");
+		if (query.aggregate !== false)
+			for (const id of requestedIds)
+				for (const child of this.#containedDescendants(id))
+					if (!selectedIds.has(child)) selectedIds.set(child, "composed-child");
 		const owners = snapshot.nodes.filter(
 			(node) =>
-				(!query.nodeIds?.length || query.nodeIds.includes(node.id)) &&
+				(!requestedIds.size || selectedIds.has(node.id)) &&
 				(!query.projectIds?.length ||
 					(node.projectId && query.projectIds.includes(node.projectId))),
 		);
@@ -142,27 +164,57 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 			string,
 			{ association: WorkspaceFileAssociation; owners: string[]; projects: string[] }
 		>();
-		for (const owner of owners)
-			for (const association of owner.files) {
-				if (query.roles?.length && !query.roles.includes(association.role)) continue;
-				if (!query.includeGenerated && association.generated) continue;
-				const matchedPaths = query.paths?.length
-					? query.paths.filter((candidate) => matchesWorkspacePattern(candidate, association.path))
-					: [association.path];
-				for (const matchedPath of matchedPaths) {
-					const resolved =
-						matchedPath === association.path ? association : { ...association, path: matchedPath };
-					const key = `${resolved.path}\0${resolved.role}`;
-					const item = files.get(key) ?? { association: resolved, owners: [], projects: [] };
-					item.owners.push(owner.id);
-					if (owner.projectId) item.projects.push(owner.projectId);
-					files.set(key, item);
-				}
+		const eligibleOwners = new Set(owners.map(({ id }) => id));
+		const candidates = query.paths?.length
+			? query.paths.flatMap((candidate) => {
+					const normalized = canonicalQueryPath(candidate);
+					return [
+						...(index.exact.get(normalized) ?? []),
+						...index.patterns.filter(({ path: pattern }) =>
+							matchesWorkspacePattern(normalized, pattern),
+						),
+					];
+				})
+			: owners.flatMap(({ id }) => index.byOwner.get(id) ?? []);
+		for (const association of uniqueAssociations(candidates)) {
+			const owner = snapshot.nodes.find(({ id }) => id === association.ownerId);
+			if (!owner || !eligibleOwners.has(owner.id)) continue;
+			if (query.roles?.length && !query.roles.includes(association.role)) continue;
+			if (query.patterns?.length) {
+				const normalizedPatterns = query.patterns.map((pattern) =>
+					normalizeWorkspaceRelativePath(pattern, { allowGlob: true }),
+				);
+				if (!normalizedPatterns.includes(association.path)) continue;
 			}
+			if (!query.includeGenerated && association.generated) continue;
+			const normalizedPaths = query.paths?.map(canonicalQueryPath);
+			const matchedPaths = normalizedPaths?.length
+				? normalizedPaths.filter((candidate) =>
+						association.match === "exact"
+							? candidate === association.path
+							: matchesWorkspacePattern(candidate, association.path),
+					)
+				: query.includePatterns === false && association.match === "glob"
+					? []
+					: [association.path];
+			for (const matchedPath of matchedPaths) {
+				const resolved =
+					matchedPath === association.path
+						? association
+						: { ...association, path: matchedPath, match: "exact" as const };
+				const key = `${resolved.ownerId}\0${resolved.path}\0${resolved.role}`;
+				const item = files.get(key) ?? { association: resolved, owners: [], projects: [] };
+				item.owners.push(owner.id);
+				if (owner.projectId) item.projects.push(owner.projectId);
+				files.set(key, item);
+			}
+		}
 		const page = paginate(
 			[...files.values()]
 				.map(({ association, owners: nodeOwners, projects }) => ({
 					...association,
+					requestedOwnerIds: requestedIds.size ? [...requestedIds].sort() : [association.ownerId],
+					relationship: selectedIds.get(association.ownerId) ?? "direct",
 					owners: [...new Set(nodeOwners)].sort(),
 					projectIds: [...new Set(projects)].sort(),
 				}))
@@ -170,11 +222,109 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 			query.limit,
 			query.cursor,
 		);
+		const warnings: { code: string; message: string }[] = [];
+		const missingOwners = [...requestedIds].filter(
+			(id) => !snapshot.nodes.some((node) => node.id === id),
+		);
+		if (missingOwners.length)
+			warnings.push({
+				code: "workspace.owner_not_found",
+				message: `Requested owners were not found: ${missingOwners.join(", ")}`,
+			});
+		if (!page.items.length) {
+			if (index.support === "unavailable")
+				warnings.push({
+					code: "workspace.ownership_unavailable",
+					message: "Ownership support is unavailable for this workspace",
+				});
+			else if (index.support === "partial")
+				warnings.push({
+					code: "workspace.ownership_incomplete",
+					message: "No association matched and ownership knowledge is partial",
+				});
+			else if (query.roles?.length)
+				warnings.push({
+					code: "workspace.role_unmatched",
+					message: `No associations matched roles: ${query.roles.join(", ")}`,
+				});
+			else if (query.paths?.length)
+				warnings.push({
+					code: "workspace.path_unowned",
+					message: "No ownership association matched the supplied path",
+				});
+			else
+				warnings.push({
+					code: "workspace.associations_empty",
+					message: "The requested owner has no declared associations",
+				});
+		}
+		if (query.includeMatchedFiles && index.patterns.length)
+			warnings.push({
+				code: "workspace.expansion_unavailable",
+				message: "Declared patterns are returned without filesystem expansion",
+			});
 		return freeze({
 			workspaceRevision: snapshot.workspaceRevision,
+			support: this.#ownershipSupport(),
 			files: page.items,
+			unresolvedPatterns: [],
+			warnings,
 			...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
 		});
+	}
+
+	#fileIndex(snapshot: WorkspaceIntelligenceSnapshot): AssociationIndex {
+		if (this.#associationIndex?.revision === snapshot.workspaceRevision)
+			return this.#associationIndex;
+		const byOwner = new Map<string, readonly WorkspaceFileAssociation[]>();
+		const byProject = new Map<string, WorkspaceFileAssociation[]>();
+		const exact = new Map<string, WorkspaceFileAssociation[]>();
+		const patterns: WorkspaceFileAssociation[] = [];
+		for (const node of snapshot.nodes) {
+			const associations = Object.freeze([...node.files].sort(associationSort));
+			byOwner.set(node.id, associations);
+			for (const association of associations) {
+				if (association.projectId) append(byProject, association.projectId, association);
+				if (association.match === "exact") append(exact, association.path, association);
+				else patterns.push(association);
+			}
+		}
+		this.#associationIndex = Object.freeze({
+			revision: snapshot.workspaceRevision,
+			byOwner: readonlyMap(byOwner),
+			byProject: readonlyMap(byProject),
+			exact: readonlyMap(exact),
+			patterns: Object.freeze(patterns.sort(associationSort)),
+			support: this.#ownershipSupport(),
+		});
+		return this.#associationIndex;
+	}
+
+	#containedDescendants(root: string): readonly string[] {
+		const result = new Set<string>();
+		const queue = [root];
+		while (queue.length && result.size < 500) {
+			const current = queue.shift();
+			if (current === undefined) break;
+			for (const edge of this.sources.graph.edges("contains"))
+				if (edge.from === current && !result.has(edge.to)) {
+					result.add(edge.to);
+					queue.push(edge.to);
+				}
+		}
+		return [...result].sort();
+	}
+
+	#ownershipSupport(): "full" | "partial" | "unavailable" {
+		if (this.sources.definition.executables.some(({ files }) => (files?.length ?? 0) > 0))
+			return "full";
+		if (
+			(this.sources.contributions ?? []).some(({ facts }) =>
+				facts.some(({ associations, resolve }) => (associations?.length ?? 0) > 0 || !!resolve),
+			)
+		)
+			return "partial";
+		return "unavailable";
 	}
 
 	queryNodes(query: NodeQuery): NodeQueryResult {
@@ -204,13 +354,28 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 		if (!query.paths.length)
 			throw intelligenceError("query.paths_required", "At least one changed path is required");
 		const snapshot = this.describeWorkspace();
-		const directFiles = this.queryFiles({
+		const fileResult = this.queryFiles({
 			paths: query.paths,
 			includeGenerated: true,
 			limit: 500,
-		}).files;
+		});
+		const directFiles = fileResult.files;
 		const directIds = new Set(directFiles.flatMap(({ owners }) => owners));
 		const affectedIds = new Set(directIds);
+		const compositionQueue = [...directIds];
+		while (compositionQueue.length) {
+			const child = compositionQueue.shift();
+			if (child === undefined) break;
+			for (const edge of this.sources.graph.edges("contains"))
+				if (
+					edge.to === child &&
+					this.sources.graph.node(edge.from)?.kind !== "workspace" &&
+					!affectedIds.has(edge.from)
+				) {
+					affectedIds.add(edge.from);
+					compositionQueue.push(edge.from);
+				}
+		}
 		for (const id of [...directIds])
 			for (const node of this.queryGraph({
 				roots: [id],
@@ -219,6 +384,8 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 				limit: 500,
 			}).nodes)
 				affectedIds.add(node.id);
+		for (const edge of this.sources.graph.edges("produces"))
+			if (affectedIds.has(edge.from)) affectedIds.add(edge.to);
 		const affectedNodes = snapshot.nodes.filter(({ id }) => affectedIds.has(id));
 		const affectedTasks = affectedNodes.filter(({ kind }) => kind === "task");
 		const projectIds = new Set(
@@ -227,7 +394,7 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 		const evidence: EvidenceRecord[] = directFiles.flatMap((file) =>
 			file.evidence.map((item) => ({
 				...item,
-				reason: `${file.path} matches declared ${file.role} ownership for ${file.owners.join(", ")}`,
+				reason: `${file.path} matches ${file.confidence} ${file.role} ownership for ${file.owners.join(", ")}`,
 			})),
 		);
 		for (const node of affectedNodes)
@@ -235,18 +402,85 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 				evidence.push({
 					type: "derived",
 					source: "system-graph",
-					reason: `${node.id} depends transitively on a directly affected node`,
+					reason: `${node.id} is related by dependency or composition to a directly affected node`,
 				});
 		return freeze({
 			workspaceRevision: snapshot.workspaceRevision,
+			support: fileResult.support,
+			affectedFiles: directFiles,
+			directOwnerIds: [...directIds].sort(),
+			aggregateOwnerIds: affectedNodes
+				.filter(({ id }) => !directIds.has(id))
+				.map(({ id }) => id)
+				.sort(),
 			affectedProjects: snapshot.projects.filter(({ id }) => projectIds.has(id)),
 			affectedNodes,
+			affectedApplications: affectedNodes.filter(({ kind }) => kind === "application"),
+			affectedProcesses: affectedNodes.filter(({ kind }) => kind === "process"),
 			affectedTasks,
+			affectedArtifacts: affectedNodes.filter(({ kind }) => kind === "artifact"),
 			recommendedValidations: affectedTasks.map(({ id }) => id).sort(),
 			evidence: evidence.sort((a, b) =>
 				`${a.source}:${a.reason}`.localeCompare(`${b.source}:${b.reason}`),
 			),
-			confidence: directFiles.length ? "declared" : "unknown",
+			confidence: directFiles.some(({ confidence }) => confidence === "declared")
+				? "declared"
+				: directFiles.length
+					? "derived"
+					: "unknown",
+			warnings: fileResult.warnings,
+		});
+	}
+
+	recommendValidation(query: ChangeImpactQuery): ValidationRecommendationResult {
+		const impact = this.analyzeChangeImpact(query);
+		const taskIds = impact.affectedTasks.map(({ id }) => id);
+		if (!taskIds.length)
+			return freeze({
+				workspaceRevision: impact.workspaceRevision,
+				support: impact.support,
+				recommendations: [],
+				warnings: [
+					...impact.warnings,
+					{
+						code: "workspace.validation_unavailable",
+						message: "No validation task is connected to the changed files by evidence",
+					},
+				],
+			});
+		const selected = new Set(taskIds);
+		const order = this.sources.graph.plan(selected).order.filter((id) => selected.has(id));
+		return freeze({
+			workspaceRevision: impact.workspaceRevision,
+			support: impact.support,
+			recommendations: order.map((taskId) => {
+				const direct = impact.directOwnerIds.includes(taskId);
+				const prerequisites = this.sources.graph
+					.dependencies(taskId)
+					.filter(({ id, kind }) => kind === "task" && selected.has(id))
+					.map(({ id }) => id)
+					.sort();
+				const covered = this.queryGraph({
+					roots: [taskId],
+					direction: "dependencies",
+					depth: 32,
+					limit: 500,
+				})
+					.nodes.filter(({ id, kind }) => kind === "task" && id !== taskId && selected.has(id))
+					.map(({ id }) => id)
+					.sort();
+				return {
+					taskId,
+					reason: direct
+						? "Task input directly matches a changed file"
+						: "Task transitively validates an affected task through the configured task graph",
+					confidence: direct ? impact.confidence : "derived",
+					evidence: impact.evidence,
+					prerequisiteTaskIds: prerequisites,
+					...(covered.length ? { coveredTaskIds: covered } : {}),
+				};
+			}),
+			warnings: impact.warnings,
 		});
 	}
 
@@ -260,12 +494,19 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 		);
 		const missing = targets.filter((id) => !resolvedTargets.includes(id));
 		const direction = command.type === "node.stop" ? "dependents" : "dependencies";
-		const related = new Set<string>();
-		for (const id of resolvedTargets)
-			if (command.type.startsWith("node.") || command.type === "task.run")
-				for (const node of this.queryGraph({ roots: [id], direction, depth: 32, limit: 500 }).nodes)
-					if (node.id !== id) related.add(node.id);
+		const selected =
+			command.type === "node.start" ||
+			command.type === "node.restart" ||
+			command.type === "task.run"
+				? selectStartClosure(this.sources.graph, resolvedTargets)
+				: resolvedTargets.flatMap((id) =>
+						this.queryGraph({ roots: [id], direction, depth: 32, limit: 500 }).nodes.map(
+							({ id }) => id,
+						),
+					);
+		const related = new Set(selected.filter((id) => !resolvedTargets.includes(id)));
 		const affected = [...new Set([...resolvedTargets, ...related])].sort();
+		const dependencyOrder = this.sources.graph.plan(affected).order;
 		const permission = controlPlaneCommandPermission(command);
 		const executableById = new Map(
 			this.sources.definition.executables.map((item) => [item.id, item]),
@@ -277,7 +518,7 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 					return [
 						`tcp:${executable.healthcheck.host ?? "localhost"}:${executable.healthcheck.port}`,
 					];
-				if (executable?.healthcheck?.type === "http") return [`http:${executable.healthcheck.url}`];
+				if (executable?.healthcheck?.type === "http") return [executable.healthcheck.url];
 				return [];
 			})
 			.sort();
@@ -285,11 +526,23 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 			command,
 			valid: missing.length === 0,
 			resolvedTargets,
-			dependencyActions: [...related].sort().map((target) => ({ action: direction, target })),
+			dependencyActions: dependencyOrder
+				.filter((target) => related.has(target))
+				.map((target) => ({ action: command.type === "node.stop" ? "stop" : "start", target })),
+			dependencyOrder,
+			readinessRequirements: this.sources.graph
+				.edges("depends-on")
+				.filter(({ from, to }) => affected.includes(from) && affected.includes(to))
+				.map(({ from, to, condition }) => ({ from, to, ...(condition ? { condition } : {}) })),
 			affectedProcesses: affected.filter(
 				(id) => snapshot.nodes.find((node) => node.id === id)?.kind !== "artifact",
 			),
 			resources,
+			expectedArtifacts: snapshot.nodes
+				.filter(({ id }) => affected.includes(id))
+				.flatMap(({ artifacts }) => artifacts)
+				.filter((id, index, values) => values.indexOf(id) === index)
+				.sort(),
 			requiredPermissions: [permission],
 			risk: command.type === "node.stop" || command.type === "node.restart" ? "medium" : "low",
 			warnings: missing.map((id) => `Target ${id} does not exist`),
@@ -340,6 +593,18 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 	): WorkspaceNodeDescription {
 		const state = live.nodes.find((item) => item.id === node.id);
 		const executable = this.sources.definition.executables.find((item) => item.id === node.id);
+		const artifact = this.sources.definition.artifacts.find((item) => item.id === node.id);
+		const artifactProducer = artifact?.producer
+			? this.sources.definition.executables.find((item) => item.name === artifact.producer)
+			: undefined;
+		const artifactPaths = artifact
+			? [
+					...(artifact.location ? [artifact.location] : []),
+					...(artifactProducer?.outputs
+						.filter(({ artifact: name }) => name === artifact.name)
+						.map(({ path: outputPath }) => outputPath) ?? []),
+				].filter((value, index, values) => values.indexOf(value) === index)
+			: [];
 		const contributed = (this.sources.contributions ?? []).flatMap((contribution) =>
 			contribution.facts.flatMap((fact) => {
 				const selected =
@@ -347,12 +612,29 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 					(fact.selector.provider !== undefined &&
 						executable?.provider?.provider === fact.selector.provider);
 				if (!selected) return [];
-				return fact.associations.map((association) => ({
+				const associations = [
+					...(fact.associations ?? []),
+					...(fact.resolve?.({
+						nodeId: node.id,
+						workspaceRoot: this.sources.definition.root,
+						projectRoot: executable?.root ?? this.sources.definition.root,
+						projectRelativeRoot: executable
+							? relative(this.sources.definition.root, executable.root)
+							: ".",
+						providerOptions: executable?.provider?.options,
+					}) ?? []),
+				];
+				return associations.map((association) => ({
+					ownerId: node.id,
+					ownerKind: node.kind,
 					path: association.pattern.replaceAll("\\", "/").replace(/^\.\//, ""),
+					match: workspacePatternKind(association.pattern),
 					role: association.role,
 					generated:
 						association.generated ??
 						(association.role === "generated" || association.role === "task-output"),
+					contributionSource: contribution.id,
+					confidence: "derived" as const,
 					evidence: [
 						{
 							type: "plugin" as const,
@@ -363,9 +645,10 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 				}));
 			}),
 		);
+		const projectOwner = executable ?? artifactProducer;
 		const projectId = projects.find((project) =>
-			executable
-				? isWithin(project.root, relative(this.sources.definition.root, executable.root))
+			projectOwner
+				? isWithin(project.root, relative(this.sources.definition.root, projectOwner.root))
 				: false,
 		)?.id;
 		const evidence: EvidenceRecord[] = executable
@@ -401,11 +684,25 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 						},
 					}
 				: {}),
-			files: [
+			files: uniqueAssociations([
 				...(executable?.files ?? []).map((association) => ({
+					ownerId: node.id,
+					ownerKind: node.kind,
+					...(projectId ? { projectId } : {}),
 					path: association.pattern,
+					match: workspacePatternKind(association.pattern),
 					role: association.role,
 					generated: association.generated,
+					contributionSource: "wsrt-config",
+					...(association.role === "task-output"
+						? {
+								producerId: node.id,
+								consumerIds: executable.outputs
+									.filter(({ path }) => path === association.pattern)
+									.map(({ artifact: name }) => `artifact:${name}`),
+							}
+						: {}),
+					confidence: "declared" as const,
 					evidence: [
 						{
 							type: "configuration" as const,
@@ -416,16 +713,52 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 						},
 					],
 				})),
+				...artifactPaths.map((artifactPath) => ({
+					ownerId: node.id,
+					ownerKind: node.kind,
+					...(projectId ? { projectId } : {}),
+					path: artifactPath.replaceAll("\\", "/").replace(/^\.\//, ""),
+					match: workspacePatternKind(artifactPath),
+					role: "artifact" as const,
+					generated: true,
+					contributionSource: "wsrt-config",
+					...(artifactProducer ? { producerId: artifactProducer.id } : {}),
+					consumerIds: artifact.consumers.map(
+						(name) =>
+							this.sources.definition.executables.find((item) => item.name === name)?.id ?? name,
+					),
+					confidence: "declared" as const,
+					evidence: [
+						{
+							type: "configuration" as const,
+							source: "wsrt-config",
+							file: relative(this.sources.definition.root, artifact.source.file),
+							reason: `Declared artifact location at ${artifact.source.path}.location`,
+						},
+					],
+				})),
 				...contributed,
-			].sort((a, b) => a.path.localeCompare(b.path) || a.role.localeCompare(b.role)),
-			artifacts: live.artifacts
-				.filter((item) => item.producer === node.id)
-				.map((item) => item.id)
+			]),
+			artifacts: [
+				...live.artifacts.filter((item) => item.producer === node.id).map((item) => item.id),
+				...this.sources.definition.artifacts
+					.filter((item) => executable && item.producer === executable.name)
+					.map((item) => item.id),
+			]
+				.filter((id, index, values) => values.indexOf(id) === index)
+				.sort(),
+			prerequisiteTaskIds: this.sources.graph
+				.dependencies(node.id)
+				.filter(({ kind }) => kind === "task")
+				.map(({ id }) => id)
 				.sort(),
 			operations: executable
 				? ["node.start", "node.stop", "node.restart"].map((type) => ({ type, available: true }))
 				: [],
 			metadata: node.metadata ?? {},
+			...(executable
+				? { providerMetadata: providerMetadata(executable, this.sources.definition) }
+				: {}),
 			evidence,
 		};
 	}
@@ -461,10 +794,9 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 			capability("workspace.description", true),
 			capability("workspace.node-description", true),
 			capability("workspace.graph-query", true, { maximumDepth: 32, maximumResults: 500 }),
-			capability(
-				"workspace.source-ownership",
-				this.sources.definition.executables.some(({ files }) => (files?.length ?? 0) > 0),
-			),
+			capability("workspace.source-ownership", this.#ownershipSupport() !== "unavailable", {
+				support: this.#ownershipSupport(),
+			}),
 			capability("runtime.state", true),
 			capability("diagnostics", true),
 			capability("logs", features.logs === true),
@@ -485,6 +817,57 @@ export class DefaultWorkspaceIntelligence implements WorkspaceIntelligence {
 			}),
 		].sort(byId);
 	}
+}
+
+function providerMetadata(
+	executable: NormalizedSystemDefinition["executables"][number],
+	definition: NormalizedSystemDefinition,
+) {
+	const health = executable.healthcheck;
+	const urls = health?.type === "http" ? [health.url] : [];
+	const ports =
+		health?.type === "tcp"
+			? [health.port]
+			: urls
+					.flatMap((value) => {
+						try {
+							return [Number(new URL(value).port)];
+						} catch {
+							return [];
+						}
+					})
+					.filter((value) => Number.isInteger(value) && value > 0);
+	return {
+		...(executable.provider?.provider ? { provider: executable.provider.provider } : {}),
+		runtimeId: executable.runtime,
+		...(executable.command
+			? { command: executable.command.command, arguments: executable.command.args }
+			: {}),
+		workingDirectory: relative(definition.root, executable.root),
+		...(ports.length ? { ports } : {}),
+		...(urls.length ? { urls } : {}),
+		...(health ? { readiness: health, healthCheck: health } : {}),
+		entrypoints: (executable.files ?? [])
+			.filter(({ role }) => role === "entrypoint")
+			.map(({ pattern }) => pattern),
+		configurationFiles: (executable.files ?? [])
+			.filter(({ role }) => role === "configuration")
+			.map(({ pattern }) => pattern),
+		outputPatterns: (executable.files ?? [])
+			.filter(({ role }) => role === "task-output" || role === "generated")
+			.map(({ pattern }) => pattern),
+		artifactIds: (definition.artifacts ?? [])
+			.filter(({ producer }) => producer === executable.name)
+			.map(({ id }) => id)
+			.sort(),
+		environmentVariableNames: Object.keys(executable.environment ?? {}).sort(),
+		evidence: [
+			{
+				...configurationEvidence(definition),
+				reason: `Normalized safe provider metadata for ${executable.id}`,
+			},
+		],
+	};
 }
 
 function configurationEvidence(definition: NormalizedSystemDefinition): EvidenceRecord {
@@ -569,8 +952,98 @@ function decodeCursor(cursor: string): number {
 }
 
 function commandTargets(command: ControlPlaneCommand): string[] {
-	if ("nodeIds" in command) return [...command.nodeIds];
+	if ("nodeIds" in command) return command.nodeIds.map(canonicalProcessId);
 	if (command.type === "task.run")
 		return [command.taskId.startsWith("task:") ? command.taskId : `task:${command.taskId}`];
 	return [command.operationId];
+}
+
+function canonicalQueryPath(value: string): string {
+	try {
+		return normalizeWorkspaceRelativePath(value);
+	} catch {
+		throw intelligenceError(
+			"query.path_invalid",
+			`Workspace path must be relative and cannot escape the workspace: ${value}`,
+		);
+	}
+}
+
+type AssociationIndex = Readonly<{
+	revision: number;
+	byOwner: ReadonlyMap<string, readonly WorkspaceFileAssociation[]>;
+	byProject: ReadonlyMap<string, readonly WorkspaceFileAssociation[]>;
+	exact: ReadonlyMap<string, readonly WorkspaceFileAssociation[]>;
+	patterns: readonly WorkspaceFileAssociation[];
+	support: "full" | "partial" | "unavailable";
+}>;
+
+function append(
+	target: Map<string, WorkspaceFileAssociation[]>,
+	key: string,
+	association: WorkspaceFileAssociation,
+): void {
+	const values = target.get(key) ?? [];
+	values.push(association);
+	target.set(key, values);
+}
+
+function readonlyMap(
+	value: Map<string, WorkspaceFileAssociation[] | readonly WorkspaceFileAssociation[]>,
+): ReadonlyMap<string, readonly WorkspaceFileAssociation[]> {
+	return new Map(
+		[...value.entries()]
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, associations]) => [key, Object.freeze([...associations].sort(associationSort))]),
+	);
+}
+
+function associationSort(left: WorkspaceFileAssociation, right: WorkspaceFileAssociation): number {
+	return (
+		left.ownerId.localeCompare(right.ownerId) ||
+		left.path.localeCompare(right.path) ||
+		left.role.localeCompare(right.role)
+	);
+}
+
+function uniqueAssociations(
+	associations: readonly WorkspaceFileAssociation[],
+): readonly WorkspaceFileAssociation[] {
+	const values = new Map<string, WorkspaceFileAssociation>();
+	for (const association of associations) {
+		const key = `${association.ownerId}\0${association.path}\0${association.role}`;
+		const current = values.get(key);
+		if (!current) {
+			values.set(key, association);
+			continue;
+		}
+		const strongest =
+			confidenceRank(association.confidence) > confidenceRank(current.confidence)
+				? association
+				: current;
+		values.set(key, {
+			...strongest,
+			generated: current.generated || association.generated,
+			evidence: [...current.evidence, ...association.evidence]
+				.filter(
+					(item, index, all) =>
+						all.findIndex(
+							(candidate) =>
+								`${candidate.type}\0${candidate.source}\0${candidate.reason}` ===
+								`${item.type}\0${item.source}\0${item.reason}`,
+						) === index,
+				)
+				.sort((left, right) =>
+					`${left.source}:${left.reason}`.localeCompare(`${right.source}:${right.reason}`),
+				),
+			consumerIds: [
+				...new Set([...(current.consumerIds ?? []), ...(association.consumerIds ?? [])]),
+			].sort(),
+		});
+	}
+	return [...values.values()].sort(associationSort);
+}
+
+function confidenceRank(value: WorkspaceFileAssociation["confidence"]): number {
+	return { unknown: 0, inferred: 1, derived: 2, declared: 3 }[value];
 }

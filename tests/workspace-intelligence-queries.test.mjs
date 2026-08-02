@@ -95,8 +95,9 @@ test("command planning is read-only and resolves existing command dependencies",
 	assert.deepEqual(plan.resolvedTargets, ["a"]);
 	assert.deepEqual(
 		plan.dependencyActions.map(({ target }) => target),
-		["b", "c"],
+		["c", "b"],
 	);
+	assert.deepEqual(plan.dependencyOrder, ["c", "b", "a"]);
 	assert.deepEqual(plan.requiredPermissions, ["nodes.start"]);
 	assert.equal(plan.risk, "low");
 	const invalid = intelligence.planCommand({ type: "node.stop", nodeIds: ["missing"] });

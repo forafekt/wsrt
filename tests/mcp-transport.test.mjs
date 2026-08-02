@@ -161,9 +161,17 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 			calls.push(["files", query, options]);
 			return response("files", { files: [] });
 		},
+		fileOwners: async (path, options) => {
+			calls.push(["owners", path, options]);
+			return response("owners", { files: [] });
+		},
 		analyzeChangeImpact: async (query, options) => {
 			calls.push(["impact", query, options]);
 			return response("impact", { affectedNodes: [] });
+		},
+		recommendValidation: async (query, options) => {
+			calls.push(["validation", query, options]);
+			return response("validation", { recommendations: [] });
 		},
 		planCommand: async (command, options) => {
 			calls.push(["plan", command, options]);
@@ -188,6 +196,8 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 			"wsrt_graph_query",
 			"wsrt_files_query",
 			"wsrt_change_impact",
+			"wsrt_file_owners",
+			"wsrt_validation_recommend",
 			"wsrt_command_plan",
 			"wsrt_command_execute",
 		]) {
@@ -210,6 +220,11 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 			arguments: { nodeIds: ["application:web"], roles: ["source"] },
 		});
 		await client.callTool({ name: "wsrt_change_impact", arguments: { paths: ["src/main.ts"] } });
+		await client.callTool({ name: "wsrt_file_owners", arguments: { path: "src/main.ts" } });
+		await client.callTool({
+			name: "wsrt_validation_recommend",
+			arguments: { paths: ["src/main.ts"] },
+		});
 		await client.callTool({
 			name: "wsrt_command_plan",
 			arguments: { command: { type: "node.start", nodeIds: ["application:web"] } },
@@ -217,12 +232,24 @@ test("MCP workspace intelligence tools are thin structured session-client adapte
 		assert.equal(node.structuredContent.result.id, "application:web");
 		assert.deepEqual(
 			calls.map(([operation]) => operation),
-			["capabilities", "describe", "node", "graph", "files", "impact", "plan"],
+			[
+				"capabilities",
+				"describe",
+				"node",
+				"graph",
+				"files",
+				"impact",
+				"owners",
+				"validation",
+				"plan",
+			],
 		);
 		assert.deepEqual(calls[3][1], { roots: ["application:web"], depth: 2 });
 		assert.deepEqual(calls[4][1], { nodeIds: ["application:web"], roles: ["source"] });
 		assert.deepEqual(calls[5][1], { paths: ["src/main.ts"] });
-		assert.deepEqual(calls[6][1], { type: "node.start", nodeIds: ["application:web"] });
+		assert.equal(calls[6][1], "src/main.ts");
+		assert.deepEqual(calls[7][1], { paths: ["src/main.ts"] });
+		assert.deepEqual(calls[8][1], { type: "node.start", nodeIds: ["application:web"] });
 		const denied = await client.callTool({
 			name: "wsrt_command_execute",
 			arguments: { command: { type: "node.start", nodeIds: ["application:web"] } },
