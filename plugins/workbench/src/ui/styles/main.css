@@ -1,0 +1,15 @@
+@import "./tokens.css";
+@import "./reset.css";
+@import "./typography.css";
+@import "./layout.css";
+@import "./utilities.css";
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto;
+		animation-duration: 0.01ms;
+		transition-duration: 0.01ms;
+	}
+}

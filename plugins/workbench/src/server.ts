@@ -3,8 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import type { WorkspaceRequest, WorkspaceSessionClient } from "@wsrt/workspace-session";
 import { normalizeWorkbenchOptions, type WorkbenchOptions } from "./plugin.js";
-import { workbenchClient } from "./ui/client.js";
-import { workbenchStyles } from "./ui/styles.js";
+import { readWorkbenchAsset, renderWorkbenchIndex } from "./server/static-assets.js";
 
 export type WorkbenchHandle = Readonly<{
 	url: string;
@@ -118,10 +117,11 @@ async function route(
 				? ""
 				: url.pathname;
 	if (!relative) return sendError(response, 404, "workbench.not_found", "Route not found");
-	if (request.method === "GET" && relative === "/assets/client.js")
-		return text(response, "text/javascript; charset=utf-8", workbenchClient);
-	if (request.method === "GET" && relative === "/assets/styles.css")
-		return text(response, "text/css; charset=utf-8", workbenchStyles);
+	if (request.method === "GET" && relative.startsWith("/assets/")) {
+		const asset = await readWorkbenchAsset(relative);
+		if (!asset) return sendError(response, 404, "workbench.asset_not_found", "Asset not found");
+		return bytes(response, asset.contentType, asset.body);
+	}
 	if (request.method === "GET" && relative === "/api/bootstrap") {
 		const [description, started, snapshot, operations, diagnostics, artifacts, status] =
 			await Promise.all([
@@ -189,24 +189,21 @@ async function route(
 		return json(response, await client.request(protocolRequest), options.maxResponseBytes);
 	}
 	if (request.method === "GET" && !relative.startsWith("/api/") && !relative.startsWith("/assets/"))
-		return text(response, "text/html; charset=utf-8", html(options));
+		return text(response, "text/html; charset=utf-8", await renderWorkbenchIndex(options));
 	return sendError(response, 404, "workbench.not_found", "Route not found");
-}
-
-function html(options: ReturnType<typeof normalizeWorkbenchOptions>) {
-	return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="wsrt-base-path" content="${escapeHtml(options.basePath)}"><meta name="wsrt-mutations" content="${options.mutations}"><title>${escapeHtml(options.title)}</title><link rel="stylesheet" href="${options.basePath}/assets/styles.css"></head><body><div id="app"><main class="boot"><i></i><span>Connecting to the authoritative workspace…</span></main></div><script type="module" src="${options.basePath}/assets/client.js"></script></body></html>`;
-}
-function escapeHtml(value: string) {
-	return value.replace(
-		/[&"<>]/g,
-		(character) =>
-			({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" })[character] ?? character,
-	);
 }
 function text(response: ServerResponse, contentType: string, body: string) {
 	response.writeHead(200, {
 		"content-type": contentType,
 		"cache-control": contentType.startsWith("text/html") ? "no-cache" : "public, max-age=300",
+		"x-content-type-options": "nosniff",
+	});
+	response.end(body);
+}
+function bytes(response: ServerResponse, contentType: string, body: Buffer) {
+	response.writeHead(200, {
+		"content-type": contentType,
+		"cache-control": "public, max-age=300",
 		"x-content-type-options": "nosniff",
 	});
 	response.end(body);

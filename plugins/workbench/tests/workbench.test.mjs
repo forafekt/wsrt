@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
 	createWorkbenchServer,
@@ -20,6 +21,37 @@ test("registers the workbench executable without dashboard ownership", () => {
 	assert.deepEqual(plugin.capabilities, ["cli"]);
 	assert.equal(plugin.contributions.executables?.[0]?.id, "workbench");
 	assert.equal(JSON.stringify(plugin).includes("plugin-dashboard"), false);
+});
+
+test("builds modular browser assets instead of TypeScript string templates", () => {
+	const server = readFileSync(new URL("../dist/server.js", import.meta.url), "utf8");
+	const index = readFileSync(new URL("../dist/ui/index.html", import.meta.url), "utf8");
+	assert.equal(existsSync(new URL("../dist/ui/assets/bootstrap.js", import.meta.url)), true);
+	assert.equal(existsSync(new URL("../dist/ui/assets/main.css", import.meta.url)), true);
+	assert.equal(server.includes("workbenchClient"), false);
+	assert.equal(server.includes("workbenchStyles"), false);
+	assert.match(index, /wsrt-workbench-app/);
+	assert.match(index, /assets\/bootstrap\.js/);
+	assert.match(index, /assets\/main\.css/);
+});
+
+test("binds native browser fetch for workspace client requests", async () => {
+	const { WorkspaceClient } = await import("../dist/ui/core/workspace-client.js");
+	const originalFetch = globalThis.fetch;
+	const marker = {};
+	globalThis.fetch = async function fetchWithBrandCheck(url) {
+		assert.equal(this, marker);
+		assert.equal(url, "/__wsrt/workbench/api/bootstrap");
+		return new Response(JSON.stringify({ ok: true }), {
+			headers: { "content-type": "application/json" },
+		});
+	}.bind(marker);
+	try {
+		const client = new WorkspaceClient({ basePath: "/__wsrt/workbench" });
+		assert.deepEqual(await client.bootstrap(), { ok: true });
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
 });
 
 test("serves deep routes and forwards only authoritative operations", async (t) => {

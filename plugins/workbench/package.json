@@ -14,17 +14,22 @@
 	"files": [
 		"dist",
 		"README.md",
-		"ARCHITECTURE.md"
+		"ARCHITECTURE.md",
+		"AUDIT.md"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.json",
+		"build": "node scripts/build.mjs",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
-		"test": "node --test tests/*.test.mjs"
+		"test": "node --test tests/*.test.mjs",
+		"test:browser": "playwright test -c playwright.config.mjs"
 	},
 	"dependencies": {
 		"@wsrt/control-plane": "workspace:*",
 		"@wsrt/plugins": "workspace:*",
 		"@wsrt/workspace-session": "workspace:*"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.62.1"
 	},
 	"description": "Authoritative semantic workspace explorer and operating layer for WSRT.",
 	"license": "ISC",

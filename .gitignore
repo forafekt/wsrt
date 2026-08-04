@@ -168,6 +168,9 @@ yarn-error.log
 # wsrt
 .wsrt
 generated
+.pnpm-store/
+test-results/
+**/test-results/
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust,rust-analyzer

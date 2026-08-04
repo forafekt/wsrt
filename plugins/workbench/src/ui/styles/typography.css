@@ -1,0 +1,18 @@
+body {
+	font-family: var(--wsrt-font-ui);
+	font-size: 13px;
+	color: var(--wsrt-color-text);
+	background: var(--wsrt-color-page);
+}
+
+h1,
+h2,
+h3,
+p {
+	margin-top: 0;
+}
+
+.mono {
+	font-family: var(--wsrt-font-mono);
+	font-size: 11px;
+}
